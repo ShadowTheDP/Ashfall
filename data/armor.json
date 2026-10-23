@@ -1,0 +1,57 @@
+{
+	"none": {
+		"name": "NONE",
+		"tone": "stone",
+		"hp": 0.0,
+		"damage_taken": 1.0,
+		"speed": 0.0,
+		"iframe": 0.0,
+		"knives": 0,
+		"text": "NO ARMOUR. FASTEST HANDS.",
+		"cost": 0
+	},
+	"plate": {
+		"name": "PLATE",
+		"tone": "pale",
+		"hp": 30.0,
+		"damage_taken": 0.90,
+		"speed": -20.0,
+		"iframe": 0.0,
+		"knives": 0,
+		"text": "+30 HP, -10% DAMAGE TAKEN, -20 SPEED",
+		"cost": 80
+	},
+	"lattice": {
+		"name": "LATTICE",
+		"tone": "light",
+		"hp": 12.0,
+		"damage_taken": 0.96,
+		"speed": 10.0,
+		"iframe": 0.03,
+		"knives": 0,
+		"text": "+12 HP, +30 ms I-FRAMES, +10 SPEED",
+		"cost": 140
+	},
+	"mantle": {
+		"name": "MANTLE",
+		"tone": "white",
+		"hp": 0.0,
+		"damage_taken": 1.0,
+		"speed": 16.0,
+		"iframe": 0.05,
+		"knives": 1,
+		"text": "+1 KUNAI, +50 ms I-FRAMES, +16 SPEED, NO HP",
+		"cost": 200
+	},
+	"aegis": {
+		"name": "AEGIS SHELL",
+		"tone": "white",
+		"hp": 45.0,
+		"damage_taken": 0.85,
+		"speed": -34.0,
+		"iframe": 0.0,
+		"knives": 0,
+		"text": "+45 HP, -15% DAMAGE TAKEN, -34 SPEED",
+		"cost": 280
+	}
+}

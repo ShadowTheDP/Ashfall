@@ -79,6 +79,15 @@ var airborne_t := 0.0
 var apex_t := 0.0
 
 var crit_bonus := 0.0
+var character_id := "square"
+var passive_id := "none"
+var armor_hp := 0.0
+var armor_taken := 1.0
+var permanent_damage_mult := 1.0
+var aegis_cooldown_scale := 1.0
+var perfect_dodge_scale := 1.0
+var echo_every := 0
+var _swing_count := 0
 var knife_charges := 2
 var _knife_regen := 0.0
 var aegis_t := 0.0
@@ -100,12 +109,67 @@ func _ready() -> void:
 	collision_layer = Layers.PLAYER
 	collision_mask = Layers.WORLD | Layers.ENEMY
 	hp = max_hp
-	weapon = Data.weapons.get("rusty_sword", {})
+	_apply_loadout()
 	weapon_combo = weapon.get("combo", [])
 	knife_charges = knife_max
 	_build_nodes()
 	Game.player = self
 	add_to_group("player")
+
+
+## Reads the persistent loadout (character, armour, weapon) and permanent
+## upgrades. Everything the hub sells funnels through here, so gameplay never
+## has to know about Profile directly.
+func _apply_loadout() -> void:
+	var character: Dictionary = Data.characters.get(Profile.selected_character, {})
+	if character.is_empty():
+		character = Data.characters.get("square", {})
+
+	max_hp = float(character.get("hp", max_hp))
+	max_speed = float(character.get("speed", max_speed))
+	jump_velocity = float(character.get("jump", jump_velocity))
+	knife_max = int(character.get("knives", knife_max))
+	character_id = Profile.selected_character
+	passive_id = str(character.get("passive", "none"))
+
+	var armor: Dictionary = Data.armor.get(Profile.selected_armor, {})
+	armor_hp = float(armor.get("hp", 0.0))
+	armor_taken = float(armor.get("damage_taken", 1.0))
+	max_hp += armor_hp
+	max_speed += float(armor.get("speed", 0.0))
+	knife_max += int(armor.get("knives", 0))
+	roll_iframe_end += float(armor.get("iframe", 0.0))
+
+	# Permanent progression.
+	max_hp += Profile.bonus("hp")
+	max_speed += Profile.bonus("speed")
+	knife_max += int(Profile.bonus("knives"))
+	roll_iframe_end += Profile.bonus("iframe")
+	crit_bonus += Profile.bonus("crit")
+	permanent_damage_mult = 1.0 + Profile.bonus("damage")
+
+	_apply_passive()
+
+	weapon = Data.weapons.get(Profile.selected_weapon, {})
+	if weapon.is_empty():
+		weapon = Data.weapons.get("rusty_sword", {})
+
+
+func _apply_passive() -> void:
+	match passive_id:
+		"glass":
+			roll_iframe_end += 0.08
+		"hunter":
+			crit_bonus += 0.35
+		"bulwark":
+			armor_taken *= 0.80
+			aegis_cooldown_scale = 0.65
+		"dancer":
+			perfect_dodge_scale = 2.0
+		"echo":
+			echo_every = 3
+		_:
+			pass
 
 
 func _build_nodes() -> void:
@@ -388,7 +452,7 @@ func _open_hitbox() -> void:
 	var rect := hitbox.shape_node.shape as RectangleShape2D
 	rect.size = Vector2(float(size[0]), float(size[1]))
 	hitbox.enable(
-		float(attack_cfg.get("damage", 10.0)) * Game.total_damage_mult(),
+		float(attack_cfg.get("damage", 10.0)) * Game.total_damage_mult() * permanent_damage_mult,
 		float(attack_cfg.get("knockback", 180.0)),
 		float(attack_cfg.get("hitstop", 0.05)),
 		self,
@@ -407,7 +471,7 @@ func _open_hitbox() -> void:
 	if attack_index == weapon_combo.size() - 1 and not weapon_combo.is_empty():
 		var wave := FunctionWave.new()
 		wave.position = global_position + Vector2(facing * 26.0, -10.0)
-		wave.setup(facing, 8.0 * Game.total_damage_mult(), MathArt.WHITE, self, crit_multiplier())
+		wave.setup(facing, 8.0 * Game.total_damage_mult() * permanent_damage_mult, MathArt.WHITE, self, crit_multiplier())
 		var root := Game.fx_root
 		if is_instance_valid(root):
 			root.add_child(wave)
@@ -424,7 +488,7 @@ func take_hit(info: Dictionary) -> void:
 	if aegis_t > 0.0:
 		_aegis_block()
 		return
-	var damage := float(info.get("damage", 1))
+	var damage := float(info.get("damage", 1)) * armor_taken
 	hp = maxf(0.0, hp - damage)
 	invuln = invuln_time
 	flash = 0.14
@@ -515,7 +579,7 @@ func _throw_knife() -> void:
 	projectile.position = spawn
 	projectile.setup_player(
 		velocity,
-		knife_damage * Game.total_damage_mult(),
+		knife_damage * Game.total_damage_mult() * permanent_damage_mult,
 		MathArt.WHITE,
 		self,
 		crit_multiplier()
@@ -532,7 +596,7 @@ func _cast_aegis() -> void:
 	if aegis_cd > 0.0 or state == State.DEAD:
 		return
 	aegis_t = aegis_time
-	aegis_cd = aegis_time + aegis_cooldown
+	aegis_cd = aegis_time + aegis_cooldown * aegis_cooldown_scale
 	Combat.ring(global_position + Vector2(0, -6), MathArt.WHITE, 52.0)
 	Combat.burst(global_position + Vector2(0, -8), MathArt.WHITE, 10, 150.0)
 	Sfx.play("dodge", -10, 0.8)
@@ -554,7 +618,7 @@ func _aegis_block() -> void:
 			continue
 		if global_position.distance_to(enemy.global_position) <= 118.0:
 			enemy.take_hit({
-				"damage": Damage.compute(10.0 * Game.total_damage_mult(), 0, false, 1.0),
+				"damage": Damage.compute(10.0 * Game.total_damage_mult() * permanent_damage_mult, 0, false, 1.0),
 				"crit": false,
 				"knockback": 260.0,
 				"hitstop": 0.03,

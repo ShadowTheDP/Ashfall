@@ -9,6 +9,7 @@ class_name Juice
 ## Sizes and speeds are in 768x480 logical pixels.
 
 static var _tex: Texture2D = null
+static var _fade: Gradient = null
 
 
 static func square_texture() -> Texture2D:
@@ -48,6 +49,16 @@ static func _finish(p: CPUParticles2D, duration: float) -> CPUParticles2D:
 	p.finished.connect(p.queue_free)
 	p.emitting = true
 	return p
+
+static func fade_ramp() -> Gradient:
+	# Hold full value, then die. A linear 1->0 ramp makes a short burst read as
+	# "thin" for its whole life instead of bright and then gone.
+	if _fade != null:
+		return _fade
+	_fade = Gradient.new()
+	_fade.offsets = PackedFloat32Array([0.0, 0.55, 1.0])
+	_fade.colors = PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 0.9), Color(1, 1, 1, 0)])
+	return _fade
 
 
 # --- World events -----------------------------------------------------------
@@ -168,6 +179,135 @@ static func dodge(host: Node, at: Vector2) -> void:
 	p.scale_amount_min = 0.3
 	p.scale_amount_max = 1.1
 	host.add_child(_finish(p, 0.2))
+
+
+# --- Mathematical presets ----------------------------------------------------
+# CPUParticles2D has no per-particle velocity array, so a *structured* burst is
+# built from `emission_points` (the curve itself) plus a radial acceleration:
+# each particle keeps the direction it spawned at, which is exactly the curve's
+# direction for that index. randomness is pinned to 0 or the geometry shears.
+
+static func _structured(host: Node, at: Vector2, points: PackedVector2Array,
+		tint: Color, lifetime: float, accel: float) -> CPUParticles2D:
+	var p := make(points.size(), lifetime, tint)
+	p.position = at
+	p.emission_shape = CPUParticles2D.EMISSION_SHAPE_POINTS
+	p.emission_points = points
+	p.explosiveness = 1.0
+	p.randomness = 0.0
+	p.spread = 0.0
+	p.direction = Vector2.ZERO
+	p.initial_velocity_min = 0.0
+	p.initial_velocity_max = 0.0
+	p.radial_accel_min = accel
+	p.radial_accel_max = accel
+	p.color_ramp = fade_ramp()
+	p.z_index = 7
+	host.add_child(_finish(p, lifetime))
+	return p
+
+
+## Phyllotaxis burst: 22 shards leave on golden-angle directions, so the blast
+## has visible spiral structure instead of a grey cloud.
+static func prism_burst(host: Node, at: Vector2, tint: Color, count: int = 22,
+		speed: float = 320.0) -> CPUParticles2D:
+	var points := PackedVector2Array()
+	for i in count:
+		points.append(MathArt.phyllotaxis(i + 1, 2.4))
+	var p := _structured(host, at, points, tint, 0.34, speed * 3.0)
+	p.scale_amount_min = 0.5
+	p.scale_amount_max = 1.3
+	p.angular_velocity_min = -420.0
+	p.angular_velocity_max = 420.0
+	return p
+
+
+## Curling trail: initial velocity follows `direction`, orbit_velocity bends the
+## path into a log spiral. (angular_velocity only spins the quad; orbit is what
+## makes the trail curl.)
+static func spiral_wake(host: Node, at: Vector2, direction: Vector2, tint: Color) -> CPUParticles2D:
+	var dir := direction.normalized() if direction.length() > 0.01 else Vector2.UP
+	var curl := 1.0 if dir.x >= 0.0 else -1.0
+	var p := make(9, 0.42, tint)
+	p.position = at
+	p.direction = dir
+	p.spread = 14.0
+	p.initial_velocity_min = 90.0
+	p.initial_velocity_max = 190.0
+	p.gravity = Vector2.ZERO
+	p.orbit_velocity_min = -2.4 * curl
+	p.orbit_velocity_max = -1.1 * curl
+	p.tangential_accel_min = 240.0
+	p.tangential_accel_max = 430.0
+	p.angular_velocity_min = -360.0
+	p.angular_velocity_max = 360.0
+	p.scale_amount_min = 0.35
+	p.scale_amount_max = 1.0
+	p.color_ramp = fade_ramp()
+	p.z_index = 6
+	host.add_child(_finish(p, 0.42))
+	return p
+
+
+## Rose curve: emission points sit on r = R*cos(k*theta), so the petals are a
+## real rose curve rather than N directions.
+## shortcut: r = cos(k*theta) only closes with integer k, and gives k lobes for
+## odd k / 2k for even k, so an exact 6 is not representable -- `petals` is
+## halved to k=3 (a 3-lobe rose). Upgrade if a true 6-lobe rosette is required:
+## use k=3 and mirror the sample set instead.
+static func rose_bloom(host: Node, at: Vector2, tint: Color, petals: int = 6) -> CPUParticles2D:
+	var k := float(petals) * 0.5 if petals % 2 == 0 else float(petals)
+	var samples := maxi(petals * 8, 24)
+	var points := PackedVector2Array()
+	for i in samples:
+		points.append(MathArt.rose(TAU * float(i) / float(samples), k, 22.0))
+	var p := _structured(host, at, points, tint, 0.85, 320.0)
+	p.scale_amount_min = 0.45
+	p.scale_amount_max = 0.9
+	p.angular_velocity_min = -90.0
+	p.angular_velocity_max = 90.0
+	return p
+
+
+## Ash: rises and wobbles. shortcut: CPUParticles2D has no per-particle path, so
+## the wobble is a Lissajous spawn footprint plus lateral acceleration; give it
+## a real curve only if ash ever has to trace an exact figure.
+static func ash_rise(host: Node, at: Vector2, tint: Color, count: int = 14) -> CPUParticles2D:
+	var points := PackedVector2Array()
+	for i in count:
+		var t := TAU * float(i) / float(maxi(count, 1))
+		points.append(MathArt.lissajous(t, 1.0, 2.0, PI * 0.5) * 7.0)
+	var p := make(count, 1.1, MathArt.with_alpha(tint, 0.55))
+	p.position = at
+	p.emission_shape = CPUParticles2D.EMISSION_SHAPE_POINTS
+	p.emission_points = points
+	p.explosiveness = 1.0
+	p.randomness = 0.0
+	p.direction = Vector2(0, -1)
+	p.spread = 16.0
+	p.initial_velocity_min = 14.0
+	p.initial_velocity_max = 34.0
+	p.gravity = Vector2(0, -18)
+	p.tangential_accel_min = -34.0
+	p.tangential_accel_max = 34.0
+	p.angular_velocity_min = -60.0
+	p.angular_velocity_max = 60.0
+	p.scale_amount_min = 0.3
+	p.scale_amount_max = 0.7
+	p.color_ramp = fade_ramp()
+	p.z_index = 6
+	host.add_child(_finish(p, 1.1))
+	return p
+
+
+## Critical halo: 12 particles on an exact circle, identical speed, no spread.
+## Uniformity is the whole point -- any randomness turns it back into sparks.
+static func critical_halo(host: Node, at: Vector2, tint: Color) -> CPUParticles2D:
+	var p := _structured(host, at, MathArt.ngon(12, 9.0), tint, 0.42, 900.0)
+	p.scale_amount_min = 0.6
+	p.scale_amount_max = 0.6
+	p.z_index = 8
+	return p
 
 
 static func telegraph(host: Node, at: Vector2) -> void:

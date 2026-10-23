@@ -31,6 +31,8 @@ var _shadow_alpha := 0.0
 var _shadow_scale := 1.0
 var _prev_blade_angle := REST_ANGLE
 var _blade_lag_angle := REST_ANGLE
+var body_visual: Node2D = null
+var weapon_visual: Node2D = null
 var _body_lag := Vector2.ZERO
 var _body_lag_target := Vector2.ZERO
 
@@ -38,6 +40,34 @@ var _body_lag_target := Vector2.ZERO
 func _ready() -> void:
 	p = get_parent() as Player
 	z_index = 2
+	_build_body()
+	_build_weapon()
+
+
+## The pseudo-3D body lives in its own node: it draws sorted faces, which needs
+## a whole draw pass of its own, and the flat square cannot host that.
+func _build_body() -> void:
+	if not ResourceLoader.exists("res://scripts/player/character_visual.gd"):
+		return
+	var script: Script = load("res://scripts/player/character_visual.gd")
+	body_visual = script.new()
+	body_visual.name = "BodyVisual"
+	body_visual.z_index = -1
+	add_child(body_visual)
+	if body_visual.has_method("setup"):
+		body_visual.setup(Profile.selected_character)
+
+
+func _build_weapon() -> void:
+	if not ResourceLoader.exists("res://scripts/player/weapon_visual.gd"):
+		return
+	var script: Script = load("res://scripts/player/weapon_visual.gd")
+	weapon_visual = script.new()
+	weapon_visual.name = "WeaponVisual"
+	weapon_visual.z_index = 3
+	add_child(weapon_visual)
+	if weapon_visual.has_method("setup"):
+		weapon_visual.setup(Profile.selected_weapon)
 
 
 func _process(delta: float) -> void:
@@ -140,6 +170,19 @@ func _draw_body(alpha: float) -> void:
 	var lean := 0.0
 	if p.state == Player.State.RUN:
 		lean = 0.14 * clampf(absf(p.velocity.x) / p.max_speed, 0.0, 1.0) * float(p.facing)
+
+	if body_visual != null:
+		# The solid owns its own bob, lean and tumble; feeding it the same
+		# numbers keeps the shadow and the hand aligned with the body.
+		if body_visual.has_method("set_tumble"):
+			body_visual.set_tumble(clampf(p.tumble, 0.0, 1.0), 2)
+		if body_visual.has_method("set_run_lean"):
+			body_visual.set_run_lean(lean / 0.14 if absf(lean) > 0.0001 else 0.0)
+		if body_visual.has_method("set_flash"):
+			body_visual.set_flash(1.0 if p.flash > 0.0 else 0.0)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		_draw_aegis(alpha)
+		return
 
 	draw_set_transform(
 		Vector2(_body_lag.x, bob + _body_lag.y),
@@ -279,6 +322,10 @@ func _draw_hand_and_blade(alpha: float) -> void:
 
 	# The hand is a DOT, not a limb.
 	MathArt.disc(self, hand, 3.2, _tint(HAND, alpha))
+
+	if weapon_visual != null and weapon_visual.has_method("draw_blade"):
+		weapon_visual.draw_blade(hand, angle, length, alpha)
+		return
 
 	# Blade: ONE tapered quad. Two offset lines read as two parallel rods and
 	# together with the guard they form an "L" at this scale - never do that.

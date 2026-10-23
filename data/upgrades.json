@@ -1,0 +1,9 @@
+{
+	"vitality": {"name": "VITALITY", "stat": "hp", "per_level": 8.0, "max": 5, "cost": 30, "cost_step": 25, "text": "+8 MAX HP"},
+	"edge": {"name": "EDGE", "stat": "damage", "per_level": 0.04, "max": 5, "cost": 35, "cost_step": 30, "text": "+4% DAMAGE"},
+	"swift": {"name": "SWIFT", "stat": "speed", "per_level": 10.0, "max": 4, "cost": 30, "cost_step": 25, "text": "+10 SPEED"},
+	"armory": {"name": "ARMORY", "stat": "knives", "per_level": 1.0, "max": 3, "cost": 45, "cost_step": 35, "text": "+1 KUNAI CHARGE"},
+	"ghost": {"name": "GHOST", "stat": "iframe", "per_level": 0.02, "max": 3, "cost": 50, "cost_step": 40, "text": "+20 ms ROLL I-FRAMES"},
+	"hunter": {"name": "HUNTER", "stat": "crit", "per_level": 0.05, "max": 4, "cost": 40, "cost_step": 30, "text": "+5% CRIT DAMAGE"},
+	"greed": {"name": "GREED", "stat": "cells", "per_level": 0.10, "max": 5, "cost": 25, "cost_step": 20, "text": "+10% CELLS DROPPED"}
+}

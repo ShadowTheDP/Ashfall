@@ -7,6 +7,9 @@ extends Node
 ## `_setup_input`.
 
 signal rewards_requested(choices: Array)
+signal floor_started(index: int, floor_name: String)
+signal floor_cleared(index: int)
+signal run_ended(victory: bool)
 
 const COMBO_WINDOW := 1.6
 const PERFECT_DODGE_TIME := 2.5
@@ -47,6 +50,14 @@ var auto_choose_rewards := false
 # Boss
 var boss: Enemy = null
 var boss_defeated := false
+
+# --- Meta progression -------------------------------------------------------
+# floor_index is 1-based while inside a floor and 0 while in the hub.
+var floor_index := 0
+var floor_name := ""
+var run_cells := 0          # unbanked; lost on death
+var in_hub := true
+var run_kills := 0
 
 # Presentation
 var hurt_flash := 0.0
@@ -95,6 +106,11 @@ func reset_run() -> void:
 	boss = null
 	boss_defeated = false
 	hurt_flash = 0.0
+	floor_index = 0
+	floor_name = ""
+	run_cells = 0
+	in_hub = true
+	run_kills = 0
 	player = null
 	Engine.time_scale = 1.0
 	get_tree().paused = false
@@ -113,11 +129,17 @@ func combo_break() -> void:
 
 
 func add_cells(amount: int) -> void:
-	cells += amount
+	# Permanent GREED upgrades and the hub bank both read this counter, so the
+	# multiplier is applied once here rather than at every drop site.
+	var scaled := int(roundf(float(amount) * (1.0 + Profile.bonus("cells"))))
+	cells += scaled
+	if not in_hub:
+		run_cells += scaled
 
 
 func add_kill() -> void:
 	kills += 1
+	run_kills += 1
 	if leech > 0 and player != null:
 		player.hp = minf(player.max_hp, player.hp + float(leech))
 
@@ -135,6 +157,43 @@ func end_run(did_win: bool) -> void:
 	victory = did_win
 	announce_t = 0.0
 	Sfx.play("wave" if did_win else "death", -4.0)
+	Profile.note_run(run_kills, not did_win, did_win)
+	# Dying forfeits whatever was still in the run; winning banks it all.
+	if did_win:
+		Profile.bank(run_cells)
+		Profile.add_souls(1)
+	run_ended.emit(did_win)
+
+
+# --- Floor flow -------------------------------------------------------------
+
+func start_floor(index: int) -> void:
+	floor_index = maxi(1, index)
+	in_hub = false
+	run_cells = 0
+	run_over = false
+	victory = false
+	run_kills = 0
+	Profile.note_floor_reached(floor_index)
+	floor_started.emit(floor_index, floor_name)
+
+
+func finish_floor() -> void:
+	# Clearing a floor banks the run's cells immediately, so the hub always has
+	# something to spend even if the player dies on the next floor.
+	Profile.bank(run_cells)
+	run_cells = 0
+	floor_cleared.emit(floor_index)
+
+
+func go_to_hub() -> void:
+	in_hub = true
+	floor_index = 0
+	run_cells = 0
+
+
+func max_floor() -> int:
+	return Data.floors.size()
 
 
 # --- Combat multipliers -----------------------------------------------------

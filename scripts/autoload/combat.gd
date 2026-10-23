@@ -59,6 +59,34 @@ func impact(at: Vector2, direction: Vector2, tier: int, tint: Color = MathArt.WH
 	shake(float(TIER_SHAKE[t]))
 	punch(float(TIER_PUNCH[t]))
 	hitstop(float(TIER_HITSTOP[t]))
+	# Each tier adds one layer of spectacle rather than scaling everything: the
+	# player has to feel the difference between a jab and a finisher instantly.
+	if t >= 1:
+		Juice.prism_burst(_fx_parent(), at, tint, 10 + t * 6, 240.0 + t * 60.0)
+	if t >= 2:
+		var wave := ShockwaveFx.new()
+		wave.position = at
+		wave.setup(at, 1 if direction.x >= 0.0 else -1, 44.0 + t * 16.0, tint, 5 if t == 2 else 6)
+		_add(wave)
+		Juice.critical_halo(_fx_parent(), at, tint)
+	if t >= 3:
+		var stars := ConstellationFx.new()
+		stars.position = at
+		stars.setup(at, 30.0, tint, 9, 0.55)
+		_add(stars)
+		Juice.rose_bloom(_fx_parent(), at, tint, 6)
+
+
+## Death, telegraphs and heavy windups pull inward instead of exploding.
+func gather(at: Vector2, radius: float, tint: Color = MathArt.WHITE) -> void:
+	var vortex := VortexFx.new()
+	vortex.position = at
+	vortex.setup(at, radius, tint, 16, 6.0, 0.5)
+	_add(vortex)
+
+
+func _fx_parent() -> Node:
+	return Game.fx_root if is_instance_valid(Game.fx_root) else null
 
 
 ## Camera zoom punch: a 2-frame zoom-in that eases back over 5 frames.

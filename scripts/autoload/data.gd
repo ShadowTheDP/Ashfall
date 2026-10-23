@@ -4,6 +4,11 @@ extends Node
 var weapons: Dictionary = {}
 var enemies: Dictionary = {}
 var rewards: Dictionary = {}
+var characters: Dictionary = {}
+var armor: Dictionary = {}
+var upgrades: Dictionary = {}
+var floors: Dictionary = {}
+var skill_nodes: Dictionary = {}
 var loaded := false
 
 
@@ -15,6 +20,11 @@ func load_all() -> void:
 	weapons = _read_json("res://data/weapons.json")
 	enemies = _read_json("res://data/enemies.json")
 	rewards = _read_json("res://data/rewards.json")
+	characters = _read_json("res://data/characters.json")
+	armor = _read_json("res://data/armor.json")
+	upgrades = _read_json("res://data/upgrades.json")
+	floors = _read_json("res://data/floors.json")
+	skill_nodes = _read_json("res://data/skill_nodes.json")
 	loaded = not weapons.is_empty() and not enemies.is_empty()
 
 

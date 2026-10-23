@@ -64,7 +64,8 @@ func _draw() -> void:
 	_draw_cells(font)
 	_draw_knives(font)
 	_draw_aegis(font)
-	_draw_wave(font, size)
+	if not Game.in_hub:
+		_draw_wave(font, size)
 	_draw_boss(font, size)
 	_draw_combo(font, size)
 	_draw_edge(font, size)
@@ -155,6 +156,24 @@ func _draw_aegis(font: Font) -> void:
 
 
 func _draw_wave(font: Font, size: Vector2) -> void:
+	# Floor mode shows the floor banner; arena mode keeps the wave counter.
+	if Game.floor_index > 0:
+		draw_string(font, Vector2(size.x * 0.5 - 160.0, 22.0),
+			Game.floor_name, HORIZONTAL_ALIGNMENT_CENTER, 320.0, 11, FG)
+		var level := _level_node()
+		var remaining := -1
+		if level != null and level.has_method("enemies_remaining"):
+			remaining = int(level.enemies_remaining())
+		if remaining > 0:
+			draw_string(font, Vector2(size.x * 0.5 - 160.0, 36.0),
+				"%d HOSTILE%s   FLOOR %d / %d" % [remaining,
+					"" if remaining == 1 else "S", Game.floor_index, Game.max_floor()],
+				HORIZONTAL_ALIGNMENT_CENTER, 320.0, 8, DIM)
+		else:
+			draw_string(font, Vector2(size.x * 0.5 - 160.0, 36.0),
+				"FLOOR %d / %d   GATE OPEN" % [Game.floor_index, Game.max_floor()],
+				HORIZONTAL_ALIGNMENT_CENTER, 320.0, 8, DIM)
+		return
 	if Game.wave <= 0:
 		return
 	draw_string(font, Vector2(size.x * 0.5 - 140.0, 22.0),
@@ -164,6 +183,15 @@ func _draw_wave(font: Font, size: Vector2) -> void:
 		draw_string(font, Vector2(size.x * 0.5 - 140.0, 36.0),
 			"%d HOSTILE%s" % [Game.enemies_left, "" if Game.enemies_left == 1 else "S"],
 			HORIZONTAL_ALIGNMENT_CENTER, 280.0, 8, DIM)
+
+
+func _level_node() -> Node:
+	var main := get_parent()
+	while main != null and not main.has_method("start_floor"):
+		main = main.get_parent()
+	if main == null:
+		return null
+	return main.get("level")
 
 
 func _draw_boss(font: Font, size: Vector2) -> void:

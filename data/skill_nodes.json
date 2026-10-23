@@ -1,0 +1,13 @@
+{
+	"root_edge": {"name": "EDGE I", "stat": "damage", "per_level": 0.06, "cost": 60, "requires": [], "at": [0.5, 0.14], "text": "+6% DAMAGE"},
+	"root_vit": {"name": "VITAL I", "stat": "hp", "per_level": 10.0, "cost": 60, "requires": [], "at": [0.26, 0.30], "text": "+10 MAX HP"},
+	"root_swift": {"name": "SWIFT I", "stat": "speed", "per_level": 14.0, "cost": 60, "requires": [], "at": [0.74, 0.30], "text": "+14 SPEED"},
+	"edge_ii": {"name": "EDGE II", "stat": "damage", "per_level": 0.08, "cost": 110, "requires": ["root_edge"], "at": [0.5, 0.38], "text": "+8% DAMAGE"},
+	"crit_ii": {"name": "HUNTER I", "stat": "crit", "per_level": 0.08, "cost": 110, "requires": ["edge_ii"], "at": [0.5, 0.58], "text": "+8% CRIT DAMAGE"},
+	"ghost_ii": {"name": "GHOST I", "stat": "iframe", "per_level": 0.03, "cost": 120, "requires": ["root_vit"], "at": [0.18, 0.50], "text": "+30 ms I-FRAMES"},
+	"armory_ii": {"name": "ARMORY I", "stat": "knives", "per_level": 1.0, "cost": 130, "requires": ["root_swift"], "at": [0.82, 0.50], "text": "+1 KUNAI CHARGE"},
+	"edge_iii": {"name": "EDGE III", "stat": "damage", "per_level": 0.10, "cost": 180, "requires": ["crit_ii"], "at": [0.5, 0.78], "text": "+10% DAMAGE"},
+	"greed_ii": {"name": "GREED I", "stat": "cells", "per_level": 0.15, "cost": 140, "requires": ["ghost_ii"], "at": [0.10, 0.70], "text": "+15% CELLS"},
+	"swift_iii": {"name": "SWIFT II", "stat": "speed", "per_level": 18.0, "cost": 150, "requires": ["armory_ii"], "at": [0.90, 0.70], "text": "+18 SPEED"},
+	"apex": {"name": "APEX", "stat": "damage", "per_level": 0.18, "cost": 260, "requires": ["edge_iii", "greed_ii", "swift_iii"], "at": [0.5, 0.93], "text": "+18% DAMAGE. THE TREE ENDS."}
+}

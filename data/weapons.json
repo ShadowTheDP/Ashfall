@@ -66,5 +66,360 @@
         "blade": 50.0
       }
     ]
+  },
+  "arc_saber": {
+    "name": "Arc Saber",
+    "slot": "melee",
+    "attribute": "tactics",
+    "crit_multiplier": 2.0,
+    "shape": "curve",
+    "unlock_cost": 60,
+    "text": "A circular segment does the cutting. Fast, wide, and it barely hurts.",
+    "combo": [
+      {
+        "windup": 0.04,
+        "active": 0.06,
+        "recovery": 0.11,
+        "cancel_at": 0.5,
+        "lunge": 230.0,
+        "damage": 12.0,
+        "knockback": 130.0,
+        "hitstop": 0.035,
+        "size": [
+          52.0,
+          64.0
+        ],
+        "offset": [
+          26.0,
+          4.0
+        ],
+        "tier": 0,
+        "blade": 34.0
+      },
+      {
+        "windup": 0.05,
+        "active": 0.06,
+        "recovery": 0.12,
+        "cancel_at": 0.5,
+        "lunge": 210.0,
+        "damage": 14.0,
+        "knockback": 150.0,
+        "hitstop": 0.04,
+        "size": [
+          54.0,
+          64.0
+        ],
+        "offset": [
+          27.0,
+          4.0
+        ],
+        "tier": 1,
+        "blade": 36.0
+      },
+      {
+        "windup": 0.09,
+        "active": 0.08,
+        "recovery": 0.18,
+        "cancel_at": 0.6,
+        "lunge": 170.0,
+        "damage": 19.0,
+        "knockback": 330.0,
+        "hitstop": 0.07,
+        "size": [
+          62.0,
+          68.0
+        ],
+        "offset": [
+          31.0,
+          4.0
+        ],
+        "tier": 2,
+        "blade": 44.0
+      }
+    ]
+  },
+  "kiss_precision": {
+    "name": "Kiss Precision",
+    "slot": "melee",
+    "attribute": "tactics",
+    "crit_multiplier": 2.4,
+    "shape": "lens",
+    "unlock_cost": 90,
+    "text": "Two arcs meeting at a point. Nothing in the middle of the lens survives.",
+    "combo": [
+      {
+        "windup": 0.03,
+        "active": 0.05,
+        "recovery": 0.1,
+        "cancel_at": 0.45,
+        "lunge": 250.0,
+        "damage": 14.0,
+        "knockback": 90.0,
+        "hitstop": 0.03,
+        "size": [
+          44.0,
+          30.0
+        ],
+        "offset": [
+          22.0,
+          4.0
+        ],
+        "tier": 0,
+        "blade": 26.0
+      },
+      {
+        "windup": 0.04,
+        "active": 0.05,
+        "recovery": 0.1,
+        "cancel_at": 0.45,
+        "lunge": 230.0,
+        "damage": 16.0,
+        "knockback": 100.0,
+        "hitstop": 0.035,
+        "size": [
+          46.0,
+          30.0
+        ],
+        "offset": [
+          23.0,
+          4.0
+        ],
+        "tier": 1,
+        "blade": 28.0
+      },
+      {
+        "windup": 0.08,
+        "active": 0.07,
+        "recovery": 0.16,
+        "cancel_at": 0.58,
+        "lunge": 190.0,
+        "damage": 24.0,
+        "knockback": 260.0,
+        "hitstop": 0.065,
+        "size": [
+          52.0,
+          34.0
+        ],
+        "offset": [
+          26.0,
+          4.0
+        ],
+        "tier": 2,
+        "blade": 34.0
+      }
+    ]
+  },
+  "fractal_edge": {
+    "name": "Fractal Edge",
+    "slot": "melee",
+    "attribute": "brutality",
+    "crit_multiplier": 1.6,
+    "shape": "fractal",
+    "unlock_cost": 140,
+    "text": "The edge subdivides as it falls. The last swing arrives in three places.",
+    "combo": [
+      {
+        "windup": 0.13,
+        "active": 0.08,
+        "recovery": 0.22,
+        "cancel_at": 0.6,
+        "lunge": 170.0,
+        "damage": 11.0,
+        "knockback": 200.0,
+        "hitstop": 0.05,
+        "size": [
+          60.0,
+          56.0
+        ],
+        "offset": [
+          30.0,
+          4.0
+        ],
+        "tier": 1,
+        "blade": 42.0
+      },
+      {
+        "windup": 0.15,
+        "active": 0.09,
+        "recovery": 0.24,
+        "cancel_at": 0.6,
+        "lunge": 160.0,
+        "damage": 14.0,
+        "knockback": 240.0,
+        "hitstop": 0.055,
+        "size": [
+          62.0,
+          58.0
+        ],
+        "offset": [
+          31.0,
+          4.0
+        ],
+        "tier": 2,
+        "blade": 44.0
+      },
+      {
+        "windup": 0.26,
+        "active": 0.11,
+        "recovery": 0.34,
+        "cancel_at": 0.68,
+        "lunge": 120.0,
+        "damage": 38.0,
+        "knockback": 520.0,
+        "hitstop": 0.1,
+        "size": [
+          80.0,
+          72.0
+        ],
+        "offset": [
+          40.0,
+          4.0
+        ],
+        "tier": 3,
+        "blade": 62.0
+      }
+    ]
+  },
+  "chain_lash": {
+    "name": "Chain Lash",
+    "slot": "melee",
+    "attribute": "brutality",
+    "crit_multiplier": 1.8,
+    "shape": "chain",
+    "unlock_cost": 120,
+    "text": "Five links of decreasing width. Reach is the whole idea; speed is not.",
+    "combo": [
+      {
+        "windup": 0.11,
+        "active": 0.08,
+        "recovery": 0.2,
+        "cancel_at": 0.55,
+        "lunge": 190.0,
+        "damage": 10.0,
+        "knockback": 220.0,
+        "hitstop": 0.045,
+        "size": [
+          76.0,
+          80.0
+        ],
+        "offset": [
+          38.0,
+          4.0
+        ],
+        "tier": 0,
+        "blade": 58.0
+      },
+      {
+        "windup": 0.13,
+        "active": 0.08,
+        "recovery": 0.21,
+        "cancel_at": 0.55,
+        "lunge": 180.0,
+        "damage": 13.0,
+        "knockback": 250.0,
+        "hitstop": 0.05,
+        "size": [
+          78.0,
+          84.0
+        ],
+        "offset": [
+          39.0,
+          4.0
+        ],
+        "tier": 1,
+        "blade": 60.0
+      },
+      {
+        "windup": 0.2,
+        "active": 0.1,
+        "recovery": 0.3,
+        "cancel_at": 0.65,
+        "lunge": 150.0,
+        "damage": 27.0,
+        "knockback": 420.0,
+        "hitstop": 0.08,
+        "size": [
+          88.0,
+          96.0
+        ],
+        "offset": [
+          44.0,
+          4.0
+        ],
+        "tier": 3,
+        "blade": 70.0
+      }
+    ]
+  },
+  "orbit_rings": {
+    "name": "Orbit Rings",
+    "slot": "melee",
+    "attribute": "tactics",
+    "crit_multiplier": 2.0,
+    "shape": "orbit",
+    "unlock_cost": 100,
+    "text": "Two blades, one hand, opposite phases. It never stops turning.",
+    "combo": [
+      {
+        "windup": 0.03,
+        "active": 0.05,
+        "recovery": 0.09,
+        "cancel_at": 0.45,
+        "lunge": 240.0,
+        "damage": 9.0,
+        "knockback": 80.0,
+        "hitstop": 0.025,
+        "size": [
+          48.0,
+          50.0
+        ],
+        "offset": [
+          24.0,
+          4.0
+        ],
+        "tier": 0,
+        "blade": 30.0
+      },
+      {
+        "windup": 0.03,
+        "active": 0.05,
+        "recovery": 0.09,
+        "cancel_at": 0.45,
+        "lunge": 230.0,
+        "damage": 12.0,
+        "knockback": 90.0,
+        "hitstop": 0.03,
+        "size": [
+          48.0,
+          50.0
+        ],
+        "offset": [
+          24.0,
+          4.0
+        ],
+        "tier": 0,
+        "blade": 30.0
+      },
+      {
+        "windup": 0.07,
+        "active": 0.07,
+        "recovery": 0.15,
+        "cancel_at": 0.6,
+        "lunge": 180.0,
+        "damage": 26.0,
+        "knockback": 300.0,
+        "hitstop": 0.07,
+        "size": [
+          56.0,
+          58.0
+        ],
+        "offset": [
+          28.0,
+          4.0
+        ],
+        "tier": 2,
+        "blade": 38.0
+      }
+    ]
   }
 }
