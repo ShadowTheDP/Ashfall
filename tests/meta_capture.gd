@@ -39,6 +39,12 @@ func _ready() -> void:
 		_main._on_station_opened(id)
 		await get_tree().create_timer(0.45).timeout
 		await _shot("h02_%s" % id)
+		# The archive owns three tabs; capture each one.
+		if id == "archive":
+			for tab in ["weapon", "armor"]:
+				_main.archive.open(tab)
+				await get_tree().create_timer(0.35).timeout
+				await _shot("h02_archive_%s" % tab)
 		_close_all()
 		await get_tree().create_timer(0.2).timeout
 

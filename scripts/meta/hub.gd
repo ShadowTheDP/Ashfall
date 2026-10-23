@@ -13,13 +13,14 @@ const DOOR_X := 1560.0
 const REACH := 70.0
 
 # One row per station: a new station is data, not a new draw function.
+# One station per screen. BESTIARY / WEAPONS / ARMOR are tabs inside a single
+# ARCHIVES screen: three separate doors into one three-tab panel meant every
+# door could reach all three, which made the hub look broken.
 const STATIONS := [
-	{"id": "upgrade", "name": "UPGRADES", "x": 180.0, "sides": 6, "inner": "star"},
-	{"id": "skill", "name": "SKILLS", "x": 420.0, "sides": 3, "inner": "spiral"},
-	{"id": "bestiary", "name": "BESTIARY", "x": 660.0, "sides": 5, "inner": "rose"},
-	{"id": "weapons", "name": "WEAPONS", "x": 900.0, "sides": 4, "inner": "blade"},
-	{"id": "armor", "name": "ARMOR", "x": 1140.0, "sides": 8, "inner": "ring"},
-	{"id": "character", "name": "CHARACTER", "x": 1380.0, "sides": 10, "inner": "lissajous"},
+	{"id": "upgrade", "name": "UPGRADES", "x": 210.0, "sides": 6, "inner": "star"},
+	{"id": "skill", "name": "SKILLS", "x": 520.0, "sides": 3, "inner": "spiral"},
+	{"id": "archive", "name": "ARCHIVES", "x": 830.0, "sides": 5, "inner": "rose"},
+	{"id": "character", "name": "CHARACTER", "x": 1140.0, "sides": 10, "inner": "lissajous"},
 ]
 
 var floor_available := 0

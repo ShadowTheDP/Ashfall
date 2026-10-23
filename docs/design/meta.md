@@ -280,3 +280,36 @@ is what trapped the player in UPGRADES.
 closes each with Esc, asserts the tree is not paused and the player is not
 frozen, and checks that Enter still buys an upgrade. It runs inside
 `tools/check.ps1`.
+
+### Arena stage is arena-mode only
+
+`Main._ready()` used to build `Arena` unconditionally. `Arena` owns a solid
+`GROUND` box from y 0 to 160 plus five platforms, and nothing ever freed it.
+Consequences:
+
+- **In the hub**, its platforms were invisible steps the player could still
+  jump onto.
+- **On a generated floor**, its ground box swallowed the spawn point, so the
+  player was stuck inside collision and could not move at all (`dx = 0`).
+
+`_build_arena_stage()` now runs only when `start_mode == "arena"`, which is
+also the only mode that creates `Encounter`. `tests/floor_probe.tscn` asserts
+`dx > 5` after a descend and fails loudly on a paused tree, a scaled
+`time_scale`, or a null player.
+
+### One door per screen
+
+The hub used to have six stations, three of which (BESTIARY / WEAPONS /
+ARMOR) opened the same three-tab `ArchiveScreen`. Every door reached all three
+tabs, which read as a bug. There are now four stations:
+
+| station | screen |
+|---|---|
+| UPGRADES | `HubUi` panel |
+| SKILLS | `SkillTree` |
+| ARCHIVES | `ArchiveScreen` (three tabs inside) |
+| CHARACTER | `HubUi` panel |
+
+`HubUi._rows()` no longer carries duplicate bestiary/weapon/armour lists; the
+archive owns them. `Main._on_station_opened("archive")` opens the BESTIARY tab
+and the player tabs across from there.

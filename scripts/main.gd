@@ -40,31 +40,12 @@ func _ready() -> void:
 	world.name = "World"
 	add_child(world)
 
-	arena = Arena.new()
-	arena.name = "Arena"
-	world.add_child(arena)
-
-	var runes := Runes.new()
-	runes.name = "Runes"
-	world.add_child(runes)
-
-	var braziers := Braziers.new()
-	braziers.name = "Braziers"
-	world.add_child(braziers)
-
-	var motes := Motes.new()
-	motes.name = "Motes"
-	world.add_child(motes)
-
-	player = PLAYER_SCENE.instantiate() as Player
-	player.position = Vector2(560.0, -40.0)
-	world.add_child(player)
-	Game.fx_root = world
-
-	encounter = Encounter.new()
-	encounter.name = "Encounter"
-	add_child(encounter)
-	encounter.world = world
+	# The arena stage owns a solid GROUND box from y 0 to 160 plus five
+	# platforms. It must NOT exist outside arena mode: in the hub its platforms
+	# were invisible steps you could still jump onto, and on a generated floor
+	# its ground box swallowed the player spawn so the level froze.
+	if start_mode == "arena":
+		_build_arena_stage()
 
 	var hud_layer := CanvasLayer.new()
 	hud_layer.name = "HudLayer"
@@ -108,6 +89,34 @@ func _ready() -> void:
 
 	if start_mode == "arena":
 		encounter.start()
+
+
+func _build_arena_stage() -> void:
+	arena = Arena.new()
+	arena.name = "Arena"
+	world.add_child(arena)
+
+	var runes := Runes.new()
+	runes.name = "Runes"
+	world.add_child(runes)
+
+	var braziers := Braziers.new()
+	braziers.name = "Braziers"
+	world.add_child(braziers)
+
+	var motes := Motes.new()
+	motes.name = "Motes"
+	world.add_child(motes)
+
+	player = PLAYER_SCENE.instantiate() as Player
+	player.position = Vector2(560.0, -40.0)
+	world.add_child(player)
+	Game.fx_root = world
+
+	encounter = Encounter.new()
+	encounter.name = "Encounter"
+	add_child(encounter)
+	encounter.world = world
 
 
 func _on_title_started() -> void:
@@ -179,16 +188,12 @@ func _on_station_opened(id: String) -> void:
 			if skill_tree != null:
 				skill_tree.open()
 				return
-		"bestiary", "weapons", "armor":
+		"archive":
 			if archive != null:
-				archive.open("enemy" if id == "bestiary" else ("weapon" if id == "weapons" else "armor"))
+				# The archive owns its three tabs; the hub only picks the door.
+				archive.open("enemy")
 				return
 	# Upgrades and character select live in the hub's own panel.
-	if hub != null and hub.has_method("get_ui"):
-		var ui: Node = hub.get_ui()
-		if ui != null and ui.has_method("open_station"):
-			ui.open_station(id)
-			return
 	var ui_field: Variant = hub.get("ui") if hub != null else null
 	if ui_field != null and ui_field.has_method("open_station"):
 		ui_field.open_station(id)

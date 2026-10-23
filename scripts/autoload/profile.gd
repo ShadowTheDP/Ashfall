@@ -36,8 +36,9 @@ func _ready() -> void:
 
 # ---------------------------------------------------------------- save / load
 
-func load_profile() -> void:
-	if _loaded:
+## Idempotent by default; `force` re-reads the file (tests, future "reload save").
+func load_profile(force: bool = false) -> void:
+	if _loaded and not force:
 		return
 	_loaded = true
 	if not FileAccess.file_exists(SAVE_PATH):

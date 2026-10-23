@@ -12,9 +12,6 @@ const ROWS_PER_PAGE := 7
 const TITLES := {
 	"upgrade": "UPGRADES",
 	"skill": "SKILLS",
-	"bestiary": "BESTIARY",
-	"weapons": "WEAPONS",
-	"armor": "ARMOR",
 	"character": "CHARACTER",
 }
 
@@ -214,48 +211,6 @@ func _rows() -> Array:
 					"state": 2 if cost < 0 else 1,
 				})
 			return upgrades
-		"bestiary":
-			var beasts: Array = []
-			for id in Data.enemies:
-				var cfg: Dictionary = Data.enemies[id]
-				var seen := Profile.has_seen("enemy", id)
-				beasts.append({
-					"id": id, "kind": "enemy",
-					"name": str(cfg.get("name", id)) if seen else "???",
-					"info": "HP %d   DMG %d   SPEED %d   CELLS %d" % [
-						int(cfg.get("hp", 0.0)), int(cfg.get("damage", 0.0)),
-						int(cfg.get("speed", 0.0)), int(cfg.get("cells", 0))] if seen else "NOT YET ENCOUNTERED",
-					"right": "", "lock": not seen,
-					"state": 1 if seen else 0,
-				})
-			return beasts
-		"weapons":
-			var arms: Array = []
-			for id in Data.weapons:
-				var cfg: Dictionary = Data.weapons[id]
-				var steps := PackedStringArray()
-				var blade := 0.0
-				for step in cfg.get("combo", []):
-					steps.append(str(int(float(step.get("damage", 0.0)))))
-					blade = maxf(blade, float(step.get("blade", 0.0)))
-				arms.append({
-					"id": id, "kind": "weapon", "name": str(cfg.get("name", id)),
-					"info": "DMG %s    BLADE %d    %s" % ["/".join(steps), int(blade), str(cfg.get("attribute", "")).to_upper()],
-					"right": _status("weapon", id, int(cfg.get("cost", 0)), Profile.selected_weapon),
-					"state": 2 if Profile.selected_weapon == id else (1 if Profile.is_unlocked("weapon", id) else 0),
-				})
-			return arms
-		"armor":
-			var shells: Array = []
-			for id in Data.armor:
-				var cfg: Dictionary = Data.armor[id]
-				shells.append({
-					"id": id, "kind": "armor", "name": str(cfg.get("name", id)),
-					"info": str(cfg.get("text", "")),
-					"right": _status("armor", id, int(cfg.get("cost", 0)), Profile.selected_armor),
-					"state": 2 if Profile.selected_armor == id else (1 if Profile.is_unlocked("armor", id) else 0),
-				})
-			return shells
 		"character":
 			var bodies: Array = []
 			for id in Data.characters:
