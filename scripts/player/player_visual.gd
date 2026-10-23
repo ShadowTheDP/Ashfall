@@ -71,10 +71,9 @@ func _draw() -> void:
 	if p == null:
 		return
 	if _shadow_alpha > 0.0:
-		# The shadow is the only ground reference: it shrinks with height.
-		var w := 15.0 * _shadow_scale
-		MathArt.px_rect(self, Rect2(-w, _shadow_y, w * 2.0, 4.0), Color(0.0, 0.0, 0.0, _shadow_alpha))
-		MathArt.px_rect(self, Rect2(-w * 0.6, _shadow_y - 1.0, w * 1.2, 2.0), Color(0.0, 0.0, 0.0, _shadow_alpha * 0.6))
+		# A soft ellipse. A hard rectangle reads as a rendering bug, and the
+		# square already has enough straight edges.
+		_draw_soft_shadow(Vector2(0, _shadow_y), 15.0 * _shadow_scale, 3.4, _shadow_alpha)
 
 	if p.state == Player.State.DEAD:
 		_draw_dead()
@@ -93,6 +92,23 @@ func _draw() -> void:
 
 
 # --- Body -------------------------------------------------------------------
+
+func _draw_soft_shadow(center: Vector2, rx: float, ry: float, alpha: float) -> void:
+	# Three stacked ellipses: cumulative centre density ~0.30, fading to zero
+	# at the rim. Cheaper and cleaner than a blur, and it never shows a corner.
+	var layers := [
+		[1.00, 0.14],
+		[0.72, 0.16],
+		[0.42, 0.18],
+	]
+	for layer in layers:
+		var scale: float = layer[0]
+		var a: float = float(layer[1]) * (alpha / 0.5)
+		var points := PackedVector2Array()
+		for p in MathArt.ngon(20, 1.0):
+			points.append(Vector2(p.x * rx * scale, p.y * ry * scale) + center)
+		MathArt.px_poly(self, points, Color(0.0, 0.0, 0.0, clampf(a, 0.0, 0.22)))
+
 
 func _body_rotation() -> float:
 	if p.state == Player.State.ATTACK:
@@ -302,61 +318,59 @@ func _draw_smear(alpha: float, hand: Vector2, length: float) -> void:
 	var coil := _coil_angle()
 	var swing := signf(current - coil)
 	var travelled := absf(current - coil)
-	var trail := clampf(travelled * 0.40, 0.30, 1.20)
+	var trail := clampf(travelled * 0.55, 0.35, 1.55)
 	var from_angle := current - swing * trail
-	if absf(current - from_angle) < 0.15:
+
+	# GAP: the trail must never reach the blade. If the trail touches the tip,
+	# blade + trail read as one bent "L". Leave ~18 degrees of empty space.
+	var gap := 0.32
+	var arc_end := current - swing * gap
+	if absf(arc_end - from_angle) < 0.12:
 		return
+
 	var radius := length
 	var fade := 1.0 - k * 0.30
 
-	# There is deliberately NO continuous arc. Any unbroken curve at this
-	# radius reads as a crescent "mooncake". Instead the swing is drawn as a
-	# set of DISCONNECTED straight streaks at different radii, each tangent to
-	# the blade's path. Disconnected straight lines cannot form a shape; they
-	# only read as motion.
-	#
-	# Each streak: start on the arc, run along the tangent, taper, fade.
-	var tangent := Vector2.from_angle(current + swing * PI * 0.5)
-	var rows := 4
-	for row in rows:
-		var radius_k := lerpf(0.55, 1.02, float(row) / float(rows - 1))
-		var row_radius := radius * radius_k
-		# Inner rows lag further behind the tip.
-		var row_lag := lerpf(0.72, 0.0, float(row) / float(rows - 1))
-		var anchor_angle := current - swing * trail * row_lag
-		var pieces := 3
-		for piece in pieces:
-			var piece_k := float(piece) / float(pieces - 1)
-			var a := anchor_angle - swing * trail * 0.22 * piece_k
-			var start_p := hand + Vector2.from_angle(a) * row_radius
-			var seg := lerpf(20.0, 7.0, piece_k) * lerpf(0.55, 1.0, radius_k)
-			var end_p := start_p + tangent * seg * swing
-			var strength := alpha * fade * lerpf(0.75, 0.25, piece_k) * lerpf(0.55, 1.0, radius_k)
-			MathArt.line(self, start_p, end_p, Color(MathArt.WHITE, strength),
-				lerpf(2.4, 1.0, piece_k))
-			if piece == 0:
-				MathArt.px_rect(self, Rect2(end_p.x - 1.0, end_p.y - 1.0, 2.0, 2.0),
-					Color(MathArt.WHITE, strength))
+	# The trail is the arc the TIP swept. It is drawn as three concentric,
+	# THIN arcs of decreasing alpha - never a filled band, never a straight
+	# stroke at the tip. Curves that stop short of the blade cannot form an L.
+	MathArt.arc(self, hand, radius, from_angle, arc_end,
+		Color(MathArt.WHITE, alpha * 0.55 * fade), 2.0)
+	MathArt.arc(self, hand, radius - 2.5, from_angle, arc_end,
+		Color(MathArt.WHITE, alpha * 0.28 * fade), 1.0)
+	MathArt.arc(self, hand, radius - 5.0, from_angle, arc_end,
+		Color(MathArt.WHITE, alpha * 0.14 * fade), 1.0)
 
-	# The leading tip streak: longest, brightest, exactly along the blade.
-	var tip_dir := Vector2.from_angle(current)
-	var tip_start := hand + tip_dir * radius
-	var tip_end := tip_start + tangent * 26.0 * swing
-	MathArt.line(self, tip_start, tip_end, Color(MathArt.WHITE, alpha * 0.95), 3.0)
-	MathArt.line(self, tip_start, tip_end, Color(MathArt.WHITE, alpha), 1.0)
+	# Brighten the last third of the trail (nearest the blade) so the eye reads
+	# direction of travel.
+	var lead := lerpf(from_angle, arc_end, 0.62)
+	MathArt.arc(self, hand, radius, lead, arc_end, Color(MathArt.WHITE, alpha * 0.95), 2.0)
 
-	# Golden-angle dots sampled along the blade path: the math accent.
+	# A few short tangential ticks, but only well BEHIND the blade and detached
+	# from the arc, so they read as shed sparks rather than as geometry.
 	for i in 3:
-		var t := 0.20 + float(i) * 0.30
-		if t > 1.0:
+		var t := 0.22 + float(i) * 0.26
+		if t > 0.92:
 			continue
-		var a := lerpf(from_angle, current, t)
-		var point := hand + Vector2.from_angle(a) * (radius * 0.60)
-		MathArt.disc(self, point, 1.5, Color(MathArt.WHITE, alpha * fade * 0.55))
+		var a := lerpf(from_angle, arc_end, t)
+		var dir := Vector2.from_angle(a)
+		var start_p := hand + dir * (radius + 1.5)
+		var end_p := start_p + dir * 4.5
+		MathArt.line(self, start_p, end_p, Color(MathArt.WHITE, alpha * fade * (0.45 - float(i) * 0.12)), 1.0)
 
-	# Tip lag dot: the blade tip trails the body by one frame.
+	# Golden-angle dots sampled on the trail: the mathematical accent.
+	for i in 3:
+		var t := 0.18 + float(i) * 0.30
+		if t > 0.9:
+			continue
+		var a := lerpf(from_angle, arc_end, t)
+		var point := hand + Vector2.from_angle(a) * (radius * 0.72)
+		MathArt.disc(self, point, 1.4, Color(MathArt.WHITE, alpha * fade * 0.5))
+
+	# Tip lag dot: the blade tip trails the body by one frame. It sits on the
+	# blade's own radius, behind the tip, so it never crosses the blade.
 	var lag_dir := Vector2.from_angle(_blade_lag_angle)
-	MathArt.disc(self, hand + lag_dir * (radius - 2.0), 2.0, Color(MathArt.LIGHT, alpha * 0.45))
+	MathArt.disc(self, hand + lag_dir * (radius - 3.0), 1.8, Color(MathArt.LIGHT, alpha * 0.4))
 
 
 func _draw_aegis(alpha: float) -> void:

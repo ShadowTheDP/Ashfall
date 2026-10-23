@@ -97,8 +97,14 @@ func _radius() -> float:
 
 
 func _draw_shadow(half_h: float) -> void:
-	var w := _radius() * 0.9
-	MathArt.px_rect(self, Rect2(-w, half_h + 1.0, w * 2.0, 4.0), Color(0.0, 0.0, 0.0, 0.36))
+	var center := Vector2(0, half_h + 2.0)
+	var rx := _radius() * 0.95
+	var ry := 3.2
+	for layer in [Vector2(1.0, 0.14), Vector2(0.72, 0.16), Vector2(0.42, 0.18)]:
+		var points := PackedVector2Array()
+		for p in MathArt.ngon(20, 1.0):
+			points.append(Vector2(p.x * rx * layer.x, p.y * ry * layer.x) + center)
+		MathArt.px_poly(self, points, Color(0.0, 0.0, 0.0, layer.y))
 
 
 func _draw_ground_sigil(half_h: float) -> void:
@@ -197,20 +203,16 @@ func _draw_bulwark(flash: bool) -> void:
 
 func _draw_warden(flash: bool) -> void:
 	var r := _radius()
-	# Aura: a pentagram outline, slowly turning.
-	var aura := MathArt.star(5, r + 20.0, r + 4.0, -PI * 0.5 + _t * 0.10)
-	MathArt.px_poly(self, aura, Color(0, 0, 0, 0), Color(MathArt.MID, 0.35), 1.0)
 	# Body: nested pentagons.
-	MathArt.px_poly(self, MathArt.ngon(5, r * 1.15, -PI * 0.5, Vector2(0, 1)),
-		_c(MathArt.PALE, flash), Color(OUTLINE, 0.9), 2.0)
+	var vertices := MathArt.ngon(5, r * 1.15, -PI * 0.5, Vector2(0, 1))
+	MathArt.px_poly(self, vertices, _c(MathArt.PALE, flash), Color(OUTLINE, 0.9), 2.0)
 	MathArt.px_poly(self, MathArt.ngon(5, r * 0.70, -PI * 0.5, Vector2(0, 1)),
 		_c(MathArt.STONE, flash, 0.95))
-	# Crown: five ticks.
+	# Pentagram ON TOP of the body: five chords joining vertex i to vertex i+2.
+	# Drawn after the fill, otherwise the fill hides it entirely.
 	for i in 5:
-		var angle := -PI * 0.5 + TAU * float(i) / 5.0
-		var base := Vector2.from_angle(angle) * r * 0.7 + Vector2(0, -2)
-		var tip := Vector2.from_angle(angle) * r * 1.35 + Vector2(0, -2)
-		MathArt.line(self, base, tip, _c(MathArt.WHITE, flash, 0.85), 2.0)
+		MathArt.line(self, vertices[i], vertices[(i + 2) % 5],
+			_c(MathArt.WHITE, flash, 0.38), 1.0)
 	# Cleaver hand: a dot exactly on the pentagon edge.
 	var hand := Vector2(r * 0.965, 2)
 	var angle := 0.85

@@ -2,6 +2,9 @@
 
 ## Read Order
 
+0. `docs/PRODUCT.md` — the business overview: what the game is, how the
+   runtime is wired, who owns what, where every number lives. Start here if
+   you need the whole picture rather than one subsystem.
 1. `README.md` — purpose, setup, structure, validation.
 2. `MEMORY.md` — durable decisions, commands, risks.
 3. `docs/agent/current-state.md` — what is being worked on now.

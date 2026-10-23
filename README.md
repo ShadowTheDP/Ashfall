@@ -142,6 +142,7 @@ DC-like/
 ├── tests/                     # 無頭測試與截圖工具
 ├── tools/                     # 音效/音樂生成、Godot 下載、檢查腳本
 ├── docs/
+│   ├── PRODUCT.md             # 業務文檔：產品定義、架構、循環、數值、驗證
 │   ├── agent/                 # 冷啟動與交接
 │   └── design/                # 五根柱子、手感調參、數學美術
 └── output/                    # 截圖與匯出（gitignored）

@@ -104,3 +104,18 @@ playtest tuning, then breadth.
 5. Replace the 7 generic boons with the three-attribute (red/purple/green)
    scroll system once there are enough weapons to scale.
 6. Export presets and a Windows build once templates are installed.
+
+## Latest
+
+- `docs/PRODUCT.md` written: full business overview (product definition,
+  runtime graph, module ownership table, game loop, all combat/enemy numbers,
+  data flow, audio, validation matrix, hard rules, known limits, milestones).
+- Blade geometry: one tapered quad instead of two parallel lines (the L-shape).
+- Smear: three concentric thin arcs with a **0.32 rad gap before the blade**.
+  The gap is load-bearing - if the trail touches the tip, blade + trail read
+  as an L again. Do not reduce it below 0.28.
+- Warden pentagram is now inscribed on the body's own five vertices
+  (`ngon(5, r*1.15, -PI*0.5, Vector2(0,1))`, chord i -> i+2) and drawn
+  **after** the body fill, otherwise the fill hides it. Crown ticks removed.
+- Shadows (player + enemies) are three stacked 20-gons, cumulative centre
+  density ~0.30, no hard rectangle anywhere.
