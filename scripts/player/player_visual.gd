@@ -20,7 +20,9 @@ const HAND := MathArt.WHITE
 const BLADE := MathArt.WHITE
 
 const HALF := 13.0
-const REST_ANGLE := 0.62
+# The sword rests pointing UP and slightly forward. Godot's +y is down, so an
+# upward angle is negative. Facing right: -1.30 rad is up-and-forward.
+const REST_ANGLE := -1.30
 
 var p: Player
 var _t := 0.0
@@ -107,16 +109,9 @@ func _body_rotation() -> float:
 
 
 func _body_scale() -> Vector2:
-	var s := p.squash
-	# Preserve area: wide means short.
-	var sx := 1.0 + (s - 1.0) * 0.85
-	var sy := 1.0 - (s - 1.0) * 0.85
-	if not p.is_on_floor():
-		# Stretch with vertical speed while airborne.
-		var stretch := clampf(absf(p.velocity.y) / 900.0, 0.0, 1.0) * 0.12
-		sy += stretch
-		sx -= stretch * 0.6
-	return Vector2(sx, sy)
+	# Pure flat 2D: the square never deforms. Weight is carried by rotation,
+	# shadow size, particles and camera, not by scaling the silhouette.
+	return Vector2.ONE
 
 
 func _draw_body(alpha: float) -> void:
@@ -177,23 +172,24 @@ func _attack_phase() -> Dictionary:
 
 
 func _start_angle() -> float:
+	# Angles are authored facing right; -PI/2 points straight up.
 	match p.attack_index:
 		1:
-			return 1.05
+			return -2.55
 		2:
-			return -3.05
+			return -2.95
 		_:
-			return -2.15
+			return -2.30
 
 
 func _end_angle() -> float:
 	match p.attack_index:
 		1:
-			return -2.15
+			return 0.35
 		2:
-			return 1.15
+			return 0.95
 		_:
-			return 0.85
+			return 0.20
 
 
 func _overshoot() -> float:
@@ -248,7 +244,8 @@ func _blade_length() -> float:
 func _draw_hand_and_blade(alpha: float) -> void:
 	# The grip sits on the FRONT EDGE of the square, mirrored by facing, so the
 	# sword never appears to start inside the body.
-	var hand := Vector2(float(p.facing) * HALF, -7.0)
+	# Grip sits in the LOWER half of the square, on the front edge.
+	var hand := Vector2(float(p.facing) * HALF, 4.0)
 	var angle := REST_ANGLE
 	if p.state == Player.State.ATTACK:
 		angle = _blade_angle()
@@ -286,63 +283,63 @@ func _draw_smear(alpha: float, hand: Vector2, length: float) -> void:
 		return
 	var current := _blade_angle()
 	var coil := _coil_angle()
-	# The smear is a TRAIL, not the whole swing. It spans the last ~35% of the
-	# arc travelled so far, which keeps it to roughly 60-90 degrees instead of
-	# wrapping into a full ring.
+	var swing := signf(current - coil)
 	var travelled := absf(current - coil)
-	var trail := clampf(travelled * 0.38, 0.25, 1.15)
-	var from_angle := current - signf(current - coil) * trail
-	if absf(current - from_angle) < 0.12:
+	var trail := clampf(travelled * 0.40, 0.30, 1.20)
+	var from_angle := current - swing * trail
+	if absf(current - from_angle) < 0.15:
 		return
 	var radius := length
-	var fade := 1.0 - k * 0.35
+	var fade := 1.0 - k * 0.30
 
-	# A CRESCENT, not a pie wedge. The inner edge sits at 55% of the blade
-	# length, so the smear reads as the path of the blade rather than as a
-	# filled disc. Three nested crescents build volume without a gradient.
-	_draw_crescent(hand, from_angle, current, radius, radius * 0.42,
-		Color(MathArt.WHITE, alpha * 0.20 * fade))
-	_draw_crescent(hand, from_angle, current, radius, radius * 0.66,
-		Color(MathArt.WHITE, alpha * 0.30 * fade))
-	_draw_crescent(hand, from_angle, current, radius, radius * 0.86,
-		Color(MathArt.WHITE, alpha * 0.40 * fade))
+	# There is deliberately NO continuous arc. Any unbroken curve at this
+	# radius reads as a crescent "mooncake". Instead the swing is drawn as a
+	# set of DISCONNECTED straight streaks at different radii, each tangent to
+	# the blade's path. Disconnected straight lines cannot form a shape; they
+	# only read as motion.
+	#
+	# Each streak: start on the arc, run along the tangent, taper, fade.
+	var tangent := Vector2.from_angle(current + swing * PI * 0.5)
+	var rows := 4
+	for row in rows:
+		var radius_k := lerpf(0.55, 1.02, float(row) / float(rows - 1))
+		var row_radius := radius * radius_k
+		# Inner rows lag further behind the tip.
+		var row_lag := lerpf(0.72, 0.0, float(row) / float(rows - 1))
+		var anchor_angle := current - swing * trail * row_lag
+		var pieces := 3
+		for piece in pieces:
+			var piece_k := float(piece) / float(pieces - 1)
+			var a := anchor_angle - swing * trail * 0.22 * piece_k
+			var start_p := hand + Vector2.from_angle(a) * row_radius
+			var seg := lerpf(20.0, 7.0, piece_k) * lerpf(0.55, 1.0, radius_k)
+			var end_p := start_p + tangent * seg * swing
+			var strength := alpha * fade * lerpf(0.75, 0.25, piece_k) * lerpf(0.55, 1.0, radius_k)
+			MathArt.line(self, start_p, end_p, Color(MathArt.WHITE, strength),
+				lerpf(2.4, 1.0, piece_k))
+			if piece == 0:
+				MathArt.px_rect(self, Rect2(end_p.x - 1.0, end_p.y - 1.0, 2.0, 2.0),
+					Color(MathArt.WHITE, strength))
 
-	# Leading edge: the blade's own path, bright and thin.
-	MathArt.arc(self, hand, radius, from_angle, current, Color(MathArt.WHITE, alpha * 0.95), 3.0)
-	MathArt.arc(self, hand, radius, from_angle, current, Color(MathArt.WHITE, alpha), 1.0)
+	# The leading tip streak: longest, brightest, exactly along the blade.
+	var tip_dir := Vector2.from_angle(current)
+	var tip_start := hand + tip_dir * radius
+	var tip_end := tip_start + tangent * 26.0 * swing
+	MathArt.line(self, tip_start, tip_end, Color(MathArt.WHITE, alpha * 0.95), 3.0)
+	MathArt.line(self, tip_start, tip_end, Color(MathArt.WHITE, alpha), 1.0)
 
-	# The blade's previous position, one frame behind: a 35% ghost.
-	var ghost_from := lerpf(from_angle, current, -0.45)
-	MathArt.arc(self, hand, radius - 3.0, ghost_from, from_angle,
-		Color(MathArt.LIGHT, alpha * 0.40), 2.0)
-
-	# Motion lines behind the tip: the cheapest, clearest "speed" cue.
+	# Golden-angle dots sampled along the blade path: the math accent.
 	for i in 3:
-		var back := lerpf(0.16, 0.44, float(i) / 2.0)
-		var a := lerpf(current, from_angle, back)
-		var from_p := hand + Vector2.from_angle(a) * radius
-		var to_p := hand + Vector2.from_angle(a) * (radius + 7.0 + float(i) * 4.0)
-		MathArt.line(self, from_p, to_p, Color(MathArt.WHITE, alpha * (0.6 - float(i) * 0.16)), 1.0)
+		var t := 0.20 + float(i) * 0.30
+		if t > 1.0:
+			continue
+		var a := lerpf(from_angle, current, t)
+		var point := hand + Vector2.from_angle(a) * (radius * 0.60)
+		MathArt.disc(self, point, 1.5, Color(MathArt.WHITE, alpha * fade * 0.55))
 
 	# Tip lag dot: the blade tip trails the body by one frame.
 	var lag_dir := Vector2.from_angle(_blade_lag_angle)
-	MathArt.disc(self, hand + lag_dir * (radius - 3.0), 2.0, Color(MathArt.LIGHT, alpha * 0.4))
-
-
-func _draw_crescent(hand: Vector2, from_angle: float, to_angle: float, outer: float, inner: float, color: Color) -> void:
-	var steps := 12
-	var points := PackedVector2Array()
-	for i in steps + 1:
-		var t := float(i) / float(steps)
-		var a := lerpf(from_angle, to_angle, t)
-		# Taper the outer radius at both ends so the crescent has points.
-		var taper := sin(t * PI)
-		points.append(hand + Vector2.from_angle(a) * lerpf(inner + (outer - inner) * 0.35, outer, taper))
-	for i in range(steps, -1, -1):
-		var t := float(i) / float(steps)
-		var a := lerpf(from_angle, to_angle, t)
-		points.append(hand + Vector2.from_angle(a) * inner)
-	MathArt.px_poly(self, points, color)
+	MathArt.disc(self, hand + lag_dir * (radius - 2.0), 2.0, Color(MathArt.LIGHT, alpha * 0.45))
 
 
 func _draw_aegis(alpha: float) -> void:

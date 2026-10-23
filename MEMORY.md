@@ -50,9 +50,19 @@
   drives hitstop 2/4/6/8 frames, shake, zoom punch and the spark/ring tables in
   `scripts/fx/impact_fx.gd`. Crits bump one tier. Multiple hits in one frame do
   not stack. Full spec: `docs/design/impact.md`.
-- **Smear is a crescent trail, not a pie wedge**: three nested crescents at
-  42/66/86% of the blade length, and only the last ~38% of the arc travelled is
-  drawn, so it never wraps into a ring.
+- **Smear is drawn with DISCONNECTED STRAIGHT LINES, never a filled shape.**
+  At 38-50 px blade length any solid crescent or wedge reads as a "mooncake".
+  Four radial rows x three tangential streaks, each tangent to the blade path,
+  plus a 3px tip streak. Broken lines cannot enclose a shape, so they read as
+  speed. Do not reintroduce `draw_colored_polygon` bands here.
+- **Grip is in the LOWER half of the square** (`facing * 13, +4`) and the sword
+  rests pointing UP (`REST_ANGLE = -1.30` rad); swings run from up-back to
+  front-down.
+- **Pure flat 2D**: no squash, no stretch, no scale on any character. Player and
+  enemies use rotation + translation only (`_body_scale()` returns ONE). Enemy
+  lean reduced to +/-0.10-0.12 rad so rigid bodies tilt instead of folding.
+- **The Watcher has no bow**: it attacks directly, with a contracting ring
+  during windup and three orbiting satellite dots.
 - **Screen-level feedback** (`scripts/fx/screen_punch.gd`, layer 25, below HUD):
   vignette pulse + two 2-frame scanline offsets + camera zoom punch 1.025.
   Never a full-screen invert or a persistent glitch filter.

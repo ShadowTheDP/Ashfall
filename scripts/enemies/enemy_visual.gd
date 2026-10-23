@@ -38,23 +38,17 @@ func _draw() -> void:
 		bob = sin(_t * 2.0) * 1.0
 	var lean := 0.0
 	if e.state == Enemy.EState.WINDUP:
-		lean = -0.20
+		lean = -0.10
 	elif e.state == Enemy.EState.HURT:
-		lean = -0.26
+		lean = -0.12
 	elif moving:
-		lean = 0.10
-	var squash := 1.0
-	if e.state == Enemy.EState.HURT:
-		squash = 1.18
-	elif e.state == Enemy.EState.WINDUP:
-		squash = 0.90
-	elif e.state == Enemy.EState.ATTACK:
-		squash = 1.12
-
+		lean = 0.06
 	var flash := e.impact > 0.0
 	var outline := e.flash > 0.0 and e.impact <= 0.0
 
-	draw_set_transform(Vector2(0, bob), lean * float(e.facing), Vector2(squash * float(e.facing), 1.0))
+	# Pure flat 2D: rotation and translation only. No squash, no stretch, no
+	# scaling - the shapes stay rigid so they never look deformed.
+	draw_set_transform(Vector2(0, bob), lean * float(e.facing), Vector2(float(e.facing), 1.0))
 	_draw_shadow(half_h)
 	_draw_ground_sigil(half_h)
 	match e.kind:
@@ -156,19 +150,21 @@ func _draw_watcher(flash: bool) -> void:
 	var bead_angle := _t * 2.4
 	var bead := Vector2(cos(bead_angle) * (r + 9.0), sin(bead_angle) * 4.5).rotated(orbit_rotation)
 	MathArt.disc(self, bead + Vector2(0, -2), 2.2, _c(MathArt.WHITE, flash))
-	# Bow hand: a dot exactly on the circle's edge, drawn with a real bow.
-	var hand := Vector2(r, -2)
-	MathArt.disc(self, hand, 2.6, _c(MathArt.WHITE, flash))
-	# Bow: an arc centred on the hand, plus a string pulled during windup.
+	# No bow: the circle attacks directly. During windup a ring contracts onto
+	# the edge, which is both a telegraph and a mathematical element.
 	var pull := 0.0
 	if e.state == Enemy.EState.WINDUP:
 		pull = clampf(e.state_t / maxf(0.001, float(e.cfg.get("windup", 0.5))), 0.0, 1.0)
-	MathArt.arc(self, hand, 11.0, -1.15, 1.15, _c(MathArt.PALE, flash, 0.9), 2.0)
-	var top := hand + Vector2(4.4, -10.0)
-	var bottom := hand + Vector2(4.4, 10.0)
-	var notch := hand + Vector2(-6.0 * pull, 0.0)
-	MathArt.line(self, top, notch, _c(MathArt.WHITE, flash, 0.55), 1.0)
-	MathArt.line(self, notch, bottom, _c(MathArt.WHITE, flash, 0.55), 1.0)
+		MathArt.ring(self, Vector2(0, -2), lerpf(r + 16.0, r + 2.0, pull),
+			_c(MathArt.WHITE, flash, 0.25 + 0.55 * pull), 2.0)
+	# Firing point: a dot on the edge, brightest right before the shot.
+	var hand := Vector2(r, -2)
+	MathArt.disc(self, hand, lerpf(2.4, 4.2, pull), _c(MathArt.WHITE, flash))
+	# Orbiting satellites: pure geometry, no weapon.
+	for i in 3:
+		var a := _t * 2.0 + TAU * float(i) / 3.0
+		MathArt.disc(self, Vector2(cos(a) * (r + 7.0), -2.0 + sin(a) * 7.0), 1.4,
+			_c(MathArt.PALE, flash, 0.7))
 
 
 func _draw_ram(flash: bool) -> void:

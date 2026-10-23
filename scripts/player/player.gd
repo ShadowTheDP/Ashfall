@@ -398,7 +398,7 @@ func _open_hitbox() -> void:
 	# The arc is drawn around the grip, not the body centre.
 	var blade := float(attack_cfg.get("blade", 38.0))
 	Combat.slash(
-		global_position + Vector2(float(facing) * 13.0, -7.0),
+		global_position + Vector2(float(facing) * 13.0, 4.0),
 		facing,
 		attack_index,
 		MathArt.WHITE,

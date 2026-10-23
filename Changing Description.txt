@@ -185,3 +185,32 @@ After each meaningful completed task, append:
   - impact_capture (new): 20 frame-by-frame screenshots of a light hit and a
     finisher; used to iterate the smear three times.
 - Ready to push: yes.
+
+2026-10-23 16:40
+- Summary: Milestone 5 - slash reads as speed, not as a shape; flat 2D.
+  1) Grip moved to the LOWER half of the square (facing*13, +4) and the sword
+     now rests pointing UP (REST_ANGLE -1.30 rad); the swing runs from
+     up-back to front-down. Attack angles and the hitbox offset were
+     re-authored to match.
+  2) Smear rewritten from a filled crescent to DISCONNECTED STRAIGHT STREAKS:
+     four radial rows x three tangential segments, each tangent to the blade
+     path, plus a 3px leading tip streak and three golden-angle dots. Filled
+     arcs at 38-50 px radius always read as a "mooncake"; broken lines read as
+     speed.
+  3) Pure flat 2D: player and enemies no longer squash or stretch at all.
+     `_body_scale()` returns ONE; enemy lean reduced to +/-0.10-0.12 rad. Hit
+     deformation is gone; weight comes from rotation, shadow, particles and
+     camera.
+  4) The Watcher no longer draws a bow: it attacks directly, with a
+     contracting ring during windup and three orbiting satellite dots.
+  5) Mathematical elements added to impacts: a rotating regular polygon
+     inscribed in the expanding ring (5 sides for heavy, 6 for finisher) and
+     golden-angle spark spacing.
+- Key files changed: data/weapons.json, scripts/player/player_visual.gd,
+  scripts/player/player.gd, scripts/enemies/enemy_visual.gd,
+  scripts/fx/impact_fx.gd, scripts/fx/ring_fx.gd, docs/design/impact.md,
+  MEMORY.md.
+- Verification notes: run_tests 111 checks; combat_probe / reward_probe /
+  soak all OK. impact_capture used to iterate the smear four times; the final
+  version has no continuous arc.
+- Ready to push: yes.

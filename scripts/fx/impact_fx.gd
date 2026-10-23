@@ -36,13 +36,14 @@ func setup(hit_direction: Vector2, p_tier: int, p_tint: Color = MathArt.WHITE) -
 	_life = maxf(float(SPARK_LIFE[tier]), float(RING_LIFE[tier])) + 0.02
 
 	# Sparks fan out around the hit normal (not uniformly in all directions),
-	# so the hit reads as directional.
+	# so the hit reads as directional. The fan is sampled with the golden angle
+	# so the spacing is even but never obviously symmetric.
 	var count: int = SPARK_COUNT[tier]
 	var base_angle := direction.angle()
 	var spread := deg_to_rad(80.0)
 	for i in count:
 		var k := 0.0 if count == 1 else float(i) / float(count - 1)
-		var angle := base_angle + lerpf(-spread, spread, k) + randf_range(-0.10, 0.10)
+		var angle := base_angle + lerpf(-spread, spread, k) + float(i) * MathArt.GOLDEN_ANGLE * 0.06
 		_sparks.append({
 			"angle": angle,
 			"speed": randf_range(float(SPARK_SPEED[tier]) * 0.75, float(SPARK_SPEED[tier])),
@@ -64,7 +65,27 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	_draw_flash()
 	_draw_ring()
+	_draw_polygon()
 	_draw_sparks()
+
+
+func _draw_polygon() -> void:
+	# A rotating regular polygon inscribed in the expanding ring. This is the
+	# mathematical element: the hit is a geometric event, not a puff of smoke.
+	if tier < 2:
+		return
+	var sides := 3 + tier          # 5 for heavy, 6 for finisher
+	var life: float = float(RING_LIFE[tier]) * 1.4
+	if _t > life:
+		return
+	var k := clampf(_t / life, 0.0, 1.0)
+	var radius: float = float(RING_RADIUS[tier]) * lerpf(0.35, 0.85, ease(k, 2.0))
+	var alpha := (1.0 - k) * 0.55
+	var spin := direction.angle() + k * 1.6
+	var points := MathArt.ngon(sides, radius, spin)
+	MathArt.px_poly(self, points, Color(0, 0, 0, 0), Color(MathArt.WHITE, alpha), 2.0)
+	var inner := MathArt.ngon(sides, radius * MathArt.INV_PHI, -spin)
+	MathArt.px_poly(self, inner, Color(0, 0, 0, 0), Color(MathArt.PALE, alpha * 0.6), 1.0)
 
 
 func _draw_flash() -> void:
