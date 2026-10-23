@@ -184,3 +184,38 @@ offset = [reach / 2, -7]
 - [Eight Hit Stop Techniques — Sakurai](https://www.youtube.com/watch?v=tycbMSjDDLg)
 - [Why Fighting Games Have Hitstop — Sajam](https://www.youtube.com/watch?v=KL5MNHGs5Fg)
 - [Game Feel — Steve Swink](https://www.routledge.com/Game-Feel-A-Game-Designers-Guide-to-Virtual-Sensation/Swink/p/book/9780123743282)
+
+## 7. The smear has exactly one owner
+
+`SlashFx` (`scripts/fx/slash_fx.gd`) is the **only** thing that draws the
+swing trail. `PlayerVisual._draw_smear()` is intentionally empty.
+
+This was not always true, and the duplication was the actual cause of the
+"mooncake" and of the trail fusing with the blade into an L:
+
+- `SlashFx` drew three **concentric bands** (4 px, 3 px, 1 px) across a
+  2.1-2.9 rad arc. At 38-50 px radius that is a filled crescent.
+- `PlayerVisual._draw_smear()` drew a second, independently-phased arc from
+  the grip. Two arcs with different origins overlapped into one solid shape.
+
+Rules that now hold:
+
+1. **One radius, one owner.** Trail = `SlashFx` dashes on the tip's radius.
+2. **Dashes, never bands.** 4 dashes over a 0.95-1.35 rad span, widths
+   1.2 -> 2.6 px, alpha 0.42 -> 1.0 (bright end leads).
+3. **The trail never touches the blade.** It ends 0.30 rad short, and it
+   lives behind the blade, so blade + trail cannot read as an L.
+4. **Span is capped, not proportional.** `arc` is a constant per combo step.
+   Scaling it with the live swept angle made long swings produce giant arcs.
+5. **`_coil_angle()` must go through `_mirror()`.** Without it a left-facing
+   swing travels ~5 rad instead of ~3.2 and the whole trail becomes a band.
+   This bug was invisible on the first two combo steps (they happened to
+   land near the mirrored value) and only showed on the third.
+
+## 8. Shadows
+
+Both player and enemies use three stacked 20-gons (scales 1.00 / 0.72 / 0.42,
+alpha 0.14 / 0.16 / 0.18). Cumulative centre density is about 0.30 and it
+fades to nothing at the rim. A `Rect2` shadow was tried and rejected: a
+hard-edged black bar reads as a rendering bug, and the cast is already
+straight-edged enough.

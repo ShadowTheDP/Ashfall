@@ -213,7 +213,10 @@ func _overshoot() -> float:
 
 
 func _coil_angle() -> float:
-	return _start_angle() - 0.38 * float(p.facing)
+	# Must go through _mirror(). Without it a left-facing swing travels ~5 rad
+	# (almost a full circle) instead of ~3.2, which is what turned the smear
+	# into a giant band.
+	return _mirror(_start_angle() - 0.38)
 
 
 func _mirror(angle: float) -> float:
@@ -225,9 +228,7 @@ func _blade_angle() -> float:
 	var phase := _attack_phase()
 	var rest := REST_ANGLE if p.facing > 0 else PI - REST_ANGLE
 	var coil := _coil_angle()
-	var to_angle := _end_angle() + _overshoot() * float(p.facing)
-	if p.facing < 0:
-		to_angle = PI - (_end_angle() - _overshoot())
+	var to_angle := _mirror(_end_angle() + _overshoot())
 	match phase["name"]:
 		"windup":
 			var k := clampf(float(phase["k"]) / 0.55, 0.0, 1.0)
@@ -307,70 +308,10 @@ func _draw_hand_and_blade(alpha: float) -> void:
 
 
 func _draw_smear(alpha: float, hand: Vector2, length: float) -> void:
-	var phase := _attack_phase()
-	if phase["name"] != "active":
-		return
-	var limit := 0.55 if p.attack_index == 2 else 0.34
-	var k := clampf(float(phase["k"]) / limit, 0.0, 1.0)
-	if k > 1.0:
-		return
-	var current := _blade_angle()
-	var coil := _coil_angle()
-	var swing := signf(current - coil)
-	var travelled := absf(current - coil)
-	var trail := clampf(travelled * 0.55, 0.35, 1.55)
-	var from_angle := current - swing * trail
-
-	# GAP: the trail must never reach the blade. If the trail touches the tip,
-	# blade + trail read as one bent "L". Leave ~18 degrees of empty space.
-	var gap := 0.32
-	var arc_end := current - swing * gap
-	if absf(arc_end - from_angle) < 0.12:
-		return
-
-	var radius := length
-	var fade := 1.0 - k * 0.30
-
-	# The trail is the arc the TIP swept. It is drawn as three concentric,
-	# THIN arcs of decreasing alpha - never a filled band, never a straight
-	# stroke at the tip. Curves that stop short of the blade cannot form an L.
-	MathArt.arc(self, hand, radius, from_angle, arc_end,
-		Color(MathArt.WHITE, alpha * 0.55 * fade), 2.0)
-	MathArt.arc(self, hand, radius - 2.5, from_angle, arc_end,
-		Color(MathArt.WHITE, alpha * 0.28 * fade), 1.0)
-	MathArt.arc(self, hand, radius - 5.0, from_angle, arc_end,
-		Color(MathArt.WHITE, alpha * 0.14 * fade), 1.0)
-
-	# Brighten the last third of the trail (nearest the blade) so the eye reads
-	# direction of travel.
-	var lead := lerpf(from_angle, arc_end, 0.62)
-	MathArt.arc(self, hand, radius, lead, arc_end, Color(MathArt.WHITE, alpha * 0.95), 2.0)
-
-	# A few short tangential ticks, but only well BEHIND the blade and detached
-	# from the arc, so they read as shed sparks rather than as geometry.
-	for i in 3:
-		var t := 0.22 + float(i) * 0.26
-		if t > 0.92:
-			continue
-		var a := lerpf(from_angle, arc_end, t)
-		var dir := Vector2.from_angle(a)
-		var start_p := hand + dir * (radius + 1.5)
-		var end_p := start_p + dir * 4.5
-		MathArt.line(self, start_p, end_p, Color(MathArt.WHITE, alpha * fade * (0.45 - float(i) * 0.12)), 1.0)
-
-	# Golden-angle dots sampled on the trail: the mathematical accent.
-	for i in 3:
-		var t := 0.18 + float(i) * 0.30
-		if t > 0.9:
-			continue
-		var a := lerpf(from_angle, arc_end, t)
-		var point := hand + Vector2.from_angle(a) * (radius * 0.72)
-		MathArt.disc(self, point, 1.4, Color(MathArt.WHITE, alpha * fade * 0.5))
-
-	# Tip lag dot: the blade tip trails the body by one frame. It sits on the
-	# blade's own radius, behind the tip, so it never crosses the blade.
-	var lag_dir := Vector2.from_angle(_blade_lag_angle)
-	MathArt.disc(self, hand + lag_dir * (radius - 3.0), 1.8, Color(MathArt.LIGHT, alpha * 0.4))
+	# Intentionally empty: the swing trail is SlashFx's job (spawned once per
+	# swing from Player._open_hitbox). Drawing it here as well produced two
+	# overlapping arcs that fused into a solid band. One trail, one owner.
+	pass
 
 
 func _draw_aegis(alpha: float) -> void:
