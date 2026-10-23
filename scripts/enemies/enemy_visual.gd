@@ -14,6 +14,8 @@ const OUTLINE := MathArt.BLACK
 
 var e: Enemy
 var _t := 0.0
+var _warden_points: PackedVector3Array = PackedVector3Array()
+var _warden_faces_cache: Array = []
 
 
 func _ready() -> void:
@@ -201,20 +203,42 @@ func _draw_bulwark(flash: bool) -> void:
 	MathArt.line(self, shield_center + Vector2(0, -11), shield_center + Vector2(0, 11), _c(MathArt.WHITE, flash, 0.45), 1.0)
 
 
+## The boss is the ONLY pseudo-3D body in the game. Everyone else stays a flat
+## polygon, so the Warden reads as a different order of thing: a solid that
+## turns in space instead of a shape that slides across the screen.
 func _draw_warden(flash: bool) -> void:
 	var r := _radius()
-	# Body: nested pentagons.
-	var vertices := MathArt.ngon(5, r * 1.15, -PI * 0.5, Vector2(0, 1))
-	MathArt.px_poly(self, vertices, _c(MathArt.PALE, flash), Color(OUTLINE, 0.9), 2.0)
-	MathArt.px_poly(self, MathArt.ngon(5, r * 0.70, -PI * 0.5, Vector2(0, 1)),
-		_c(MathArt.STONE, flash, 0.95))
-	# Pentagram ON TOP of the body: five chords joining vertex i to vertex i+2.
-	# Drawn after the fill, otherwise the fill hides it entirely.
+	var spin := _t * 0.42
+	var points := Geom3D.rotate_y(_warden_mesh(r), spin)
+	# A slight pitch so the top cap is visible: without it the prism reads as a
+	# flat pentagon that merely changes width.
+	var pitch := 0.22
+	var projected := Geom3D.project(points, 260.0, Vector2.ZERO, pitch)
+	var depths := Geom3D.depths(points, pitch)
+	# Pre-darken: draw_solid lightens a face by up to +0.275, so a PALE base
+	# would clamp every face to the same value and the solid would go flat.
+	var tone := _c(MathArt.shade(MathArt.PALE, -0.18), flash)
+	# contrast 1.15 is nearly twice the default: five facets on a 40 px body
+	# need a wide value spread or the solid flattens into one grey mass.
+	Geom3D.draw_solid(self, projected, _warden_faces(), tone,
+		_c(MathArt.WHITE, flash), pitch, depths, 1.15)
+
+	# The pentagram is inscribed on whichever cap faces the camera. Picking by
+	# depth matters: drawing it on a fixed cap puts the lines behind the solid
+	# half the time, and it reads as a wire cage instead of a sigil on a face.
+	var front_cap := 5 if _cap_depth(depths, 5) > _cap_depth(depths, 0) else 0
+	var sigil := PackedVector2Array()
 	for i in 5:
-		MathArt.line(self, vertices[i], vertices[(i + 2) % 5],
-			_c(MathArt.WHITE, flash, 0.38), 1.0)
-	# Cleaver hand: a dot exactly on the pentagon edge.
-	var hand := Vector2(r * 0.965, 2)
+		sigil.append(projected[front_cap + i])
+	# INK, not white: the cap is the LIGHTEST face, so a bright sigil vanishes
+	# into it. A dark inscription reads as carved.
+	for i in 5:
+		MathArt.line(self, sigil[i], sigil[(i + 2) % 5],
+			_c(MathArt.INK, flash, 0.62), 1.5)
+
+	# Cleaver hand: a dot on the leading edge, mirrored by facing so the blade
+	# never crosses the body.
+	var hand := Vector2(float(-e.facing) * -1.0 * r * 0.98, 2)
 	var angle := 0.85
 	if e.state == Enemy.EState.WINDUP:
 		angle = -1.05
@@ -226,6 +250,31 @@ func _draw_warden(flash: bool) -> void:
 	MathArt.line(self, hand, hand + direction * 32.0, _c(MathArt.PALE, flash, 0.6), 1.0)
 	if e.state == Enemy.EState.ATTACK:
 		MathArt.arc(self, hand, 28.0, angle - 1.5, angle, Color(MathArt.WHITE, 0.35), 3.0)
+
+
+## Pentagon column, cached: the mesh never changes, only its rotation.
+func _warden_mesh(r: float) -> PackedVector3Array:
+	if _warden_points.is_empty():
+		var raw := Geom3D.prism(5, r * 1.15, r * 1.15)
+		# A vertex must point UP. Geom3D.prism starts at +x, so turn it -90 deg.
+		_warden_points = Geom3D.rotate_z(raw, -PI * 0.5)
+	return _warden_points
+
+
+func _cap_depth(depths: PackedFloat32Array, offset: int) -> float:
+	var total := 0.0
+	for i in 5:
+		total += depths[offset + i]
+	return total / 5.0
+
+
+func _warden_faces() -> Array:
+	if _warden_faces_cache.is_empty():
+		var faces: Array = Geom3D.prism_faces(5)
+		faces.append([0, 1, 2, 3, 4])
+		faces.append([9, 8, 7, 6, 5])
+		_warden_faces_cache = faces
+	return _warden_faces_cache
 
 
 func _draw_telegraph() -> void:

@@ -39,6 +39,29 @@ function Invoke-Step {
     }
 }
 
+# --- meta layer probes (scene-based: they need autoloads) -------------------
+function Invoke-Probe {
+    param([string]$Name, [string]$Scene)
+    Write-Host ""
+    Write-Host "== $Name ==" -ForegroundColor Cyan
+    # Godot writes warnings to stderr; with $ErrorActionPreference = "Stop"
+    # PowerShell turns those into terminating errors. Relax it for the call.
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $out = & $Godot --headless --path $root $Scene 2>&1
+    $code = $LASTEXITCODE
+    $ErrorActionPreference = $previous
+    $out | Write-Output
+    if ($out -match "FAILED|FAIL:") {
+        Write-Host "FAILED: $Name" -ForegroundColor Red
+        exit 1
+    }
+    if ($code -ne 0) {
+        Write-Host "FAILED: $Name (exit $code)" -ForegroundColor Red
+        exit $code
+    }
+}
+
 Invoke-Step -Name "Import assets / compile scripts" -Arguments @(
     "--headless", "--path", $root, "--import"
 )
@@ -58,6 +81,8 @@ Invoke-Step -Name "Reward probe (keyboard boon picker)" -Arguments @(
 Invoke-Step -Name "Soak (all enemies, 3 waves, victory)" -Arguments @(
     "--headless", "--path", $root, "tests/soak.tscn"
 )
+
+Invoke-Probe -Name "Hub panels (open/close/buy)" -Scene "tests/esc_probe.tscn"
 
 Write-Host ""
 Write-Host "ALL CHECKS PASSED" -ForegroundColor Green

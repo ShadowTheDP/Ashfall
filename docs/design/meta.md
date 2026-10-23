@@ -248,3 +248,35 @@ Deviations and load-bearing details that the next reader needs.
   counterpart for telegraphs and deaths.
 - `rose_bloom(petals=6)` renders 3 lobes: `r = cos(kθ)` closes at integer k and
   gives k lobes for odd k, 2k for even.
+
+### Pseudo-3D is boss-only
+
+`CharacterVisual` (`scripts/player/character_visual.gd`) is **not wired in**.
+The player and every normal enemy stay flat polygons — that is the game's
+identity, and a rotating solid body destroyed it. `enemy_visual.gd`
+`_draw_warden()` is the only caller of `Geom3D`.
+
+Two things the Warden needs that a small body does not:
+
+- `draw_solid(..., contrast)` — the default 0.55 flattens five facets on a
+  40 px body into one grey mass. The Warden passes **1.15**.
+- The pentagram is inscribed on the cap that faces the camera (chosen by
+  averaging the cap's depths), and it is drawn in **INK, not white**. The cap
+  is the lightest face, so a bright sigil disappears into it; a dark one reads
+  as carved.
+
+### Modal panels own Esc
+
+`HubUi`, `ArchiveScreen` and `SkillTree` use `_input()`, not
+`_unhandled_input()`. The HUD also listens for Esc and sits later in the tree,
+so unhandled input reached the HUD first: Esc paused the game instead of
+closing the panel, and a paused panel stopped receiving input entirely, which
+is what trapped the player in UPGRADES.
+
+`Hud._unhandled_input()` additionally returns early while any panel
+`is_open()`, so a pause can never happen underneath a modal.
+
+`tests/esc_probe.tscn` is the regression test: it opens all six stations,
+closes each with Esc, asserts the tree is not paused and the player is not
+frozen, and checks that Enter still buys an upgrade. It runs inside
+`tools/check.ps1`.

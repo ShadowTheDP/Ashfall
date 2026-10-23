@@ -88,7 +88,10 @@ func _process(delta: float) -> void:
 	_canvas.queue_redraw()
 
 
-func _unhandled_input(event: InputEvent) -> void:
+## _input, not _unhandled_input: the HUD also listens for Esc and it is
+## later in the tree, so unhandled input reaches it first. A modal panel
+## has to claim the key before the HUD can pause the game under it.
+func _input(event: InputEvent) -> void:
 	if not _open:
 		return
 	if not (event is InputEventKey) or not event.pressed or event.echo:

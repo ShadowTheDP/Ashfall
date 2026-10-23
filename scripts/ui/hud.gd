@@ -26,6 +26,10 @@ func _process(_delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if Game.reward_open:
 		return
+	# A hub station panel owns Esc while it is open; otherwise pausing under it
+	# traps the player with no way back out.
+	if _modal_open():
+		return
 	if event.is_action_pressed("restart") and (paused or Game.run_over):
 		_restart()
 		get_viewport().set_input_as_handled()
@@ -36,6 +40,22 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if paused and event is InputEventKey and event.pressed and event.physical_keycode == KEY_Q:
 		get_tree().quit()
+
+
+func _modal_open() -> bool:
+	var main := get_parent()
+	while main != null and not main.has_method("start_floor"):
+		main = main.get_parent()
+	if main == null:
+		return false
+	for name in ["archive", "skill_tree"]:
+		var screen: Variant = main.get(name)
+		if screen != null and screen.has_method("is_open") and screen.is_open():
+			return true
+	var hub: Variant = main.get("hub")
+	if hub != null and hub.has_method("is_open") and hub.is_open():
+		return true
+	return false
 
 
 func _set_paused(value: bool) -> void:

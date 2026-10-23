@@ -199,7 +199,8 @@ static func depths(points: PackedVector3Array, pitch: float = 0.0) -> PackedFloa
 ## reads without any outline at all.
 static func draw_solid(canvas: CanvasItem, points: PackedVector2Array,
 		faces: Array, tone: Color, rim: Color, pitch: float = 0.0,
-		depths_in: PackedFloat32Array = PackedFloat32Array()) -> void:
+		depths_in: PackedFloat32Array = PackedFloat32Array(),
+		contrast: float = 0.55) -> void:
 	if points.size() == 0:
 		return
 	var sorted := _sort_faces(faces, depths_in)
@@ -211,7 +212,7 @@ static func draw_solid(canvas: CanvasItem, points: PackedVector2Array,
 		if poly.size() < 3:
 			continue
 		var shade := _face_shade(poly, points)
-		var fill := MathArt.shade(tone, (shade - 0.5) * 0.55)
+		var fill := MathArt.shade(tone, (shade - 0.5) * contrast)
 		MathArt.poly(canvas, poly, fill, MathArt.with_alpha(rim, 0.28), 1.0)
 
 
