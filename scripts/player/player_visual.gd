@@ -257,17 +257,34 @@ func _draw_hand_and_blade(alpha: float) -> void:
 
 	var length := _blade_length()
 	var direction := Vector2.from_angle(angle)
-	var tip := hand + direction * length
 	var side := direction.orthogonal()
+	var tip := hand + direction * length
 
 	# The hand is a DOT, not a limb.
 	MathArt.disc(self, hand, 3.2, _tint(HAND, alpha))
 
-	# Blade: a 2px core with a 1px highlight, tapering to a point.
-	MathArt.line(self, hand + direction * 3.0, tip, _tint(BLADE, alpha), 2.0)
-	MathArt.line(self, hand + direction * 3.0 + side, tip, _tint(MathArt.WHITE, alpha * 0.5), 1.0)
-	# Cross guard: two 1px ticks.
-	MathArt.line(self, hand + side * 4.0, hand - side * 4.0, _tint(MathArt.MID, alpha), 2.0)
+	# Blade: ONE tapered quad. Two offset lines read as two parallel rods and
+	# together with the guard they form an "L" at this scale - never do that.
+	var base := hand + direction * 3.0
+	var base_half := 2.1
+	var tip_half := 0.35
+	var blade := PackedVector2Array([
+		base + side * base_half,
+		tip + side * tip_half,
+		tip - side * tip_half,
+		base - side * base_half,
+	])
+	MathArt.px_poly(self, blade, _tint(BLADE, alpha), _tint(MathArt.WHITE, alpha * 0.35), 1.0)
+
+	# A single bright edge along ONE side only, so it reads as a bevel rather
+	# than a second blade.
+	MathArt.line(self, base + side * (base_half - 0.4), tip, _tint(MathArt.WHITE, alpha * 0.75), 1.0)
+
+	# Guard: a short bar perpendicular to the blade, centred on the grip and
+	# kept SHORT so it cannot form an "L" with the blade.
+	MathArt.line(self, hand + side * 3.0, hand - side * 3.0, _tint(MathArt.MID, alpha), 2.0)
+	# Pommel: a 1px dot behind the grip.
+	MathArt.disc(self, hand - direction * 3.0, 1.6, _tint(MathArt.MID, alpha))
 
 	if p.state == Player.State.ATTACK:
 		_draw_smear(alpha, hand, length)
