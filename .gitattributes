@@ -5,3 +5,4 @@
 *.wav binary
 *.pck binary
 *.exe binary
+*.bat text eol=crlf

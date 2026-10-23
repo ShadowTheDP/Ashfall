@@ -29,3 +29,13 @@ After each meaningful completed task, append:
     finisher, roll, bestiary, pause) render on Godot 4.7.2 / OpenGL.
 - Ready to push: yes for Milestone 0. Export templates are not installed yet,
   so no Windows build has been produced.
+
+2026-10-23 09:23
+- Summary: Made the keyboard-only guarantee explicit: removed the mouse attack
+  binding, documented that every action (move/jump/attack/roll/pause/restart/
+  quit) has a keyboard binding, and added a double-click launcher (`play.bat`).
+- Key files changed: `scripts/autoload/game.gd`, `play.bat`, `README.md`,
+  `AGENTS.md`, `MEMORY.md`, `.gitattributes`
+- Verification notes: `tools/check.ps1` passes (53 data checks, combat probe,
+  3-wave soak). Game launched and rendered for manual playtest.
+- Ready to push: yes.

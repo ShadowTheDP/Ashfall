@@ -36,6 +36,9 @@
   This avoids serialized `InputEvent` blobs in `project.godot`.
   `shortcut: no in-game rebinding; move actions to project.godot when a settings
   screen or controller remap lands.`
+- **Keyboard-only guarantee:** every action has a keyboard binding and the game
+  does not bind or require the mouse. Pause/restart/quit are keyboard-only too.
+  Do not introduce mouse-only actions. Gamepad support is additive.
 - **Enemy spawns are split:** melee/charger use ground points, archers prefer
   platform points. This was changed after wave 1 sometimes spawned entirely on
   platforms.

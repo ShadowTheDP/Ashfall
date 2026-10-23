@@ -47,6 +47,9 @@
 # 第一次：下載固定版本的 Godot 到 .tools\
 powershell -ExecutionPolicy Bypass -File tools\fetch_godot.ps1
 
+# 雙擊啟動（或從終端機）
+.\play.bat
+
 # 直接跑遊戲
 .\.tools\Godot_v4.7.2-stable_win64.exe --path .
 
@@ -62,11 +65,14 @@ powershell -ExecutionPolicy Bypass -File tools\fetch_godot.ps1
 |---|---|---|
 | 移動 | `A` / `D` 或方向鍵 | 左類比 |
 | 跳躍 | `Space` / `W` / `Up` | A |
-| 攻擊 | `J` / `Z` / 滑鼠左鍵 | X |
+| 攻擊 | `J` / `Z` | X |
 | 翻滾 | `Shift` / `L` | B |
 | 暫停 | `Esc` | Start |
 | 重來（死亡或暫停時） | `R` | Back |
 | 離開（暫停時） | `Q` | — |
+
+**鍵盤完整保證**：所有操作都有鍵盤綁定，遊戲不需要滑鼠；
+`scripts/autoload/game.gd` 也不再綁定任何滑鼠事件。手把是額外選項。
 
 > 輸入動作在 `scripts/autoload/game.gd` 的 `_setup_input()` 以程式註冊，
 > 不是寫在 `project.godot`。這是刻意的原型取捨，詳見 `MEMORY.md`。

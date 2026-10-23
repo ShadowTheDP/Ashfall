@@ -120,15 +120,18 @@ func _setup_input() -> void:
 			event.physical_keycode = key
 			InputMap.action_add_event(action, event)
 
-	var mouse := InputEventMouseButton.new()
-	mouse.button_index = MOUSE_BUTTON_LEFT
-	InputMap.action_add_event("attack", mouse)
+	var joy_buttons := {
+		"jump": JOY_BUTTON_A,
+		"attack": JOY_BUTTON_X,
+		"roll": JOY_BUTTON_B,
+		"pause": JOY_BUTTON_START,
+		"restart": JOY_BUTTON_BACK,
+	}
+	for action in joy_buttons:
+		_joy(action, joy_buttons[action])
 
-	_joy("jump", JOY_BUTTON_A)
-	_joy("attack", JOY_BUTTON_X)
-	_joy("roll", JOY_BUTTON_B)
-	_joy("pause", JOY_BUTTON_START)
-	_joy("restart", JOY_BUTTON_BACK)
+	# Keyboard-only guarantee: every action above has a key binding and the
+	# game never requires a mouse. Do not add mouse-only actions.
 
 
 func _joy(action: String, button: int) -> void:

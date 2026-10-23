@@ -17,6 +17,8 @@
   data tables, or decompiled output. Mechanics and genre are fair game;
   expression is not.
 - Keep the prototype runnable with the headless checks in `tools/check.ps1`.
+- **Keyboard-only:** every action must have a keyboard binding; do not add
+  mouse-only interactions. Pause, restart and quit included. Gamepad is additive.
 - Prefer Godot built-ins over new libraries. There are no third-party runtime
   dependencies.
 
