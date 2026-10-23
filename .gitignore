@@ -1,0 +1,15 @@
+# Godot import cache
+.godot/
+
+# Local engine binaries used for headless validation
+.tools/
+
+# Build and capture output
+output/
+*.tmp
+*.log
+
+# OS noise
+Thumbs.db
+desktop.ini
+.DS_Store

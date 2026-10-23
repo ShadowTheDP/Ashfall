@@ -1,0 +1,31 @@
+Project: Ashfall (DC-like)
+
+This is the single official project change log.
+After each meaningful completed task, append:
+- date and time
+- short summary of the completed work
+- key files changed
+- verification notes
+- whether the work is ready to push
+
+2026-10-23 09:01
+- Summary: Created Milestone 0 of an original Dead-Cells-like combat
+  prototype: one handmade arena, 3-wave encounter, playable player with a
+  3-hit sword combo, roll i-frames, input buffering, coyote time, jump buffer,
+  hitstop, camera shake, crits, cells, HUD, pause and run-summary overlays.
+  All visuals are procedural; all 12 SFX are synthesized.
+- Key files changed: `project.godot`, `README.md`, `AGENTS.md`, `MEMORY.md`,
+  `docs/agent/`, `docs/design/`, `data/weapons.json`, `data/enemies.json`,
+  `scripts/` (autoload, systems, player, enemies, world, ui, fx, combat),
+  `scenes/`, `shaders/`, `assets/audio/`, `tests/`, `tools/make_sfx.py`,
+  `tools/check.ps1`
+- Verification notes:
+  - `tests/run_tests.gd`: 53 data/formula checks pass.
+  - `tests/combat_probe.tscn`: combo 11/13/24 kills a 42 hp husk; cells and
+    kills count; hurt i-frames and roll i-frames block damage.
+  - `tests/soak.tscn`: Watcher and Ram damage the player; all 3 waves clear;
+    victory, 10 kills, no script errors.
+  - `tests/capture_scene.tscn`: 9 screenshots (idle, run, air, attack, combo,
+    finisher, roll, bestiary, pause) render on Godot 4.7.2 / OpenGL.
+- Ready to push: yes for Milestone 0. Export templates are not installed yet,
+  so no Windows build has been produced.

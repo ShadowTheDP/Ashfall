@@ -1,0 +1,46 @@
+{
+  "rusty_sword": {
+    "name": "Rusty Sword",
+    "slot": "melee",
+    "attribute": "brutality",
+    "crit_multiplier": 1.7,
+    "combo": [
+      {
+        "windup": 0.06,
+        "active": 0.07,
+        "recovery": 0.15,
+        "cancel_at": 0.55,
+        "lunge": 210.0,
+        "damage": 11.0,
+        "knockback": 170.0,
+        "hitstop": 0.045,
+        "size": [68.0, 46.0],
+        "offset": [38.0, -12.0]
+      },
+      {
+        "windup": 0.08,
+        "active": 0.07,
+        "recovery": 0.17,
+        "cancel_at": 0.55,
+        "lunge": 190.0,
+        "damage": 13.0,
+        "knockback": 190.0,
+        "hitstop": 0.05,
+        "size": [70.0, 48.0],
+        "offset": [38.0, -12.0]
+      },
+      {
+        "windup": 0.15,
+        "active": 0.09,
+        "recovery": 0.26,
+        "cancel_at": 0.62,
+        "lunge": 150.0,
+        "damage": 24.0,
+        "knockback": 430.0,
+        "hitstop": 0.085,
+        "size": [82.0, 58.0],
+        "offset": [44.0, -14.0]
+      }
+    ]
+  }
+}
