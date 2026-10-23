@@ -5,7 +5,7 @@ extends Node2D
 var _t := 0.0
 var _life := 0.2
 var _facing := 1
-var _color := MathArt.CYAN
+var _color := MathArt.WHITE
 
 
 func setup(is_facing: int, tint: Color) -> void:

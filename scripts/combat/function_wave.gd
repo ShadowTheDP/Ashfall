@@ -8,7 +8,7 @@ var damage := 8.0
 var crit_mult := 1.5
 var direction := 1
 var speed := 540.0
-var tint := MathArt.CYAN
+var tint := MathArt.WHITE
 var _t := 0.0
 var _life := 0.42
 var _hit: Array[Node] = []
@@ -35,6 +35,7 @@ func _ready() -> void:
 	shape.shape = rect
 	add_child(shape)
 	body_entered.connect(_on_body_entered)
+	Combat.burst(global_position, MathArt.WHITE, 6, 120.0)
 
 
 func _physics_process(delta: float) -> void:

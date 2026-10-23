@@ -6,10 +6,10 @@ extends Control
 signal started
 
 const PALE := MathArt.PALE
-const AMBER := MathArt.AMBER
-const AMBER_HI := MathArt.AMBER_HI
-const CYAN := MathArt.CYAN
-const VIOLET := MathArt.VIOLET
+const AMBER := MathArt.PALE_DIM
+const AMBER_HI := MathArt.WHITE
+const CYAN := MathArt.WHITE
+const VIOLET := MathArt.PALE
 
 var _t := 0.0
 var _open := true
@@ -55,7 +55,7 @@ func _draw() -> void:
 	var size := get_viewport_rect().size
 	var center := Vector2(roundf(size.x * 0.5), roundf(size.y * 0.40))
 
-	MathArt.px_rect(self, Rect2(0, 0, size.x, size.y), Color(0.02, 0.028, 0.04, 0.96))
+	MathArt.px_rect(self, Rect2(0, 0, size.x, size.y), Color(0.028, 0.028, 0.028, 0.96))
 
 	_draw_rose_window(center)
 	_draw_lissajous(center)
@@ -63,23 +63,23 @@ func _draw() -> void:
 	_draw_orbit_sigils(center)
 
 	draw_string(font, Vector2(center.x - 200.0, center.y), "ASHFALL",
-		HORIZONTAL_ALIGNMENT_CENTER, 400.0, 28, PALE)
+		HORIZONTAL_ALIGNMENT_CENTER, 400.0, 44, PALE)
 	draw_string(font, Vector2(center.x - 200.0, center.y + 16.0),
 		"combat, geometry and consequence",
-		HORIZONTAL_ALIGNMENT_CENTER, 400.0, 7, Color(0.72, 0.78, 0.86, 0.8))
-	MathArt.px_rect(self, Rect2(center.x - 56.0, center.y + 22.0, 112, 1), Color(AMBER, 0.85))
-	MathArt.px_poly(self, MathArt.ngon(3, 3.0, -PI * 0.5, Vector2(center.x, center.y + 22.0)), AMBER)
+		HORIZONTAL_ALIGNMENT_CENTER, 400.0, 10, Color(0.774, 0.774, 0.774, 0.85))
+	MathArt.px_rect(self, Rect2(center.x - 56.0, center.y + 26.0, 140, 1), Color(AMBER, 0.85))
+	MathArt.px_poly(self, MathArt.ngon(3, 3.0, -PI * 0.5, Vector2(center.x, center.y + 26.0)), AMBER)
 
 	var blink := 0.55 + 0.45 * (0.5 + 0.5 * sin(_t * 3.4))
 	draw_string(font, Vector2(center.x - 150.0, roundf(size.y * 0.70)), "PRESS ENTER TO DESCEND",
-		HORIZONTAL_ALIGNMENT_CENTER, 300.0, 10, Color(PALE, blink))
+		HORIZONTAL_ALIGNMENT_CENTER, 320.0, 14, Color(PALE, blink))
 
 	draw_string(font, Vector2(center.x - 240.0, roundf(size.y * 0.79)),
 		"A/D MOVE    SPACE JUMP    J SINE EDGE    K KUNAI    L AEGIS    SHIFT ROLL",
-		HORIZONTAL_ALIGNMENT_CENTER, 480.0, 6, Color(0.55, 0.62, 0.72, 0.9))
+		HORIZONTAL_ALIGNMENT_CENTER, 520.0, 9, Color(0.685, 0.685, 0.685, 0.95))
 	draw_string(font, Vector2(center.x - 240.0, roundf(size.y * 0.85)),
 		"ESC PAUSE      R RESTART      Q QUIT      EVERYTHING IS KEYBOARD",
-		HORIZONTAL_ALIGNMENT_CENTER, 480.0, 6, Color(0.42, 0.48, 0.58, 0.8))
+		HORIZONTAL_ALIGNMENT_CENTER, 520.0, 8, Color(0.545, 0.545, 0.545, 0.85))
 
 
 func _draw_rose_window(center: Vector2) -> void:
@@ -90,7 +90,7 @@ func _draw_rose_window(center: Vector2) -> void:
 		var angle := TAU * float(i) / 16.0 + _t * 0.02
 		var from_point := center + Vector2.from_angle(angle) * 54.0
 		var to_point := center + Vector2.from_angle(angle) * 140.0
-		MathArt.px_line(self, from_point, to_point, Color(0.55, 0.42, 0.20, 0.07), 1.0)
+		MathArt.px_line(self, from_point, to_point, Color(0.569, 0.569, 0.569, 0.07), 1.0)
 	# star() already places points around `center`; do not offset again.
 	var star_points := MathArt.star(12, 138.0, 108.0, -PI * 0.5 + _t * 0.01, center)
 	for i in star_points.size():

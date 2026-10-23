@@ -1,15 +1,13 @@
 class_name Hud
 extends Control
-## Pixel HUD. Everything is drawn at whole-pixel coordinates on a 640x360
-## canvas: chunky bars, 1px frames and small caps labels.
+## Monochrome HUD for 768x480. Layout uses an 8px grid and proportional
+## anchoring; no element relies on colour to be understood.
 
-const AMBER := MathArt.AMBER
-const AMBER_HI := MathArt.AMBER_HI
-const RED := MathArt.RED
-const RED_HI := MathArt.RED_HI
-const PALE := MathArt.PALE
-const DIM := MathArt.STEEL
-const CYAN := MathArt.CYAN
+const FG := MathArt.PALE
+const FG_HI := MathArt.WHITE
+const DIM := MathArt.MID
+const DIM2 := MathArt.MID_DIM
+const BG := MathArt.INK
 
 var paused := false
 
@@ -82,7 +80,7 @@ func _draw() -> void:
 		_draw_run_over(font, size)
 
 
-func _label(font: Font, at: Vector2, text: String, color: Color, size := 6) -> void:
+func _text(font: Font, at: Vector2, text: String, color: Color, size := 9) -> void:
 	draw_string(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
 
 
@@ -91,133 +89,130 @@ func _draw_vitals(font: Font) -> void:
 	if player == null:
 		return
 	var ratio := clampf(player.hp / maxf(player.max_hp, 1.0), 0.0, 1.0)
-	_label(font, Vector2(14, 12), "VITALITY", DIM, 6)
-	var bar := Rect2(14, 16, 132, 6)
-	MathArt.px_rect(self, bar.grow(1.0), Color(0.0, 0.0, 0.0, 0.7))
-	MathArt.px_rect(self, bar, MathArt.STONE_2)
+	_text(font, Vector2(20, 22), "VITALITY", DIM, 9)
+	var bar := Rect2(20, 28, 168, 9)
+	MathArt.px_rect(self, bar.grow(2.0), Color(0.0, 0.0, 0.0, 0.75))
+	MathArt.px_rect(self, bar, MathArt.STONE)
 	if ratio > 0.0:
-		var width := roundf(bar.size.x * ratio)
-		MathArt.px_rect(self, Rect2(bar.position, Vector2(width, bar.size.y)), RED)
-		MathArt.px_rect(self, Rect2(bar.position, Vector2(width, 1.0)), RED_HI)
-		MathArt.px_rect(self, Rect2(bar.position + Vector2(0, bar.size.y - 1.0), Vector2(width, 1.0)), Color(MathArt.RED_DIM, 0.9))
-	# Quarter ticks.
+		var w := bar.size.x * ratio
+		MathArt.px_rect(self, Rect2(bar.position, Vector2(w, bar.size.y)), MathArt.LIGHT)
+		MathArt.px_rect(self, Rect2(bar.position, Vector2(w, 2.0)), MathArt.WHITE)
+	draw_rect(bar, Color(MathArt.WHITE, 0.25), false, 1.0)
 	for i in range(1, 4):
-		var x := bar.position.x + roundf(bar.size.x * float(i) / 4.0)
-		MathArt.px_rect(self, Rect2(x, bar.position.y, 1, bar.size.y), Color(0.0, 0.0, 0.0, 0.45))
-	draw_string(font, Vector2(bar.position.x + bar.size.x, 12.0),
-		"%d/%d" % [int(ceil(player.hp)), int(player.max_hp)],
-		HORIZONTAL_ALIGNMENT_RIGHT, 56.0, 7, PALE)
+		var x := bar.position.x + bar.size.x * float(i) / 4.0
+		MathArt.px_rect(self, Rect2(x, bar.position.y, 1, bar.size.y), Color(0.0, 0.0, 0.0, 0.5))
+	draw_string(font, Vector2(bar.position.x + bar.size.x - 96.0, 22.0),
+		"%d / %d" % [int(ceil(player.hp)), int(player.max_hp)],
+		HORIZONTAL_ALIGNMENT_RIGHT, 96.0, 10, FG)
 
 
 func _draw_cells(font: Font) -> void:
-	var center := Vector2(20, 36)
+	var center := Vector2(26, 56)
 	MathArt.px_poly(self, PackedVector2Array([
-		center + Vector2(0, -4), center + Vector2(3, 0),
-		center + Vector2(0, 4), center + Vector2(-3, 0),
-	]), AMBER, AMBER_HI, 1.0)
-	draw_string(font, Vector2(30, 40), "%d" % Game.cells, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, PALE)
-	_label(font, Vector2(30, 47), "CELLS", DIM, 6)
+		center + Vector2(0, -6), center + Vector2(4, 0),
+		center + Vector2(0, 6), center + Vector2(-4, 0),
+	]), FG_HI, FG_HI, 1.0)
+	draw_string(font, Vector2(38, 62), "%d" % Game.cells, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, FG)
+	_text(font, Vector2(38, 74), "CELLS", DIM2, 8)
 
 
 func _draw_knives(font: Font) -> void:
 	var player := Game.player
 	if player == null:
 		return
-	_label(font, Vector2(14, 57), "KUNAI", DIM, 6)
+	_text(font, Vector2(20, 90), "KUNAI", DIM2, 8)
 	for i in player.knife_max:
-		var center := Vector2(18 + i * 11, 66)
+		var center := Vector2(26 + i * 14, 102)
 		var charged := i < player.knife_charges
-		var tint := CYAN if charged else MathArt.STEEL_DIM
-		var alpha := 0.95 if charged else 0.30
+		var tint := FG_HI if charged else MathArt.MID_DIM
+		var alpha := 0.95 if charged else 0.35
 		MathArt.px_poly(self, PackedVector2Array([
-			center + Vector2(0, -4), center + Vector2(3, 0),
-			center + Vector2(0, 4), center + Vector2(-3, 0),
+			center + Vector2(0, -5), center + Vector2(4, 0),
+			center + Vector2(0, 5), center + Vector2(-4, 0),
 		]), Color(tint, alpha), Color(tint, alpha), 1.0)
 	if player.knife_charges < player.knife_max:
-		var width := float(player.knife_max) * 11.0 - 4.0
+		var w := float(player.knife_max) * 14.0 - 6.0
 		var ratio := clampf(player._knife_regen / player.knife_regen_time, 0.0, 1.0)
-		MathArt.px_rect(self, Rect2(14, 73, width, 1), Color(0.0, 0.0, 0.0, 0.5))
-		MathArt.px_rect(self, Rect2(14, 73, roundf(width * ratio), 1), CYAN)
+		MathArt.px_rect(self, Rect2(20, 110, w, 2), Color(0.0, 0.0, 0.0, 0.6))
+		MathArt.px_rect(self, Rect2(20, 110, w * ratio, 2), FG_HI)
 
 
 func _draw_aegis(font: Font) -> void:
 	var player := Game.player
 	if player == null:
 		return
-	var center := Vector2(20, 86)
+	var center := Vector2(27, 126)
 	var total := player.aegis_time + player.aegis_cooldown
 	var ratio := 1.0 - clampf(player.aegis_cd / maxf(total, 0.001), 0.0, 1.0)
 	var ready := player.aegis_cd <= 0.0
-	_label(font, Vector2(14, 78), "AEGIS", DIM, 6)
-	MathArt.px_ring(self, center, 5.0, Color(0.0, 0.0, 0.0, 0.6), 2.0)
-	var arc_end := -PI * 0.5 + TAU * ratio
-	MathArt.px_arc(self, center, 5.0, -PI * 0.5, arc_end, Color(CYAN, 0.95 if ready else 0.45), 2.0)
+	_text(font, Vector2(20, 118), "AEGIS", DIM2, 8)
+	MathArt.ring(self, center, 7.0, Color(0.0, 0.0, 0.0, 0.7), 3.0)
+	MathArt.arc(self, center, 7.0, -PI * 0.5, -PI * 0.5 + TAU * ratio, Color(FG_HI, 1.0 if ready else 0.5), 3.0)
 	if player.aegis_t > 0.0:
-		MathArt.px_rect(self, Rect2(center.x - 1, center.y - 1, 3, 3), Color(CYAN, 1.0))
+		MathArt.disc(self, center, 2.4, FG_HI)
 	elif ready:
-		MathArt.px_rect(self, Rect2(center.x - 1, center.y - 1, 2, 2), Color(CYAN, 0.75))
+		MathArt.disc(self, center, 1.8, Color(FG_HI, 0.8))
 
 
 func _draw_wave(font: Font, size: Vector2) -> void:
 	if Game.wave <= 0:
 		return
-	draw_string(font, Vector2(size.x * 0.5 - 120.0, 15.0),
-		"WAVE %d/%d" % [Game.wave, Game.wave_total],
-		HORIZONTAL_ALIGNMENT_CENTER, 240.0, 8, PALE)
+	draw_string(font, Vector2(size.x * 0.5 - 140.0, 22.0),
+		"WAVE %d / %d" % [Game.wave, Game.wave_total],
+		HORIZONTAL_ALIGNMENT_CENTER, 280.0, 11, FG)
 	if Game.enemies_left > 0:
-		draw_string(font, Vector2(size.x * 0.5 - 120.0, 25.0),
+		draw_string(font, Vector2(size.x * 0.5 - 140.0, 36.0),
 			"%d HOSTILE%s" % [Game.enemies_left, "" if Game.enemies_left == 1 else "S"],
-			HORIZONTAL_ALIGNMENT_CENTER, 240.0, 6, DIM)
+			HORIZONTAL_ALIGNMENT_CENTER, 280.0, 8, DIM)
 
 
 func _draw_boss(font: Font, size: Vector2) -> void:
 	if not is_instance_valid(Game.boss):
 		return
 	var boss := Game.boss
-	var width := 260.0
-	var x := roundf((size.x - width) * 0.5)
-	var y := 36.0
+	var width := 320.0
+	var x := (size.x - width) * 0.5
+	var y := 52.0
 	var ratio := clampf(boss.hp / maxf(boss.max_hp, 1.0), 0.0, 1.0)
-	draw_string(font, Vector2(size.x * 0.5 - 120.0, y - 4.0), "THE WARDEN",
-		HORIZONTAL_ALIGNMENT_CENTER, 240.0, 7, Color(MathArt.VIOLET, 0.95))
-	MathArt.px_rect(self, Rect2(x - 1.0, y - 1.0, width + 2.0, 7.0), Color(0.0, 0.0, 0.0, 0.75))
-	MathArt.px_rect(self, Rect2(x, y, width, 5.0), Color(0.10, 0.06, 0.16))
-	MathArt.px_rect(self, Rect2(x, y, roundf(width * ratio), 5.0), MathArt.VIOLET_MID)
-	MathArt.px_rect(self, Rect2(x, y, roundf(width * ratio), 1.0), Color(0.85, 0.72, 1.0, 0.8))
+	draw_string(font, Vector2(size.x * 0.5 - 140.0, y - 6.0), "THE WARDEN",
+		HORIZONTAL_ALIGNMENT_CENTER, 280.0, 9, FG)
+	MathArt.px_rect(self, Rect2(x - 2.0, y - 2.0, width + 4.0, 10.0), Color(0.0, 0.0, 0.0, 0.8))
+	MathArt.px_rect(self, Rect2(x, y, width, 6.0), MathArt.STONE)
+	MathArt.px_rect(self, Rect2(x, y, width * ratio, 6.0), FG)
+	MathArt.px_rect(self, Rect2(x, y, width * ratio, 1.5), FG_HI)
 	for i in range(1, 5):
-		var tx := x + roundf(width * float(i) / 5.0)
-		MathArt.px_rect(self, Rect2(tx, y, 1, 5.0), Color(0.0, 0.0, 0.0, 0.4))
+		MathArt.px_rect(self, Rect2(x + width * float(i) / 5.0, y, 1, 6.0), Color(0.0, 0.0, 0.0, 0.45))
 
 
 func _draw_combo(font: Font, size: Vector2) -> void:
 	if Game.combo < 2:
 		return
 	var pop := 1.0 + Game.combo_pop * 0.2
-	var center := Vector2(size.x - 34.0, 40.0)
-	var radius := roundf(16.0 * pop)
+	var center := Vector2(size.x - 46.0, 54.0)
+	var radius := 22.0 * pop
 	var ratio := clampf(Game.combo_time / Game.COMBO_WINDOW, 0.0, 1.0)
-	MathArt.px_ring(self, center, radius, Color(0.0, 0.0, 0.0, 0.55), 3.0)
-	MathArt.px_arc(self, center, radius, -PI * 0.5, -PI * 0.5 + TAU * ratio, AMBER, 3.0)
-	draw_string(font, Vector2(center.x - 20.0, center.y + 4.0), "%d" % Game.combo,
-		HORIZONTAL_ALIGNMENT_CENTER, 40.0, int(11.0 * pop), AMBER_HI)
-	draw_string(font, Vector2(center.x - 24.0, center.y + 24.0), "COMBO",
-		HORIZONTAL_ALIGNMENT_CENTER, 48.0, 5, DIM)
+	MathArt.ring(self, center, radius, Color(0.0, 0.0, 0.0, 0.6), 3.0)
+	MathArt.arc(self, center, radius, -PI * 0.5, -PI * 0.5 + TAU * ratio, FG_HI, 3.0)
+	draw_string(font, Vector2(center.x - 24.0, center.y + 5.0), "%d" % Game.combo,
+		HORIZONTAL_ALIGNMENT_CENTER, 48.0, int(15.0 * pop), FG_HI)
+	draw_string(font, Vector2(center.x - 30.0, center.y + 32.0), "COMBO",
+		HORIZONTAL_ALIGNMENT_CENTER, 60.0, 7, DIM2)
 
 
 func _draw_edge(font: Font, size: Vector2) -> void:
 	if Game.edge_timer <= 0.0:
 		return
 	var ratio := clampf(Game.edge_timer / Game.PERFECT_DODGE_TIME, 0.0, 1.0)
-	var x := size.x - 96.0
-	_label(font, Vector2(x, 78), "EDGE +25%", AMBER_HI, 6)
-	MathArt.px_rect(self, Rect2(x, 82, 82, 2), Color(0.0, 0.0, 0.0, 0.5))
-	MathArt.px_rect(self, Rect2(x, 82, roundf(82.0 * ratio), 2), AMBER)
+	var x := size.x - 132.0
+	_text(font, Vector2(x, 96), "EDGE +25%", FG_HI, 9)
+	MathArt.px_rect(self, Rect2(x, 102, 112, 3), Color(0.0, 0.0, 0.0, 0.6))
+	MathArt.px_rect(self, Rect2(x, 102, 112.0 * ratio, 3), FG_HI)
 
 
 func _draw_timer(font: Font, size: Vector2) -> void:
 	var total := int(Game.run_time)
-	draw_string(font, Vector2(size.x - 70.0, 15.0), "%02d:%02d" % [total / 60, total % 60],
-		HORIZONTAL_ALIGNMENT_RIGHT, 56.0, 8, DIM)
+	draw_string(font, Vector2(size.x - 100.0, 22.0), "%02d:%02d" % [total / 60, total % 60],
+		HORIZONTAL_ALIGNMENT_RIGHT, 80.0, 11, DIM)
 
 
 func _draw_build(font: Font, size: Vector2) -> void:
@@ -227,16 +222,16 @@ func _draw_build(font: Font, size: Vector2) -> void:
 	for id in Game.reward_counts:
 		var count := int(Game.reward_counts[id])
 		parts.append(str(id).to_upper() + ("x%d" % count if count > 1 else ""))
-	draw_string(font, Vector2(size.x - 230.0, size.y - 30.0), " · ".join(parts),
-		HORIZONTAL_ALIGNMENT_RIGHT, 216.0, 6, Color(DIM, 0.7))
+	draw_string(font, Vector2(size.x - 300.0, size.y - 42.0), " · ".join(parts),
+		HORIZONTAL_ALIGNMENT_RIGHT, 280.0, 8, Color(DIM, 0.8))
 
 
 func _draw_hints(font: Font, size: Vector2) -> void:
-	draw_string(font, Vector2(14, size.y - 8.0),
-		"A/D MOVE   SPACE JUMP   J EDGE   K KUNAI   L AEGIS   SHIFT ROLL   ESC PAUSE",
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 6, Color(DIM, 0.78))
-	draw_string(font, Vector2(size.x - 96.0, size.y - 8.0), "ASHFALL 0.2",
-		HORIZONTAL_ALIGNMENT_RIGHT, 82.0, 6, Color(DIM, 0.5))
+	draw_string(font, Vector2(20, size.y - 14.0),
+		"A/D MOVE    SPACE JUMP    J EDGE    K KUNAI    L AEGIS    SHIFT ROLL    ESC PAUSE",
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(DIM, 0.85))
+	draw_string(font, Vector2(size.x - 130.0, size.y - 14.0), "ASHFALL 0.3",
+		HORIZONTAL_ALIGNMENT_RIGHT, 110.0, 8, Color(DIM2, 0.6))
 
 
 func _draw_announce(font: Font, size: Vector2) -> void:
@@ -245,9 +240,9 @@ func _draw_announce(font: Font, size: Vector2) -> void:
 	var elapsed := Game.announce_max - Game.announce_t
 	var alpha := clampf(elapsed / 0.14, 0.0, 1.0) * clampf(Game.announce_t / 0.26, 0.0, 1.0)
 	var y := size.y * 0.30
-	draw_string(font, Vector2(size.x * 0.5 - 150.0, y), Game.announce_text,
-		HORIZONTAL_ALIGNMENT_CENTER, 300.0, 18, Color(PALE, alpha))
-	MathArt.px_rect(self, Rect2(size.x * 0.5 - 40.0, y + 4.0, 80, 1), Color(AMBER, alpha * 0.8))
+	draw_string(font, Vector2(size.x * 0.5 - 200.0, y), Game.announce_text,
+		HORIZONTAL_ALIGNMENT_CENTER, 400.0, 24, Color(FG, alpha))
+	MathArt.px_rect(self, Rect2(size.x * 0.5 - 50.0, y + 6.0, 100, 1), Color(FG_HI, alpha * 0.8))
 
 
 func _draw_low_health(size: Vector2) -> void:
@@ -258,8 +253,8 @@ func _draw_low_health(size: Vector2) -> void:
 	if ratio > 0.3:
 		return
 	var pulse := 0.5 + 0.5 * sin(Time.get_ticks_msec() / 1000.0 * 7.0)
-	var alpha := 0.10 + 0.14 * pulse * (1.0 - ratio / 0.3)
-	var tint := Color(0.72, 0.10, 0.12, alpha)
+	var alpha := 0.08 + 0.14 * pulse * (1.0 - ratio / 0.3)
+	var tint := Color(1.000, 1.000, 1.000, alpha)
 	MathArt.px_rect(self, Rect2(0, 0, size.x, 2), tint)
 	MathArt.px_rect(self, Rect2(0, size.y - 2, size.x, 2), tint)
 	MathArt.px_rect(self, Rect2(0, 0, 2, size.y), tint)
@@ -270,15 +265,15 @@ func _draw_hurt_flash(size: Vector2) -> void:
 	if Game.hurt_flash <= 0.0:
 		return
 	var alpha := clampf(Game.hurt_flash / 0.32, 0.0, 1.0)
-	MathArt.px_rect(self, Rect2(0, 0, size.x, size.y), Color(0.70, 0.08, 0.10, alpha * 0.16))
-	MathArt.px_rect(self, Rect2(0, 0, size.x, 1), Color(0.90, 0.16, 0.18, alpha * 0.8))
-	MathArt.px_rect(self, Rect2(0, size.y - 1, size.x, 1), Color(0.90, 0.16, 0.18, alpha * 0.8))
+	MathArt.px_rect(self, Rect2(0, 0, size.x, size.y), Color(1.000, 1.000, 1.000, alpha * 0.10))
+	MathArt.px_rect(self, Rect2(0, 0, size.x, 2), Color(1.000, 1.000, 1.000, alpha * 0.75))
+	MathArt.px_rect(self, Rect2(0, size.y - 2, size.x, 2), Color(1.000, 1.000, 1.000, alpha * 0.75))
 
 
 func _draw_corners(size: Vector2) -> void:
-	var ink := Color(AMBER, 0.20)
-	var length := 10.0
-	var m := 6.0
+	var ink := Color(MathArt.WHITE, 0.18)
+	var length := 14.0
+	var m := 10.0
 	MathArt.px_rect(self, Rect2(m, m, length, 1), ink)
 	MathArt.px_rect(self, Rect2(m, m, 1, length), ink)
 	MathArt.px_rect(self, Rect2(size.x - m - length, m, length, 1), ink)
@@ -290,30 +285,29 @@ func _draw_corners(size: Vector2) -> void:
 
 
 func _draw_pause(font: Font, size: Vector2) -> void:
-	MathArt.px_rect(self, Rect2(0, 0, size.x, size.y), Color(0.02, 0.03, 0.045, 0.80))
-	MathArt.px_ring(self, Vector2(size.x * 0.5, size.y * 0.44), 56.0, Color(AMBER, 0.12), 1.0)
-	MathArt.px_ring(self, Vector2(size.x * 0.5, size.y * 0.44), 34.0, Color(AMBER, 0.09), 1.0)
-	draw_string(font, Vector2(size.x * 0.5 - 150.0, size.y * 0.44), "PAUSED",
-		HORIZONTAL_ALIGNMENT_CENTER, 300.0, 26, PALE)
-	MathArt.px_rect(self, Rect2(size.x * 0.5 - 34.0, size.y * 0.44 + 8.0, 68, 1), AMBER)
-	draw_string(font, Vector2(size.x * 0.5 - 150.0, size.y * 0.44 + 30.0),
-		"ESC RESUME    R RESTART    Q QUIT",
-		HORIZONTAL_ALIGNMENT_CENTER, 300.0, 8, DIM)
+	MathArt.px_rect(self, Rect2(0, 0, size.x, size.y), Color(0.028, 0.028, 0.028, 0.82))
+	MathArt.ring(self, Vector2(size.x * 0.5, size.y * 0.44), 70.0, Color(MathArt.WHITE, 0.14), 1.0)
+	MathArt.ring(self, Vector2(size.x * 0.5, size.y * 0.44), 44.0, Color(MathArt.WHITE, 0.10), 1.0)
+	draw_string(font, Vector2(size.x * 0.5 - 200.0, size.y * 0.44), "PAUSED",
+		HORIZONTAL_ALIGNMENT_CENTER, 400.0, 34, FG)
+	MathArt.px_rect(self, Rect2(size.x * 0.5 - 44.0, size.y * 0.44 + 12.0, 88, 1), FG_HI)
+	draw_string(font, Vector2(size.x * 0.5 - 200.0, size.y * 0.44 + 40.0),
+		"ESC RESUME      R RESTART      Q QUIT",
+		HORIZONTAL_ALIGNMENT_CENTER, 400.0, 10, DIM)
 
 
 func _draw_run_over(font: Font, size: Vector2) -> void:
-	MathArt.px_rect(self, Rect2(0, 0, size.x, size.y), Color(0.02, 0.025, 0.04, 0.82))
+	MathArt.px_rect(self, Rect2(0, 0, size.x, size.y), Color(0.028, 0.028, 0.028, 0.85))
 	var title := "FLOOR CLEARED" if Game.victory else "YOU DIED"
-	var title_color := AMBER if Game.victory else RED
 	var y := size.y * 0.34
-	draw_string(font, Vector2(size.x * 0.5 - 180.0, y), title,
-		HORIZONTAL_ALIGNMENT_CENTER, 360.0, 28, title_color)
-	MathArt.px_rect(self, Rect2(size.x * 0.5 - 50.0, y + 9.0, 100, 1), Color(title_color, 0.8))
+	draw_string(font, Vector2(size.x * 0.5 - 220.0, y), title,
+		HORIZONTAL_ALIGNMENT_CENTER, 440.0, 38, FG_HI)
+	MathArt.px_rect(self, Rect2(size.x * 0.5 - 60.0, y + 12.0, 120, 1), Color(FG_HI, 0.8))
 	var total := int(Game.run_time)
-	var stats := "%d CELLS   %d KILLS   x%d COMBO   %d PERFECT   %02d:%02d" % [
+	var stats := "%d CELLS    %d KILLS    x%d COMBO    %d PERFECT    %02d:%02d" % [
 		Game.cells, Game.kills, Game.max_combo, Game.perfect_dodges, total / 60, total % 60
 	]
-	draw_string(font, Vector2(size.x * 0.5 - 200.0, y + 34.0), stats,
-		HORIZONTAL_ALIGNMENT_CENTER, 400.0, 8, PALE)
-	draw_string(font, Vector2(size.x * 0.5 - 200.0, y + 56.0), "PRESS R TO RUN IT BACK",
-		HORIZONTAL_ALIGNMENT_CENTER, 400.0, 7, DIM)
+	draw_string(font, Vector2(size.x * 0.5 - 240.0, y + 44.0), stats,
+		HORIZONTAL_ALIGNMENT_CENTER, 480.0, 10, FG)
+	draw_string(font, Vector2(size.x * 0.5 - 240.0, y + 72.0), "PRESS R TO RUN IT BACK",
+		HORIZONTAL_ALIGNMENT_CENTER, 480.0, 9, DIM)

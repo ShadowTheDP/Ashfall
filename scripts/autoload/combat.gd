@@ -74,7 +74,7 @@ func slash(at: Vector2, facing: int, attack_index: int, tint: Color) -> void:
 func afterimage(at: Vector2, facing: int) -> void:
 	var fx := Afterimage.new()
 	fx.position = at
-	fx.setup(facing, Color("#6fb8e8"))
+	fx.setup(facing, Color("#dfe4ea"))
 	_add(fx)
 
 
@@ -116,21 +116,21 @@ func shatter(at: Vector2, tint: Color, sides: int = 3, count: int = 14, speed: f
 func dodge_burst(at: Vector2) -> void:
 	var fx := BurstFx.new()
 	fx.position = at
-	fx.setup("dodge", MathArt.CYAN)
+	fx.setup("dodge", MathArt.WHITE)
 	_add(fx)
 
 
 func block_burst(at: Vector2, facing: int) -> void:
 	var fx := BurstFx.new()
 	fx.position = at
-	fx.setup("block", MathArt.AMBER, facing)
+	fx.setup("block", MathArt.PALE_DIM, facing)
 	_add(fx)
 
 
 func hurt_burst(at: Vector2, facing: int) -> void:
 	var fx := BurstFx.new()
 	fx.position = at
-	fx.setup("hurt", MathArt.RED_HI, facing)
+	fx.setup("hurt", MathArt.WHITE, facing)
 	_add(fx)
 
 

@@ -74,4 +74,4 @@ func _draw() -> void:
 	if crit:
 		# A tiny 5-point star for crits only.
 		MathArt.px_poly(self, MathArt.star(5, 13.0 * (1.0 - k * 0.5), 5.0 * (1.0 - k * 0.5), _t * 3.0),
-			Color(0, 0, 0, 0), Color(MathArt.AMBER_HI, alpha * 0.7), 1.0)
+			Color(0, 0, 0, 0), Color(MathArt.WHITE, alpha * 0.7), 1.0)

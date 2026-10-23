@@ -12,16 +12,18 @@
 ## Stable Decisions
 
 - **Engine:** Godot 4.7.2, GL Compatibility renderer.
-- **Pixel pipeline (hard rule):** logical resolution **640x360**, window
-  1280x720, `stretch/mode="viewport"` + `scale_mode="integer"`, nearest
-  texture filter. Camera `zoom = 1.0`, position rounded every frame, and
-  **rotation disabled** (`ignore_rotation = true`) - sub-pixel motion or roll
-  shimmers the whole upscaled image.
-- **No anti-aliased drawing.** Never call `draw_circle`, `draw_arc`,
-  `draw_polyline` or `draw_colored_polygon` directly. Use `MathArt.px_*`,
-  which rasterises circles/rings/arcs as 1px-tall `draw_rect` rows using
-  `dx = floor(sqrt(r^2 - dy^2))`. The legacy AA helpers were deleted from
-  `math_art.gd` so nothing can bypass the pipeline.
+- **Resolution:** 768x480 logical, window 1536x960, integer x2, `viewport`
+  stretch. Bumped from 640x360 because the pixel grid was too coarse.
+- **Motion first, not pixel snapping.** Characters and camera move on floats;
+  there is no per-frame rounding. The trade is that a fast object can land on
+  a half pixel; that is accepted in exchange for smooth motion.
+- **Physics:** 120 Hz with `physics_interpolation=true`. Camera runs in
+  `_physics_process` so interpolation carries it (Godot warns that Camera2D is
+  forced to physics mode - that is expected and correct).
+- **Monochrome (hard rule):** no hue anywhere. `MathArt` defines a fixed
+  greyscale ramp (`INK..WHITE`) plus semantic aliases (`PLAYER`, `ENEMY`,
+  `BOSS`, `PICKUP`). Readability comes from value contrast, outline weight and
+  motion. `scripts/systems/math_art.gd` is the only place colours are defined.
 - **Zero art assets:** every visual is drawn in `_draw()` through
   `scripts/systems/math_art.gd`. No textures, no `Sprite2D`. See
   `docs/design/math-art.md`. This is a hard rule, not a temporary state.
@@ -30,8 +32,21 @@
   blade); the finisher releases a travelling sine wave drawn as 1px columns;
   Kunai solves a ballistic `v0` and previews the parabola; Aegis is three
   concentric pixel rings plus six orbiting dots.
-- **Player silhouette is a diamond** (rotated square) with a square core; it is
-  the only glowing shape, so the eye always finds it.
+- **Player silhouette is a SQUARE**: white body, black inset face, white core
+  dot, 2px black keyline. It carries a corner notch and an edge pip because a
+  square looks identical after a 90-degree turn - those marks are the only
+  thing that makes "landed on a new face" readable.
+- **Tumble:** every jump turns the square exactly 90 degrees
+  (`face = (face + 1) % 4`), completed over 0.42 s; short hops finish the
+  remaining quarter turn in 70 ms instead of snapping. Direction follows
+  `facing`.
+- **No limbs anywhere.** Enemies are plain polygons; a "hand" is a single dot.
+  Legs and arms were removed from every draw function.
+- **Particles are Godot's own `CPUParticles2D`** (`scripts/systems/juice.gd`),
+  not a hand-written simulator. The only hand-written part is a 6x6 white
+  square texture generated at runtime, so the project still ships zero image
+  assets. Presets: dust, land_dust, jump_burst, hit_sparks, shatter, pickup,
+  block, dodge, telegraph.
 - **Animation priority order:** anticipation -> smear -> impact frame ->
   follow-through -> secondary motion. Concretely:
   - windup holds the blade at the coil angle (body squashes to 0.86 width);
@@ -74,8 +89,8 @@
   stays crisp while the world glows.
 - **Title screen pauses the tree** at `_ready()` and resumes on Enter/Space/J.
   Tests instantiate `main.tscn` with `skip_title = true`.
-- **HUD font sizes are tuned for 640x360**: labels 6, values 7-9, headings
-  10-18, run-summary title 28. Nothing below 6 is used.
+- **HUD font sizes are tuned for 768x480**: labels 8, values 9-12, headings
+  11-14, announce 24, run-summary title 38. Nothing below 8 is used.
 - **Boon picker is a real pause**: `get_tree().paused = true`, keyboard 1/2/3
   or arrows+Enter. The encounter resumes only after a choice.
 - **Perfect Dodge:** rolling through an attack grants 2.5 s of +25% damage and
@@ -158,9 +173,13 @@ python tools\make_sfx.py
   autoloads.
 - Screenshot and soak harnesses are dev-only; they are not part of the game
   boot path.
-- `MathArt.draw_poly` / `draw_ring` / `draw_glow` / `draw_spiral` /
-  `draw_sigil` were removed. If an old call site is restored it will silently
-  reintroduce anti-aliasing.
+- `MathArt.px_*` still exists as an alias layer but now draws SMOOTHLY; it no
+  longer snaps. Code that assumes integer positions must use its own rounding.
+- The camera warning "Camera2D overridden to physics process mode due to use
+  of physics interpolation" is expected; do not silence it by moving the
+  camera back to `_process`, that reintroduces jitter.
+- The player spawns at x=560 in open ground; the old spawn was under a
+  platform and a full jump clipped its head.
 - Subagent audits live in `output/agent-reports/` (gitignored). They are
   read-only findings; re-run them rather than trusting stale line numbers.
 

@@ -25,6 +25,7 @@ var fade := 1.0
 
 var _dead := false
 var _spawn_t := 0.0
+var _was_on_floor := true
 var _pending_attack := "cleave"
 var _pattern := 0
 var _slam_done := false
@@ -103,6 +104,12 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 		return
 
+	# Landing dust so every body feels like it has weight.
+	var on_floor := is_on_floor()
+	if on_floor and not _was_on_floor and absf(velocity.y) > 120.0:
+		Juice.land_dust(get_parent(), global_position + Vector2(0, 22), 0.45)
+	_was_on_floor = on_floor
+
 	match state:
 		EState.HURT:
 			_tick_hurt(delta)
@@ -166,6 +173,7 @@ func _enter_windup() -> void:
 	state_t = 0.0
 	velocity.x = 0.0
 	_slam_done = false
+	Juice.telegraph(get_parent(), global_position + Vector2(0, -12))
 	if kind == "charger":
 		Sfx.play("swing", -18, 0.55)
 	elif kind == "warden":
@@ -268,7 +276,7 @@ func _spawn_shockwaves() -> void:
 			Vector2(direction, 0),
 			float(cfg.get("shockwave_speed", 430.0)),
 			float(cfg.get("shockwave_damage", 13.0)),
-			Color(cfg.get("color", "#9b6bff")),
+			Color(cfg.get("color", "#dfe4ea")),
 			self
 		)
 		var root := Game.fx_root
@@ -301,11 +309,12 @@ func _shoot() -> void:
 	var velocity := MathArt.ballistic_velocity(spawn, target, float(cfg.get("projectile_speed", 320.0)), 700.0)
 	var projectile := Projectile.new()
 	projectile.position = spawn
-	projectile.setup_ballistic(velocity, float(cfg.get("damage", 7.0)), Color(cfg.get("color", "#b76bd6")), self)
+	projectile.setup_ballistic(velocity, float(cfg.get("damage", 7.0)), Color(cfg.get("color", "#b8bec8")), self)
 	var root := Game.fx_root
 	if is_instance_valid(root):
 		root.add_child(projectile)
-	Combat.burst(spawn, Color(cfg.get("color", "#b76bd6")), 5, 90.0)
+	Combat.burst(spawn, MathArt.WHITE, 5, 90.0)
+	Juice.hit_sparks(get_parent(), spawn, Vector2(float(facing), 0), 0.5)
 
 
 func take_hit(info: Dictionary) -> void:
@@ -326,9 +335,9 @@ func take_hit(info: Dictionary) -> void:
 		flash = 0.06
 		Combat.block_number(global_position + Vector2(0, -54))
 		var shield_point := global_position + Vector2(float(facing) * 18.0, -10.0)
-		Combat.spark(shield_point, Vector2(float(facing), 0.0), false, MathArt.CYAN)
+		Combat.spark(shield_point, Vector2(float(facing), 0.0), false, MathArt.WHITE)
 		Combat.block_burst(shield_point, facing)
-		Combat.burst(shield_point, MathArt.CYAN, 5, 130.0)
+		Combat.burst(shield_point, MathArt.WHITE, 5, 130.0)
 		Sfx.play("block", -8)
 		Combat.shake(0.06)
 		if hp <= 0.0:
@@ -348,7 +357,7 @@ func take_hit(info: Dictionary) -> void:
 	velocity = Vector2(dir * float(info.get("knockback", 180.0)) * scale, -20.0 if bool(cfg.get("boss", false)) else -90.0 * scale)
 
 	var contact: Vector2 = info.get("point", global_position + Vector2(0, -18))
-	var tint := Color(cfg.get("color", "#b23a48"))
+	var tint := Color(cfg.get("color", "#b8bec8"))
 	Combat.hitstop(float(info.get("hitstop", 0.05)))
 	Combat.shake(0.34 if crit else 0.18)
 	Combat.spark(contact, Vector2(dir, 0), crit, tint)
@@ -381,7 +390,7 @@ func _die() -> void:
 	collision_layer = 0
 	collision_mask = 0
 	velocity = Vector2(randf_range(-60.0, 60.0), -160.0)
-	var tint := Color(cfg.get("color", "#b23a48"))
+	var tint := Color(cfg.get("color", "#b8bec8"))
 	var sides := 3
 	match kind:
 		"archer":
@@ -394,6 +403,7 @@ func _die() -> void:
 			sides = 5
 	Combat.shatter(global_position + Vector2(0, -14), tint, sides, 24 if bool(cfg.get("boss", false)) else 14, 380.0 if bool(cfg.get("boss", false)) else 280.0)
 	Combat.burst(global_position + Vector2(0, -18), tint, 12, 260.0)
+	Juice.shatter(get_parent(), global_position + Vector2(0, -14), MathArt.LIGHT, 24 if bool(cfg.get("boss", false)) else 14)
 	if bool(cfg.get("boss", false)):
 		Combat.ring(global_position + Vector2(0, -10), tint.lightened(0.3), 180.0, 5)
 		Combat.shake(0.75)

@@ -19,10 +19,10 @@ func setup(amount: int, crit: bool, override_text: String = "") -> void:
 	_label.position = Vector2(-24, -8)
 	if override_text.is_empty():
 		_label.add_theme_font_size_override("font_size", 13 if crit else 10)
-		_label.add_theme_color_override("font_color", MathArt.AMBER_HI if crit else MathArt.PALE)
+		_label.add_theme_color_override("font_color", MathArt.WHITE if crit else MathArt.PALE)
 	else:
 		_label.add_theme_font_size_override("font_size", 8)
-		_label.add_theme_color_override("font_color", MathArt.CYAN)
+		_label.add_theme_color_override("font_color", MathArt.WHITE)
 	_label.add_theme_color_override("font_outline_color", MathArt.INK)
 	_label.add_theme_constant_override("outline_size", 4)
 	add_child(_label)

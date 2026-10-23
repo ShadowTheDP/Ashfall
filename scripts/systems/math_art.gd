@@ -1,11 +1,15 @@
 class_name MathArt
-## The single visual language of the game: pixel-quantised geometry.
+## The single visual language of the game.
 ##
-## Every shape is snapped to whole pixels and drawn with hard edges so the
-## upscaled viewport reads as true pixel art. Colours come from one palette.
+## Two rules, in priority order:
+##   1. MOTION FIRST. Nothing is pixel-snapped. Characters and camera use
+##      float positions so motion is smooth at any refresh rate.
+##   2. MONOCHROME. There is no hue anywhere. Readability comes from value
+##      contrast (see the ramp below), outline weight and motion.
 ##
-## Reference: phi = 1.618..., golden angle = 2.399963..., log spiral
-## r = a * e^(b*theta), Lissajous curves, regular n-gons, superellipses.
+## Geometry comes from a small set of parametric curves so the whole game
+## reads as one system: polygons, stars, superellipses, Lissajous, rose curves,
+## phyllotaxis, logarithmic spirals, harmonic waves and ballistic arcs.
 
 const PHI := 1.618033988749895
 const INV_PHI := 0.6180339887498949
@@ -13,101 +17,51 @@ const GOLDEN_ANGLE := 2.399963229728653
 const SQRT2 := 1.4142135623730951
 const SQRT3 := 1.7320508075688772
 
-# --- Palette ----------------------------------------------------------------
-# A fixed ramp keeps the art coherent. Do not invent new colours per file.
-const INK := Color("#07090d")
-const INK_2 := Color("#0d1218")
-const STONE := Color("#131a22")
-const STONE_2 := Color("#1d2733")
-const STONE_3 := Color("#2b3a4a")
-const EDGE := Color("#3d5165")
-const STEEL_DIM := Color("#5a6f85")
-const STEEL := Color("#7c8fa3")
-const STEEL_HI := Color("#a8b8c8")
-const PALE := Color("#e9e2d2")
-const WHITE := Color("#fff6e0")
-const AMBER_DIM := Color("#8a5a1f")
-const AMBER := Color("#e8a33d")
-const AMBER_HI := Color("#ffd166")
-const RED_DIM := Color("#7a2436")
-const RED := Color("#d94a4a")
-const RED_HI := Color("#ff6b6b")
-const CYAN_DIM := Color("#2a4a5a")
-const CYAN_MID := Color("#4a90a8")
-const CYAN := Color("#8fe3ff")
-const VIOLET_DIM := Color("#3a2a5a")
-const VIOLET_MID := Color("#6b4a9e")
-const VIOLET := Color("#9b6bff")
-const GREEN := Color("#7fd6a0")
-const BROWN := Color("#2b1f14")
+# --- Greyscale ramp ---------------------------------------------------------
+# Values are chosen for contrast ratio, not for beauty. Do not add hue.
+const BLACK := Color("#000000")
+const INK := Color("#08090b")
+const BG_0 := Color("#101114")
+const BG_1 := Color("#1a1c20")
+const BG_2 := Color("#23262c")
+const STONE_DIM := Color("#2e3238")
+const STONE := Color("#3c4048")
+const STONE_HI := Color("#565b64")
+const MID_DIM := Color("#6b7078")
+const MID := Color("#7a808a")
+const LIGHT_DIM := Color("#9aa0a8")
+const LIGHT := Color("#b8bec8")
+const PALE_DIM := Color("#d0d5db")
+const PALE := Color("#dfe4ea")
+const WHITE_DIM := Color("#f0f2f5")
+const WHITE := Color("#ffffff")
+
+# Semantic aliases. Gameplay code reads these, not raw ramp values.
+const PLAYER := WHITE
+const PLAYER_CORE := INK
+const ENEMY := LIGHT
+const ENEMY_RIM := PALE_DIM
+const BOSS := PALE
+const PICKUP := WHITE
+const DANGER := WHITE
+const SHIELD := PALE_DIM
+const OUTLINE_DARK := BLACK
+const OUTLINE_LIGHT := WHITE
 
 
-# --- Pixel helpers ----------------------------------------------------------
+# --- Value helpers ----------------------------------------------------------
 
-static func px(value: float) -> float:
-	return roundf(value)
-
-
-static func snapv(point: Vector2) -> Vector2:
-	return Vector2(roundf(point.x), roundf(point.y))
+static func with_alpha(color: Color, alpha: float) -> Color:
+	var out := color
+	out.a = alpha
+	return out
 
 
-static func px_rect(canvas: CanvasItem, rect: Rect2, color: Color) -> void:
-	var snapped := Rect2(
-		Vector2(roundf(rect.position.x), roundf(rect.position.y)),
-		Vector2(roundf(rect.size.x), roundf(rect.size.y))
-	)
-	canvas.draw_rect(snapped, color)
-
-
-static func px_circle(canvas: CanvasItem, center: Vector2, radius: float, color: Color) -> void:
-	var c := snapv(center)
-	var r := int(roundf(radius))
-	if r <= 0:
-		return
-	for dy in range(-r, r + 1):
-		var dx := int(floor(sqrt(maxf(0.0, float(r * r - dy * dy)))))
-		canvas.draw_rect(Rect2(c.x - float(dx), c.y + float(dy), float(dx * 2 + 1), 1.0), color)
-
-
-static func px_ring(canvas: CanvasItem, center: Vector2, radius: float, color: Color, thickness := 1.0, segments := 0) -> void:
-	var c := snapv(center)
-	var r := int(roundf(radius))
-	var t := maxi(1, int(roundf(thickness)))
-	var inner := maxi(0, r - t)
-	if r <= 0:
-		return
-	for dy in range(-r, r + 1):
-		var dxo := int(floor(sqrt(maxf(0.0, float(r * r - dy * dy)))))
-		var dxi := 0
-		if absi(dy) <= inner:
-			dxi = int(floor(sqrt(maxf(0.0, float(inner * inner - dy * dy)))))
-		if dxo <= dxi:
-			continue
-		canvas.draw_rect(Rect2(c.x - float(dxo), c.y + float(dy), float(dxo - dxi), 1.0), color)
-		canvas.draw_rect(Rect2(c.x + float(dxi) + 1.0, c.y + float(dy), float(dxo - dxi), 1.0), color)
-
-
-static func px_arc(canvas: CanvasItem, center: Vector2, radius: float, from_angle: float, to_angle: float, color: Color, thickness := 1.0) -> void:
-	var c := snapv(center)
-	var r := roundf(radius)
-	var t := maxf(1.0, roundf(thickness))
-	var steps := maxi(6, int(absf(to_angle - from_angle) * r * 0.9))
-	for i in steps + 1:
-		var angle := lerpf(from_angle, to_angle, float(i) / float(steps))
-		var point := snapv(c + Vector2.from_angle(angle) * r)
-		canvas.draw_rect(Rect2(point.x, point.y, t, t), color)
-
-
-static func px_line(canvas: CanvasItem, from_point: Vector2, to_point: Vector2, color: Color, thickness := 1.0) -> void:
-	canvas.draw_line(snapv(from_point), snapv(to_point), color, maxf(1.0, roundf(thickness)))
-
-
-static func px_poly(canvas: CanvasItem, points: PackedVector2Array, fill: Color, outline := Color.TRANSPARENT, width := 1.0) -> void:
-	var snapped := PackedVector2Array()
-	for point in points:
-		snapped.append(snapv(point))
-	draw_poly(canvas, snapped, fill, outline, width)
+static func shade(color: Color, amount: float) -> Color:
+	# amount > 0 lightens toward white, < 0 darkens toward black.
+	if amount >= 0.0:
+		return color.lerp(WHITE, clampf(amount, 0.0, 1.0))
+	return color.lerp(BLACK, clampf(-amount, 0.0, 1.0))
 
 
 # --- Geometry ---------------------------------------------------------------
@@ -195,9 +149,9 @@ static func ballistic_velocity(origin: Vector2, target: Vector2, speed: float, g
 	return Vector2(cos(theta) * signf(delta.x), -sin(theta)) * speed
 
 
-# --- Legacy drawing helpers (kept for UI code) ------------------------------
+# --- Drawing (smooth, never snapped) ----------------------------------------
 
-static func draw_poly(canvas: CanvasItem, points: PackedVector2Array, fill: Color, outline := Color.TRANSPARENT, width := 1.0) -> void:
+static func poly(canvas: CanvasItem, points: PackedVector2Array, fill: Color, outline := Color.TRANSPARENT, width := 1.0) -> void:
 	if points.size() < 3:
 		return
 	if fill.a > 0.0:
@@ -208,11 +162,73 @@ static func draw_poly(canvas: CanvasItem, points: PackedVector2Array, fill: Colo
 		canvas.draw_polyline(closed, outline, width, true)
 
 
-static func draw_ring(canvas: CanvasItem, center: Vector2, radius: float, color: Color, width := 1.0, segments: int = 48, from_angle := 0.0, to_angle := TAU) -> void:
-	canvas.draw_arc(center, radius, from_angle, to_angle, segments, color, width, true)
+static func ring(canvas: CanvasItem, center: Vector2, radius: float, color: Color, width := 1.0, segments := 48, from_angle := 0.0, to_angle := TAU) -> void:
+	if radius <= 0.0:
+		return
+	canvas.draw_arc(center, radius, from_angle, to_angle, maxi(6, segments), color, width, true)
 
 
-static func with_alpha(color: Color, alpha: float) -> Color:
-	var out := color
-	out.a = alpha
-	return out
+static func arc(canvas: CanvasItem, center: Vector2, radius: float, from_angle: float, to_angle: float, color: Color, width := 1.0) -> void:
+	if radius <= 0.0:
+		return
+	var steps := maxi(6, int(absf(to_angle - from_angle) * radius * 0.5))
+	canvas.draw_arc(center, radius, from_angle, to_angle, steps, color, width, true)
+
+
+static func line(canvas: CanvasItem, from_point: Vector2, to_point: Vector2, color: Color, width := 1.0) -> void:
+	canvas.draw_line(from_point, to_point, color, width)
+
+
+static func disc(canvas: CanvasItem, center: Vector2, radius: float, color: Color) -> void:
+	if radius > 0.0:
+		canvas.draw_circle(center, radius, color)
+
+
+static func glow(canvas: CanvasItem, center: Vector2, radius: float, color: Color, layers: int = 4) -> void:
+	# Cheap radial falloff: a few translucent discs. No shader, no texture.
+	for i in layers:
+		var k := 1.0 - float(i) / float(layers)
+		canvas.draw_circle(center, radius * (0.3 + 0.7 * k), Color(color, color.a * 0.12 * k))
+
+
+static func spiral_line(canvas: CanvasItem, center: Vector2, radius: float, turns: float, color: Color, width := 1.2, samples := 48, rotation := 0.0) -> void:
+	var points := spiral(radius, turns, samples, rotation)
+	for i in points.size():
+		points[i] += center
+	canvas.draw_polyline(points, color, width, true)
+
+
+# --- Legacy aliases ---------------------------------------------------------
+# Older call sites use the px_ prefix. These now draw SMOOTHLY on purpose:
+# the project traded pixel snapping for motion fluidity.
+
+static func px(value: float) -> float:
+	return value
+
+
+static func snapv(point: Vector2) -> Vector2:
+	return point
+
+
+static func px_rect(canvas: CanvasItem, rect: Rect2, color: Color) -> void:
+	canvas.draw_rect(rect, color)
+
+
+static func px_circle(canvas: CanvasItem, center: Vector2, radius: float, color: Color) -> void:
+	disc(canvas, center, radius, color)
+
+
+static func px_ring(canvas: CanvasItem, center: Vector2, radius: float, color: Color, thickness := 1.0, segments := 0) -> void:
+	ring(canvas, center, radius, color, thickness, segments if segments > 0 else 48)
+
+
+static func px_arc(canvas: CanvasItem, center: Vector2, radius: float, from_angle: float, to_angle: float, color: Color, thickness := 1.0) -> void:
+	arc(canvas, center, radius, from_angle, to_angle, color, thickness)
+
+
+static func px_line(canvas: CanvasItem, from_point: Vector2, to_point: Vector2, color: Color, thickness := 1.0) -> void:
+	line(canvas, from_point, to_point, color, thickness)
+
+
+static func px_poly(canvas: CanvasItem, points: PackedVector2Array, fill: Color, outline := Color.TRANSPARENT, width := 1.0) -> void:
+	poly(canvas, points, fill, outline, width)

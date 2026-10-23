@@ -1,6 +1,6 @@
 ; Engine configuration file.
 ; Ashfall — an original Dead-Cells-like combat study.
-; Rendered at 640x360 and upscaled with integer scaling for true pixel art.
+; 768x480 logical, integer x2 = 1536x960. Monochrome, motion-first.
 
 config_version=5
 
@@ -8,7 +8,7 @@ config_version=5
 
 config/name="Ashfall (DC-like)"
 config/description="Original roguelite combat-feel prototype. No third-party game code or assets."
-config/version="0.2.0"
+config/version="0.3.0"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"
@@ -22,23 +22,25 @@ Game="*res://scripts/autoload/game.gd"
 
 [display]
 
-window/size/viewport_width=640
-window/size/viewport_height=360
-window/size/window_width_override=1280
-window/size/window_height_override=720
+window/size/viewport_width=768
+window/size/viewport_height=480
+window/size/window_width_override=1536
+window/size/window_height_override=960
 window/stretch/mode="viewport"
 window/stretch/aspect="keep"
 window/stretch/scale_mode="integer"
+window/vsync/vsync_mode=1
 
 [physics]
 
-common/physics_ticks_per_second=60
+common/physics_ticks_per_second=120
+common/physics_interpolation=true
 2d/default_gravity=0.0
 
 [rendering]
 
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
-environment/defaults/default_clear_color=Color(0.027, 0.035, 0.051, 1)
-textures/canvas_textures/default_texture_filter=0
-anti_aliasing/quality/msaa_2d=0
+environment/defaults/default_clear_color=Color(0.063, 0.067, 0.078, 1)
+textures/canvas_textures/default_texture_filter=1
+anti_aliasing/quality/msaa_2d=2

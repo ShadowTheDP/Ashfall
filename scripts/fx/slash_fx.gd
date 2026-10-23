@@ -4,7 +4,7 @@ extends Node2D
 ## volume without blurring the sprite.
 
 var facing := 1
-var color := MathArt.CYAN
+var color := MathArt.WHITE
 var radius := 21.0
 var arc := 2.2
 var _t := 0.0

@@ -83,18 +83,18 @@ func _draw() -> void:
 	if font == null:
 		return
 	var size := get_viewport_rect().size
-	MathArt.px_rect(self, Rect2(0, 0, size.x, size.y), Color(0.02, 0.028, 0.04, 0.86))
+	MathArt.px_rect(self, Rect2(0, 0, size.x, size.y), Color(0.028, 0.028, 0.028, 0.86))
 	var mid_x := roundf(size.x * 0.5)
 	var title_y := roundf(size.y * 0.17)
 	draw_string(font, Vector2(mid_x - 160.0, title_y), "WAVE CLEARED",
-		HORIZONTAL_ALIGNMENT_CENTER, 320.0, 18, MathArt.PALE)
-	draw_string(font, Vector2(mid_x - 160.0, title_y + 12.0), "CHOOSE A BOON",
-		HORIZONTAL_ALIGNMENT_CENTER, 320.0, 7, MathArt.STEEL)
-	MathArt.px_rect(self, Rect2(mid_x - 46.0, title_y + 17.0, 92, 1), Color(MathArt.AMBER, 0.7))
+		HORIZONTAL_ALIGNMENT_CENTER, 360.0, 26, MathArt.PALE)
+	draw_string(font, Vector2(mid_x - 160.0, title_y + 16.0), "CHOOSE A BOON",
+		HORIZONTAL_ALIGNMENT_CENTER, 320.0, 7, MathArt.LIGHT)
+	MathArt.px_rect(self, Rect2(mid_x - 46.0, title_y + 23.0, 110, 1), Color(MathArt.PALE_DIM, 0.7))
 
-	var card_w := 148.0
-	var card_h := 108.0
-	var gap := 14.0
+	var card_w := 178.0
+	var card_h := 132.0
+	var gap := 18.0
 	var total_w := card_w * 3.0 + gap * 2.0
 	var start_x := roundf((size.x - total_w) * 0.5)
 	var card_y := roundf(size.y * 0.30)
@@ -104,17 +104,17 @@ func _draw() -> void:
 
 	draw_string(font, Vector2(mid_x - 220.0, card_y + card_h + 22.0),
 		"LEFT/RIGHT SELECT      1/2/3 QUICK PICK      ENTER CONFIRM",
-		HORIZONTAL_ALIGNMENT_CENTER, 440.0, 6, MathArt.STEEL)
+		HORIZONTAL_ALIGNMENT_CENTER, 440.0, 6, MathArt.LIGHT)
 
 
 func _draw_card(font: Font, index: int, rect: Rect2) -> void:
 	var id: String = _choices[index]
 	var data: Dictionary = Data.rewards.get(id, {})
-	var tint := Color(data.get("color", "#e8a33d"))
+	var tint := Color(data.get("color", "#dfe4ea"))
 	var selected := index == _index
 	var center := Vector2(roundf(rect.position.x + rect.size.x * 0.5), rect.position.y)
 
-	MathArt.px_rect(self, rect, Color(0.055, 0.075, 0.105, 0.97) if selected else Color(0.035, 0.048, 0.068, 0.94))
+	MathArt.px_rect(self, rect, Color(0.080, 0.080, 0.080, 0.97) if selected else Color(0.053, 0.053, 0.053, 0.94))
 	MathArt.px_rect(self, Rect2(rect.position, Vector2(rect.size.x, 1)), Color(tint, 0.9 if selected else 0.3))
 	MathArt.px_rect(self, Rect2(rect.position + Vector2(0, rect.size.y - 1.0), Vector2(rect.size.x, 1)), Color(tint, 0.55 if selected else 0.2))
 	MathArt.px_rect(self, Rect2(rect.position, Vector2(1, rect.size.y)), Color(tint, 0.55 if selected else 0.2))
@@ -125,22 +125,22 @@ func _draw_card(font: Font, index: int, rect: Rect2) -> void:
 			Color(tint, 0.10 * pulse), false, 1.0)
 
 	draw_string(font, rect.position + Vector2(6, 12), str(index + 1),
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(tint, 0.9))
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(tint, 0.9))
 
-	var sigil_center := Vector2(center.x, rect.position.y + 42.0)
-	_draw_sigil(id, sigil_center, 17.0, tint)
+	var sigil_center := Vector2(center.x, rect.position.y + 52.0)
+	_draw_sigil(id, sigil_center, 22.0, tint)
 
-	draw_string(font, Vector2(rect.position.x, rect.position.y + 68.0), str(data.get("name", id)),
-		HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 10, MathArt.PALE)
+	draw_string(font, Vector2(rect.position.x, rect.position.y + 84.0), str(data.get("name", id)),
+		HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 14, MathArt.PALE)
 
 	var lines: PackedStringArray = str(data.get("desc", "")).split("\n")
 	for line in lines.size():
-		draw_string(font, Vector2(rect.position.x, rect.position.y + 82.0 + float(line) * 9.0),
-			lines[line], HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 6, Color(0.62, 0.70, 0.80))
+		draw_string(font, Vector2(rect.position.x, rect.position.y + 100.0 + float(line) * 12.0),
+			lines[line], HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 9, Color(0.725, 0.725, 0.725))
 
 	var key_label := str(index + 1)
 	draw_string(font, Vector2(rect.position.x, rect.position.y + rect.size.y - 6.0),
-		"PRESS " + key_label, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 5, Color(tint, 0.6))
+		"PRESS " + key_label, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 8, Color(tint, 0.7))
 
 
 func _draw_sigil(id: String, center: Vector2, radius: float, tint: Color) -> void:

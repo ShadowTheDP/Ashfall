@@ -100,3 +100,46 @@ After each meaningful completed task, append:
   - `title_capture.tscn`: TITLE OK.
   - `capture_scene.tscn`: 13 screenshots at 640x360, visually inspected.
 - Ready to push: yes.
+
+2026-10-23 13:20
+- Summary: Milestone 3 - monochrome, motion-first rebuild at 768x480.
+  1) Resolution 640x360 -> 768x480 (window 1536x960, integer x2); physics
+     raised to 120 Hz with physics_interpolation; camera moved to
+     _physics_process with float position and no rounding. Pixel snapping was
+     removed on purpose: motion fluidity now beats pixel alignment.
+  2) Colour removed entirely. MathArt now defines one greyscale ramp plus
+     semantic aliases (PLAYER/ENEMY/BOSS/PICKUP); every hue in scripts, data
+     and shaders was flattened to grey.
+  3) Player is a SQUARE that tumbles exactly 90 degrees per jump and lands on
+     a new face (face index, 0.42 s tumble, 70 ms settle for short hops). The
+     square carries a corner notch and an edge pip so the face change is
+     readable. No legs, no arms.
+  4) Enemies are plain polygons only (triangle/square/hexagon/pentagon/circle);
+     all legs, arms and feet removed; a "hand" is a single dot.
+  5) Particles: replaced the hand-written simulator with Godot's
+     CPUParticles2D via scripts/systems/juice.gd (nine presets, runtime-
+     generated 6x6 texture, still zero image assets). Added coverage for
+     enemy landing, windup telegraph, projectile expiry, wave spawn and
+     magnetised pickups.
+- Subagent audits (4 parallel `pi -p --thinking max` scouts):
+  output/agent-reports/{sa_feel,sa_anim,sa_oss,sa_audit}.md. Key findings
+  adopted: 120 Hz + interpolation; 90-degree tumble with face index; particle
+  counts/lifetimes; no ready-made Godot 4 FX addon fits the zero-texture rule
+  (so CPUParticles2D instead of an addon); full file:line audit of what to
+  change.
+- Key files changed: project.godot, scripts/systems/math_art.gd (greyscale
+  ramp, smooth drawing, px_* aliases kept as smooth aliases),
+  scripts/systems/juice.gd (new), scripts/player/player.gd (tumble, apex hang,
+  asymmetric gravity), scripts/player/player_visual.gd (square, no limbs),
+  scripts/player/player_camera.gd, scripts/enemies/enemy_visual.gd (polygons
+  only), scripts/enemies/enemy.gd, scripts/ui/*.gd, scripts/world/*.gd,
+  shaders/*, docs.
+- Verification notes:
+  - `run_tests.gd`: 111 checks pass.
+  - `combat_probe.tscn`: PROBE OK. `reward_probe.tscn`: REWARD OK.
+  - `soak.tscn`: SOAK OK.
+  - `title_capture.tscn`: TITLE OK.
+  - `capture_scene.tscn`: 13 screenshots at 768x480, visually inspected.
+  - `jump_capture.tscn` (new): frame-by-frame jump strip confirms the square
+    turns and lands with face 0 -> 1.
+- Ready to push: yes.

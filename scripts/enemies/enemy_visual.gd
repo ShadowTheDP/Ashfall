@@ -1,11 +1,15 @@
 class_name EnemyVisual
 extends Node2D
-## Enemies are pure geometric sigils. Side count is the threat tier:
-##   Husk 3 (triangle) · Ram 4 (square) · Warden 5 (pentagon)
-##   Bulwark 6 (hexagon) · Watcher 0 (circle + orbit)
-## Detail is carried by rim light, a pulsing core and pixel particles.
+## Enemies are plain polygons: no legs, no arms, no faces. A "hand" is one dot.
+## Readability comes from silhouette + motion + value, never from colour.
+##
+##   Husk    3  triangle   fast, twitchy, points at you
+##   Ram     4  square     heavy, slow to turn, commits to a charge
+##   Bulwark 6  hexagon    slow, always presents a flat face
+##   Warden  5  pentagon   ritual pacing, fixed rhythm
+##   Watcher 0  circle     keeps distance, orbits
 
-const MASK := MathArt.PALE
+const OUTLINE := MathArt.BLACK
 
 var e: Enemy
 var _t := 0.0
@@ -25,44 +29,49 @@ func _draw() -> void:
 	if e == null or e.cfg.is_empty():
 		return
 	var half_h := float(e.cfg.get("body_height", 42.0)) * 0.5
-	var tint: Color = Color(e.cfg.get("color", "#d94a4a"))
 	var moving := absf(e.velocity.x) > 10.0 and e.state == Enemy.EState.CHASE
 	var bob := 0.0
 	if moving:
-		bob = roundf(sin(_t * 10.0) * 1.5)
+		bob = absf(sin(_t * 10.0)) * -2.0
 	else:
-		bob = roundf(sin(_t * 2.0))
+		bob = sin(_t * 2.0) * 1.0
 	var lean := 0.0
 	if e.state == Enemy.EState.WINDUP:
-		lean = -0.18
+		lean = -0.20
 	elif e.state == Enemy.EState.HURT:
-		lean = -0.24
+		lean = -0.26
 	elif moving:
-		lean = 0.12
-	# Impact frame: pure white for 2 frames, then the normal tint plus a
-	# white 1px outline that fades out over the remaining hit flash.
+		lean = 0.10
+	var squash := 1.0
+	if e.state == Enemy.EState.HURT:
+		squash = 1.18
+	elif e.state == Enemy.EState.WINDUP:
+		squash = 0.90
+	elif e.state == Enemy.EState.ATTACK:
+		squash = 1.12
+
 	var flash := e.impact > 0.0
 	var outline := e.flash > 0.0 and e.impact <= 0.0
-	draw_set_transform(Vector2(0, bob), lean * float(e.facing), Vector2(float(e.facing), 1.0))
 
+	draw_set_transform(Vector2(0, bob), lean * float(e.facing), Vector2(squash * float(e.facing), 1.0))
 	_draw_shadow(half_h)
-	_draw_ground_sigil(half_h, tint)
+	_draw_ground_sigil(half_h)
 	match e.kind:
 		"archer":
-			_draw_watcher(tint, flash)
+			_draw_watcher(flash)
 		"charger":
-			_draw_ram(tint, flash)
+			_draw_ram(flash)
 		"bulwark":
-			_draw_bulwark(tint, flash)
+			_draw_bulwark(flash)
 		"warden":
-			_draw_warden(tint, flash)
+			_draw_warden(flash)
 		_:
-			_draw_husk(tint, flash)
+			_draw_husk(flash)
 
 	if e.state == Enemy.EState.WINDUP:
-		_draw_telegraph(tint)
+		_draw_telegraph()
 	if outline:
-		_draw_hit_outline(tint, half_h)
+		_draw_hit_outline(half_h)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	_draw_health_bar(half_h)
 	_draw_spawn_flash(half_h)
@@ -72,26 +81,6 @@ func _c(color: Color, flash: bool, alpha: float = 1.0) -> Color:
 	var out := MathArt.WHITE if flash else color
 	out.a *= alpha
 	return out
-
-
-func _draw_shadow(half_h: float) -> void:
-	var width := roundf(float(e.cfg.get("body_radius", 12.0)) * 0.9 + 6.0)
-	MathArt.px_rect(self, Rect2(-width, half_h + 1.0, width * 2.0, 3.0), Color(0.0, 0.0, 0.0, 0.34))
-	MathArt.px_rect(self, Rect2(-width * 0.6, half_h, width * 1.2, 1.0), Color(0.0, 0.0, 0.0, 0.22))
-
-
-func _draw_ground_sigil(half_h: float, tint: Color) -> void:
-	var radius := float(e.cfg.get("body_radius", 12.0)) + 10.0
-	var alpha := 0.16 + 0.06 * sin(_t * 2.0)
-	var sides := _sides()
-	if sides == 0:
-		MathArt.px_ring(self, Vector2(0, half_h + 2.0), radius * 1.15, Color(tint, alpha), 1.0)
-		MathArt.px_ring(self, Vector2(0, half_h + 2.0), radius * 0.8, Color(tint, alpha * 0.6), 1.0)
-		return
-	var flat := PackedVector2Array()
-	for point in MathArt.ngon(sides, radius, -_t * 0.25):
-		flat.append(Vector2(point.x, half_h + 2.0 + point.y * 0.22))
-	MathArt.px_poly(self, flat, Color(0, 0, 0, 0), Color(tint, alpha), 1.0)
 
 
 func _sides() -> int:
@@ -108,173 +97,166 @@ func _sides() -> int:
 			return 3
 
 
-func _draw_husk(tint: Color, flash: bool) -> void:
-	var dark := tint.darkened(0.55)
-	var rim := tint.lightened(0.35)
-	# Legs: two 3x7 blocks.
-	MathArt.px_rect(self, Rect2(-6, 4, 3, 8), _c(dark, flash))
-	MathArt.px_rect(self, Rect2(3, 4, 3, 8), _c(dark, flash))
-	# Body: one triangle, one inner triangle.
-	var body := PackedVector2Array([Vector2(0, -13), Vector2(12, 11), Vector2(-12, 11)])
-	MathArt.px_poly(self, body, _c(tint, flash), _c(rim, flash, 0.6), 1.0)
-	var inner := PackedVector2Array([Vector2(0, -5), Vector2(6, 7), Vector2(-6, 7)])
-	MathArt.px_poly(self, inner, _c(dark, flash, 0.55))
-	# Two 1px eyes: the only "face".
-	MathArt.px_rect(self, Rect2(-3, -1, 2, 2), _c(MathArt.RED_HI, flash))
-	MathArt.px_rect(self, Rect2(2, -1, 2, 2), _c(MathArt.RED_HI, flash))
-	# Shoulder spikes.
-	MathArt.px_poly(self, PackedVector2Array([Vector2(9, -7), Vector2(15, -13), Vector2(11, -3)]),
-		_c(dark, flash), _c(rim, flash, 0.4), 1.0)
-	# Claw arm.
-	MathArt.px_line(self, Vector2(9, 2), Vector2(16, 8), _c(rim, flash, 0.8), 2.0)
-	MathArt.px_rect(self, Rect2(16, 8, 2, 2), _c(MASK, flash, 0.9))
+func _radius() -> float:
+	return float(e.cfg.get("body_radius", 12.0)) + 4.0
 
 
-func _draw_watcher(tint: Color, flash: bool) -> void:
-	var dark := tint.darkened(0.55)
-	var rim := tint.lightened(0.35)
-	# Robe: a tall triangle under the orb.
-	MathArt.px_poly(self, PackedVector2Array([Vector2(-10, 18), Vector2(10, 18), Vector2(5, -6), Vector2(-5, -6)]),
-		_c(dark, flash), _c(rim, flash, 0.45), 1.0)
-	MathArt.px_rect(self, Rect2(-10, 17, 20, 2), _c(tint, flash, 0.5))
-	# Head orb.
-	MathArt.px_circle(self, Vector2(1, -15), 7.0, _c(tint, flash))
-	MathArt.px_circle(self, Vector2(1, -15), 5.0, _c(dark, flash, 0.7))
-	MathArt.px_rect(self, Rect2(2, -16, 2, 2), _c(MathArt.AMBER_HI, flash))
-	# Orbit: an ellipse of 1px dots, with one travelling bead.
-	var orbit_rotation := 0.22 + sin(_t * 1.1) * 0.06
-	for i in 18:
-		var theta := TAU * float(i) / 18.0
-		var point := Vector2(cos(theta) * 15.0, sin(theta) * 4.0).rotated(orbit_rotation)
-		MathArt.px_rect(self, Rect2(roundf(point.x), roundf(point.y - 15.0), 1, 1), _c(rim, flash, 0.55))
-	var bead_angle := _t * 2.4
-	var bead := Vector2(cos(bead_angle) * 15.0, sin(bead_angle) * 4.0).rotated(orbit_rotation)
-	MathArt.px_rect(self, Rect2(roundf(bead.x) - 1.0, roundf(bead.y - 15.0) - 1.0, 3, 3), _c(MathArt.AMBER_HI, flash))
-	# Bow: a 1px arc plus a taut string.
-	MathArt.px_arc(self, Vector2(11, 0), 12.0, -1.2, 1.2, _c(MathArt.AMBER_DIM, flash), 1.0)
-	MathArt.px_line(self, Vector2(15, -11), Vector2(15, 10), _c(MASK, flash, 0.4), 1.0)
-	if e.state == Enemy.EState.WINDUP:
-		var pull := clampf(e.state_t / float(e.cfg.get("windup", 0.5)), 0.0, 1.0)
-		var notch := Vector2(15.0 - 9.0 * pull, 0)
-		MathArt.px_line(self, Vector2(15, 10), notch, _c(MASK, flash, 0.5), 1.0)
-		MathArt.px_line(self, Vector2(15, -11), notch, _c(MASK, flash, 0.5), 1.0)
-		MathArt.px_line(self, notch, Vector2(28, 0), _c(MASK, flash), 1.0)
+func _draw_shadow(half_h: float) -> void:
+	var w := _radius() * 0.9
+	MathArt.px_rect(self, Rect2(-w, half_h + 1.0, w * 2.0, 4.0), Color(0.0, 0.0, 0.0, 0.36))
 
 
-func _draw_ram(tint: Color, flash: bool) -> void:
-	var dark := tint.darkened(0.55)
-	var rim := tint.lightened(0.35)
-	# Legs.
-	MathArt.px_rect(self, Rect2(-7, 8, 4, 10), _c(dark, flash))
-	MathArt.px_rect(self, Rect2(4, 8, 4, 10), _c(dark, flash))
-	# Square body with a 1px inner frame.
-	MathArt.px_rect(self, Rect2(-14, -14, 28, 24), _c(tint, flash))
-	MathArt.px_rect(self, Rect2(-12, -12, 24, 20), _c(dark, flash, 0.65))
-	MathArt.px_rect(self, Rect2(-12, -12, 24, 1), _c(rim, flash, 0.8))
-	MathArt.px_rect(self, Rect2(-12, 7, 24, 1), _c(MathArt.INK, flash, 0.5))
-	# Cross brace.
-	MathArt.px_line(self, Vector2(-12, -12), Vector2(12, 8), _c(rim, flash, 0.28), 1.0)
-	MathArt.px_line(self, Vector2(12, -12), Vector2(-12, 8), _c(rim, flash, 0.28), 1.0)
-	# Horns: two short spirals read as curled horns.
-	MathArt.px_arc(self, Vector2(-6, -17), 5.0, -2.6, 0.2, _c(MASK, flash, 0.85), 1.0)
-	MathArt.px_arc(self, Vector2(8, -17), 5.0, -2.6, 0.2, _c(MASK, flash, 0.85), 1.0)
-	# Eye slit.
-	MathArt.px_rect(self, Rect2(-4, -6, 12, 2), _c(MathArt.AMBER_HI, flash))
+func _draw_ground_sigil(half_h: float) -> void:
+	# A soft ring under the enemy: cheap grounding, no colour needed.
+	var radius := _radius() + 8.0
+	var alpha := 0.10 + 0.05 * sin(_t * 2.0)
+	var sides := _sides()
+	if sides == 0:
+		MathArt.ring(self, Vector2(0, half_h + 2.0), radius, Color(MathArt.MID, alpha), 1.0)
+		return
+	var flat := PackedVector2Array()
+	for point in MathArt.ngon(sides, radius, -_t * 0.25):
+		flat.append(Vector2(point.x, half_h + 2.0 + point.y * 0.20))
+	MathArt.px_poly(self, flat, Color(0, 0, 0, 0), Color(MathArt.MID, alpha), 1.0)
+
+
+func _body_fill() -> Color:
+	return MathArt.ENEMY
+
+
+func _draw_husk(flash: bool) -> void:
+	var r := _radius()
+	var body := MathArt.ngon(3, r, -PI * 0.5, Vector2(0, -2))
+	MathArt.px_poly(self, body, _c(_body_fill(), flash), Color(OUTLINE, 0.9), 2.0)
+	# Inner hollow triangle: the "face" of the shape.
+	MathArt.px_poly(self, MathArt.ngon(3, r * MathArt.INV_PHI, -PI * 0.5, Vector2(0, 0)),
+		_c(MathArt.STONE, flash, 0.9))
+	# Two dot eyes.
+	MathArt.disc(self, Vector2(-4, -2), 1.8, _c(MathArt.WHITE, flash))
+	MathArt.disc(self, Vector2(4, -2), 1.8, _c(MathArt.WHITE, flash))
+	# Claw: one dot, extended during the attack.
+	var hand := Vector2(11, 4)
 	if e.state == Enemy.EState.ATTACK:
-		for i in 3:
-			var x := -float(i + 1) * 10.0 - 12.0
-			MathArt.px_rect(self, Rect2(x, 2, 6, 1), Color(MathArt.AMBER, 0.45))
+		hand = Vector2(18, 4)
+	elif e.state == Enemy.EState.WINDUP:
+		hand = Vector2(6, 2)
+	MathArt.disc(self, hand, 3.0, _c(MathArt.WHITE, flash, 0.95))
+	MathArt.line(self, Vector2(5, 1), hand, _c(MathArt.LIGHT_DIM, flash, 0.55), 1.5)
 
 
-func _draw_bulwark(tint: Color, flash: bool) -> void:
-	var dark := tint.darkened(0.55)
-	var rim := tint.lightened(0.35)
-	MathArt.px_rect(self, Rect2(-7, 8, 4, 10), _c(dark, flash))
-	MathArt.px_rect(self, Rect2(4, 8, 4, 10), _c(dark, flash))
-	# Hexagonal body, nested at 1/phi.
-	var body := MathArt.ngon(6, 15.0, PI / 6.0, Vector2(0, -2))
-	MathArt.px_poly(self, body, _c(tint, flash), _c(rim, flash, 0.65), 1.0)
-	var inner := MathArt.ngon(6, 15.0 * MathArt.INV_PHI, PI / 6.0, Vector2(0, -2))
-	MathArt.px_poly(self, inner, _c(dark, flash, 0.6))
+func _draw_watcher(flash: bool) -> void:
+	var r := _radius()
+	MathArt.disc(self, Vector2(0, -2), r, _c(_body_fill(), flash))
+	MathArt.ring(self, Vector2(0, -2), r, Color(OUTLINE, 0.9), 2.0)
+	MathArt.disc(self, Vector2(0, -2), r * 0.55, _c(MathArt.STONE, flash, 0.92))
+	MathArt.disc(self, Vector2(2, -3), 2.0, _c(MathArt.WHITE, flash))
+	# Orbit: a dashed ellipse plus one travelling bead.
+	var orbit_rotation := 0.24 + sin(_t * 1.1) * 0.06
+	for i in 16:
+		var theta := TAU * float(i) / 16.0
+		var point := Vector2(cos(theta) * (r + 9.0), sin(theta) * 4.5).rotated(orbit_rotation)
+		MathArt.px_rect(self, Rect2(point.x - 1.0, point.y - 2.0 - 2.0, 2.0, 2.0), _c(MathArt.MID, flash, 0.7))
+	var bead_angle := _t * 2.4
+	var bead := Vector2(cos(bead_angle) * (r + 9.0), sin(bead_angle) * 4.5).rotated(orbit_rotation)
+	MathArt.disc(self, bead + Vector2(0, -2), 2.2, _c(MathArt.WHITE, flash))
+	# Bow hand: a dot on the front edge.
+	var hand := Vector2(r + 2.0, -2)
+	if e.state == Enemy.EState.WINDUP:
+		hand = Vector2(r - 2.0, -2)
+	MathArt.disc(self, hand, 2.6, _c(MathArt.WHITE, flash))
+
+
+func _draw_ram(flash: bool) -> void:
+	var r := _radius()
+	var body := MathArt.ngon(4, r * 1.15, PI * 0.25, Vector2(0, -2))
+	MathArt.px_poly(self, body, _c(_body_fill(), flash), Color(OUTLINE, 0.9), 2.0)
+	MathArt.px_poly(self, MathArt.ngon(4, r * 0.65, PI * 0.25, Vector2(0, -2)), _c(MathArt.STONE, flash, 0.92))
+	# Eye slit: a single wide dot pair, no face.
+	MathArt.px_rect(self, Rect2(-5, -6, 4, 2), _c(MathArt.WHITE, flash))
+	MathArt.px_rect(self, Rect2(2, -6, 4, 2), _c(MathArt.WHITE, flash))
+	# Horns: two short ticks that lead the charge.
+	var horn := 8.0 if e.state == Enemy.EState.ATTACK else 5.0
+	MathArt.line(self, Vector2(-r * 0.6, -r * 0.9), Vector2(-r * 0.6 - horn * 0.4, -r * 0.9 - horn),
+		_c(MathArt.WHITE, flash, 0.9), 2.0)
+	MathArt.line(self, Vector2(r * 0.6, -r * 0.9), Vector2(r * 0.6 + horn * 0.4, -r * 0.9 - horn),
+		_c(MathArt.WHITE, flash, 0.9), 2.0)
+
+
+func _draw_bulwark(flash: bool) -> void:
+	var r := _radius()
+	var body := MathArt.ngon(6, r * 1.05, PI / 6.0, Vector2(0, -2))
+	MathArt.px_poly(self, body, _c(_body_fill(), flash), Color(OUTLINE, 0.9), 2.0)
+	MathArt.px_poly(self, MathArt.ngon(6, r * 0.62, PI / 6.0, Vector2(0, -2)), _c(MathArt.STONE, flash, 0.92))
 	# Eye.
-	MathArt.px_rect(self, Rect2(-2, -6, 5, 2), _c(MathArt.CYAN, flash))
-	# Front shield: three concentric hex outlines, rotating slightly.
-	var shield_center := Vector2(15, -2)
+	MathArt.disc(self, Vector2(0, -2), 2.2, _c(MathArt.WHITE, flash))
+	# Front shield: a flat face presented to the player.
+	var shield_center := Vector2(r * 1.05, -2)
 	for i in 3:
 		var radius := 13.0 * pow(MathArt.INV_PHI, float(i))
-		var points := MathArt.ngon(6, radius, PI / 6.0 + _t * 0.12 * float(i + 1), shield_center)
-		MathArt.px_poly(self, points, Color(tint, 0.22) if i == 0 else Color(0, 0, 0, 0),
-			_c(MASK, flash, 0.55 - float(i) * 0.12), 1.0)
-	MathArt.px_line(self, shield_center + Vector2(0, -11), shield_center + Vector2(0, 11), _c(MASK, flash, 0.4), 1.0)
-	if e.state == Enemy.EState.WINDUP:
-		var pulse := 0.4 + 0.5 * clampf(e.state_t / 0.55, 0.0, 1.0)
-		MathArt.px_ring(self, shield_center, 16.0 + 4.0 * pulse, Color(MathArt.CYAN, pulse * 0.55), 1.0)
+		var points := MathArt.ngon(6, radius, PI / 6.0 + _t * 0.10 * float(i + 1), shield_center)
+		MathArt.px_poly(self, points, Color(0, 0, 0, 0) if i > 0 else _c(MathArt.STONE_HI, flash, 0.5),
+			_c(MathArt.WHITE, flash, 0.55 - float(i) * 0.12), 1.5)
+	MathArt.line(self, shield_center + Vector2(0, -11), shield_center + Vector2(0, 11), _c(MathArt.WHITE, flash, 0.45), 1.0)
 
 
-func _draw_warden(tint: Color, flash: bool) -> void:
-	var dark := tint.darkened(0.6)
-	var rim := tint.lightened(0.4)
-	# Aura: pentagram outline, 1px, slowly turning.
-	var aura := MathArt.star(5, 34.0, 14.0, -PI * 0.5 + _t * 0.10)
-	MathArt.px_poly(self, aura, Color(0, 0, 0, 0), Color(tint, 0.20), 1.0)
-	MathArt.px_ring(self, Vector2.ZERO, 36.0, Color(tint, 0.10), 1.0)
-	for i in 5:
-		var angle := _t * 0.8 + TAU * float(i) / 5.0
-		var point := Vector2.from_angle(angle) * 30.0
-		MathArt.px_rect(self, Rect2(roundf(point.x), roundf(point.y), 2, 2), Color(rim, 0.7))
+func _draw_warden(flash: bool) -> void:
+	var r := _radius()
+	# Aura: a pentagram outline, slowly turning.
+	var aura := MathArt.star(5, r + 20.0, r + 4.0, -PI * 0.5 + _t * 0.10)
+	MathArt.px_poly(self, aura, Color(0, 0, 0, 0), Color(MathArt.MID, 0.35), 1.0)
 	# Body: nested pentagons.
-	MathArt.px_poly(self, MathArt.ngon(5, 19.0, -PI * 0.5, Vector2(0, 3)),
-		_c(dark, flash), _c(rim, flash, 0.5), 1.0)
-	MathArt.px_poly(self, MathArt.ngon(5, 19.0 * MathArt.INV_PHI, -PI * 0.5, Vector2(0, 3)),
-		_c(tint, flash, 0.85), _c(rim, flash, 0.55), 1.0)
-	# Crown: five 1px spikes.
+	MathArt.px_poly(self, MathArt.ngon(5, r * 1.15, -PI * 0.5, Vector2(0, 1)),
+		_c(MathArt.PALE, flash), Color(OUTLINE, 0.9), 2.0)
+	MathArt.px_poly(self, MathArt.ngon(5, r * 0.70, -PI * 0.5, Vector2(0, 1)),
+		_c(MathArt.STONE, flash, 0.95))
+	# Crown: five ticks.
 	for i in 5:
 		var angle := -PI * 0.5 + TAU * float(i) / 5.0
-		var base := Vector2.from_angle(angle) * 10.0 + Vector2(0, -18)
-		var tip := Vector2.from_angle(angle) * 17.0 + Vector2(0, -18)
-		MathArt.px_line(self, base, tip, _c(MathArt.AMBER_HI, flash, 0.8), 1.0)
-	# Eye.
-	MathArt.px_rect(self, Rect2(-2, -10, 5, 2), _c(MathArt.VIOLET, flash))
-	MathArt.px_rect(self, Rect2(0, -10, 1, 1), _c(MathArt.WHITE, flash))
-	# Cleaver: a long 2px blade on a 1px grip.
-	var hand := Vector2(14, -6)
-	var angle := 0.8
+		var base := Vector2.from_angle(angle) * r * 0.7 + Vector2(0, -2)
+		var tip := Vector2.from_angle(angle) * r * 1.35 + Vector2(0, -2)
+		MathArt.line(self, base, tip, _c(MathArt.WHITE, flash, 0.85), 2.0)
+	MathArt.disc(self, Vector2(0, -2), 3.0, _c(MathArt.WHITE, flash))
+	# Cleaver hand: a dot with a long blade.
+	var hand := Vector2(r * 0.9, 2)
+	var angle := 0.85
 	if e.state == Enemy.EState.WINDUP:
-		angle = -1.0
+		angle = -1.05
 	elif e.state == Enemy.EState.ATTACK:
-		angle = 1.0
+		angle = 1.05
+	MathArt.disc(self, hand, 3.4, _c(MathArt.WHITE, flash))
 	var direction := Vector2.from_angle(angle)
-	MathArt.px_line(self, hand, hand + direction * 30.0, _c(MathArt.STEEL_HI, flash), 3.0)
-	MathArt.px_line(self, hand, hand + direction * 30.0, _c(MathArt.WHITE, flash, 0.55), 1.0)
-	MathArt.px_line(self, hand - direction * 4.0, hand, _c(MathArt.AMBER_DIM, flash), 2.0)
+	MathArt.line(self, hand, hand + direction * 32.0, _c(MathArt.WHITE, flash), 3.0)
+	MathArt.line(self, hand, hand + direction * 32.0, _c(MathArt.PALE, flash, 0.6), 1.0)
 	if e.state == Enemy.EState.ATTACK:
-		MathArt.px_arc(self, hand, 26.0, angle - 1.4, angle, Color(MathArt.VIOLET, 0.35), 3.0)
+		MathArt.arc(self, hand, 28.0, angle - 1.5, angle, Color(MathArt.WHITE, 0.35), 3.0)
 
 
-func _draw_telegraph(tint: Color) -> void:
+func _draw_telegraph() -> void:
 	var windup := maxf(0.001, float(e.cfg.get("windup", 0.4)))
 	var progress := clampf(e.state_t / windup, 0.0, 1.0)
-	var pulse := 0.35 + 0.5 * progress
-	var warn := Color(MathArt.RED_HI, pulse)
+	# No colour: the telegraph is a blinking high-contrast outline.
+	var blink := 0.45 + 0.55 * (0.5 + 0.5 * sin(_t * 34.0))
+	var alpha := (0.35 + 0.55 * progress) * blink
+	var tint := Color(MathArt.WHITE, alpha)
+
 	if e.kind == "warden":
 		match String(e._pending_attack):
 			"cleave":
-				MathArt.px_arc(self, Vector2(14, -4), 30.0 + 10.0 * progress, -1.2, 1.2, warn, 2.0)
-				MathArt.px_line(self, Vector2(4, -4), Vector2(4 + 54.0 * progress, -4), Color(warn, pulse * 0.5), 1.0)
+				MathArt.arc(self, Vector2(10, -2), 30.0 + 12.0 * progress, -1.2, 1.2, tint, 3.0)
 			"charge":
-				MathArt.px_line(self, Vector2(8, 2), Vector2(8 + 110.0 * progress, 2), warn, 2.0)
+				MathArt.line(self, Vector2(6, 2), Vector2(6 + 130.0 * progress, 2), tint, 3.0)
 			_:
-				MathArt.px_ring(self, Vector2(0, 26), 24.0 + 22.0 * progress, Color(warn, pulse * 0.7), 2.0)
+				MathArt.ring(self, Vector2(0, 28), 26.0 + 26.0 * progress, tint, 3.0)
 		return
 	if e.kind == "charger":
-		MathArt.px_line(self, Vector2(8, -4), Vector2(8 + 34.0 + 56.0 * progress, -4), warn, 2.0)
+		MathArt.line(self, Vector2(6, -2), Vector2(6 + 40.0 + 70.0 * progress, -2), tint, 3.0)
 	elif e.kind == "archer":
-		MathArt.px_ring(self, Vector2(11, 0), 15.0 + 5.0 * progress, Color(warn, pulse * 0.6), 1.0)
+		MathArt.ring(self, Vector2(0, -2), _radius() + 8.0 + 6.0 * progress, tint, 2.0)
 		_draw_arrow_prediction()
 	elif e.kind == "bulwark":
-		MathArt.px_arc(self, Vector2(6, -2), 22.0, -1.1, 1.1, Color(MathArt.CYAN, pulse), 2.0)
+		MathArt.arc(self, Vector2(6, -2), 24.0, -1.1, 1.1, tint, 3.0)
 	else:
-		MathArt.px_arc(self, Vector2(6, -2), 22.0, -1.1, 1.1, warn, 2.0)
+		MathArt.arc(self, Vector2(4, -2), 24.0, -1.1, 1.1, tint, 3.0)
 
 
 func _draw_arrow_prediction() -> void:
@@ -284,42 +266,40 @@ func _draw_arrow_prediction() -> void:
 	var origin := e.global_position + Vector2(float(e.facing) * 12.0, -15.0)
 	var target := player.global_position + Vector2(0, -15)
 	var velocity := MathArt.ballistic_velocity(origin, target, float(e.cfg.get("projectile_speed", 320.0)), 700.0)
-	for i in 20:
-		var time := 0.85 * float(i) / 19.0
+	for i in 24:
+		var time := 0.9 * float(i) / 23.0
 		var world := origin + velocity * time + Vector2(0.0, 0.5 * 700.0 * time * time)
 		var local := to_local(world)
 		local.x *= float(e.facing)
 		if i % 2 == 0:
-			MathArt.px_rect(self, Rect2(roundf(local.x), roundf(local.y), 1, 1), Color(MathArt.RED_HI, 0.30))
+			MathArt.px_rect(self, Rect2(local.x - 1.0, local.y - 1.0, 2.0, 2.0), Color(MathArt.WHITE, 0.35))
 
 
-func _draw_hit_outline(tint: Color, half_h: float) -> void:
-	# A hard white rim around the silhouette, no fill: keeps the shape readable.
-	var radius := float(e.cfg.get("body_radius", 12.0)) + 2.0
+func _draw_hit_outline(half_h: float) -> void:
+	var radius := _radius() + 2.0
 	var sides := _sides()
-	var alpha := clampf(e.flash / 0.10, 0.0, 1.0) * 0.55
+	var alpha := clampf(e.flash / 0.10, 0.0, 1.0) * 0.7
 	if sides == 0:
-		MathArt.px_ring(self, Vector2(0, -14.0), radius, Color(MathArt.WHITE, alpha), 1.0)
+		MathArt.ring(self, Vector2(0, -2), radius, Color(MathArt.WHITE, alpha), 2.0)
 		return
-	MathArt.px_poly(self, MathArt.ngon(sides, radius + 2.0, 0.0, Vector2(0, -2)),
-		Color(0, 0, 0, 0), Color(MathArt.WHITE, alpha), 1.0)
+	MathArt.px_poly(self, MathArt.ngon(sides, radius + 2.0, -PI * 0.5, Vector2(0, -2)),
+		Color(0, 0, 0, 0), Color(MathArt.WHITE, alpha), 2.0)
 
 
 func _draw_health_bar(half_h: float) -> void:
 	if e.hp >= e.max_hp or e._dead or bool(e.cfg.get("boss", false)):
 		return
-	var width := 34.0
-	var y := -(half_h + 12.0)
-	MathArt.px_rect(self, Rect2(-width * 0.5 - 1.0, y - 1.0, width + 2.0, 5.0), Color(0.0, 0.0, 0.0, 0.8))
+	var width := 38.0
+	var y := -(half_h + 14.0)
+	MathArt.px_rect(self, Rect2(-width * 0.5 - 1.0, y - 1.0, width + 2.0, 6.0), Color(0.0, 0.0, 0.0, 0.85))
 	var ratio := clampf(e.hp / maxf(e.max_hp, 1.0), 0.0, 1.0)
-	MathArt.px_rect(self, Rect2(-width * 0.5, y, width * ratio, 3.0), MathArt.RED)
-	MathArt.px_rect(self, Rect2(-width * 0.5, y, width * ratio, 1.0), MathArt.RED_HI)
+	MathArt.px_rect(self, Rect2(-width * 0.5, y, width * ratio, 4.0), MathArt.PALE)
+	MathArt.px_rect(self, Rect2(-width * 0.5, y, width * ratio, 1.0), MathArt.WHITE)
 
 
 func _draw_spawn_flash(half_h: float) -> void:
 	if e._spawn_t <= 0.0 or e._spawn_t > 0.4:
 		return
 	var a := clampf(e._spawn_t / 0.4, 0.0, 1.0)
-	var radius := 22.0 + 12.0 * (1.0 - a)
-	MathArt.px_ring(self, Vector2(0, -4), radius, Color(MathArt.WHITE, a * 0.45), 1.0)
-	MathArt.px_ring(self, Vector2(0, -4), radius * 0.6, Color(MathArt.AMBER_HI, a * 0.3), 1.0)
+	var radius := 22.0 + 14.0 * (1.0 - a)
+	MathArt.ring(self, Vector2(0, -2), radius, Color(MathArt.WHITE, a * 0.55), 2.0)

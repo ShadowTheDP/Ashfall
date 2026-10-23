@@ -9,7 +9,7 @@ var direction := Vector2.RIGHT
 var speed := 320.0
 var damage := 7.0
 var knockback := 150.0
-var tint := MathArt.VIOLET
+var tint := MathArt.PALE
 var source: Node2D = null
 var crit_mult := 1.0
 var spin := false
@@ -92,6 +92,7 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	_t += delta
 	if _t >= _life:
+		Combat.burst(global_position, MathArt.LIGHT, 4, 80.0)
 		queue_free()
 		return
 	if ballistic:
@@ -160,8 +161,8 @@ func _draw_kunai() -> void:
 	# A 4px diamond blade on a 1px grip.
 	MathArt.px_poly(self, PackedVector2Array([Vector2(6, 0), Vector2(0, -3), Vector2(-3, 0), Vector2(0, 3)]),
 		Color(tint, 0.95), Color(MathArt.WHITE, 0.8), 1.0)
-	MathArt.px_rect(self, Rect2(-6, -1, 4, 1), MathArt.AMBER)
-	MathArt.px_rect(self, Rect2(-7, -1, 1, 2), MathArt.AMBER_DIM)
+	MathArt.px_rect(self, Rect2(-6, -1, 4, 1), MathArt.PALE_DIM)
+	MathArt.px_rect(self, Rect2(-7, -1, 1, 2), MathArt.MID_DIM)
 
 
 func _draw_wave() -> void:

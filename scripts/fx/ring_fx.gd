@@ -2,7 +2,7 @@ class_name RingFx
 extends Node2D
 ## Expanding pixel ring / shockwave outline.
 
-var tint := MathArt.CYAN
+var tint := MathArt.WHITE
 var radius := 60.0
 var _t := 0.0
 var _life := 0.34

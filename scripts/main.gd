@@ -42,7 +42,7 @@ func _ready() -> void:
 	world.add_child(motes)
 
 	player = PLAYER_SCENE.instantiate() as Player
-	player.position = Vector2(230.0, -40.0)
+	player.position = Vector2(560.0, -40.0)
 	world.add_child(player)
 	Game.fx_root = world
 

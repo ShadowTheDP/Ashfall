@@ -2,10 +2,11 @@
 
 ## Current Objective
 
-Milestone 2 is complete: the whole game renders as **640x360 pixel art** with
-integer upscaling, and combat animation follows the standard action-game frame
-order (anticipation -> smear -> impact -> follow-through -> secondary motion).
-Next is human playtest tuning, then breadth.
+Milestone 3 is complete: **768x480 monochrome**, motion-first rendering with
+float transforms and 120 Hz physics interpolation. The player is a square that
+tumbles 90 degrees per jump and lands on a new face; enemies are plain polygons
+with no limbs; all particles come from Godot's `CPUParticles2D`. Next is human
+playtest tuning, then breadth.
 
 ## What Exists
 
@@ -37,8 +38,17 @@ Next is human playtest tuning, then breadth.
 - **Visual system**: `MathArt` pixel primitives everywhere (`px_rect`,
   `px_circle`, `px_ring`, `px_arc`, `px_line`, `px_poly`); no anti-aliased
   drawing is reachable. Dithered vignette, tight nearest-filtered bloom.
-- **Pixel pipeline**: 640x360 logical, x2 integer upscale, nearest filter,
-  camera zoom 1.0, rounded camera position, no camera rotation.
+- **Rendering pipeline**: 768x480 logical, x2 integer upscale, linear filter,
+  120 Hz physics + interpolation, float camera in `_physics_process`, no
+  rounding anywhere in gameplay transforms.
+- **Monochrome**: one greyscale ramp in `MathArt`; no hue anywhere.
+- **Player is a square**: white body, black inset face, white core, corner
+  notch and edge pip so a 90-degree turn is visible. Tumble completes in
+  0.42 s; short hops settle in 70 ms.
+- **No limbs**: enemies are plain polygons; hands are dots.
+- **Particles**: `scripts/systems/juice.gd` wraps `CPUParticles2D` with nine
+  presets (dust, land_dust, jump_burst, hit_sparks, shatter, pickup, block,
+  dodge, telegraph).
 - **Combat animation**: anticipation coil + body squash, one solid smear wedge
   (two on the finisher), 2-frame white impact silhouette on enemies, 10-14 deg
   overshoot with a 55/30/15 ease-out, 1-frame secondary lag on tip and body.
@@ -49,11 +59,12 @@ Next is human playtest tuning, then breadth.
 
 ## Current Decisions
 
-- Art must go through `MathArt.px_*`; no textures, no `Sprite2D`, and no
-  anti-aliased draw calls. Style comes from constraint, not from more elements.
-- The camera never rotates and its position is rounded every frame; any
-  sub-pixel motion is a bug at 640x360.
-- HUD text uses whole-pixel baselines and sizes 6-28.
+- Art must go through `MathArt`; no textures, no `Sprite2D`. Style comes from
+  constraint, not from more elements.
+- Monochrome is a hard rule; readability is engineered through value contrast,
+  keyline weight and motion.
+- Motion fluidity beats pixel snapping: no rounding of gameplay transforms.
+- HUD text sizes 8-38, laid out on a proportional grid at 768x480.
 - Weapons and enemy telegraphs express their actual math (ballistic preview,
   sine wave, radial field).
 - Keyboard-only is a hard requirement; gamepad is additive.
@@ -76,9 +87,9 @@ Next is human playtest tuning, then breadth.
 
 ## Next Likely Improvements
 
-1. Real playtest tuning pass: attack commit length, hitstop duration, Warden
-   telegraph readability, Aegis cooldown, and whether the smear frames read
-   clearly at x2.
+1. Real playtest tuning pass: does the square's 90-degree tumble read as a
+   face change; are the smear frames clear at 1536x960; is the monochrome
+   contrast comfortable; is Aegis readable without colour.
 2. A second weapon function with a different curve (e.g. a Lissajous flail or
    a rose-petal area attack) to prove the weapon schema generalizes.
 3. A second handcrafted arena and a doorway transition before any generator

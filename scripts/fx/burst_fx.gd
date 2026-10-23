@@ -59,7 +59,7 @@ func _draw_dodge(k: float) -> void:
 	var alpha := 1.0 if k < 0.34 else (0.7 if k < 0.67 else 0.0)
 	if alpha <= 0.0:
 		return
-	var color := MathArt.WHITE if k < 0.34 else MathArt.CYAN
+	var color := MathArt.WHITE if k < 0.34 else MathArt.WHITE
 	var radius := lerpf(4.0, 9.0, k)
 	for ray in _rays:
 		var angle: float = ray["angle"]
@@ -99,5 +99,5 @@ func _draw_hurt(k: float) -> void:
 		var angle: float = float(ray["angle"]) + (0.0 if facing > 0 else PI)
 		var from_point := Vector2.from_angle(angle) * 4.0
 		var to_point := Vector2.from_angle(angle) * (4.0 + float(ray["len"]) * (0.4 + k))
-		MathArt.px_line(self, from_point, to_point, Color(MathArt.RED_HI, alpha * 0.85), 1.0)
+		MathArt.px_line(self, from_point, to_point, Color(MathArt.WHITE, alpha * 0.85), 1.0)
 	MathArt.px_rect(self, Rect2(-1, -1, 3, 3), Color(MathArt.WHITE, alpha))

@@ -2,9 +2,9 @@ class_name Braziers
 extends Node2D
 ## Pixel braziers: hex plinth, chunky flame, 1px embers on a phyllotaxis drift.
 
-const AMBER := MathArt.AMBER
-const FLAME := MathArt.AMBER_HI
-const EMBER := MathArt.RED_HI
+const AMBER := MathArt.PALE_DIM
+const FLAME := MathArt.WHITE
+const EMBER := MathArt.WHITE
 
 var _t := 0.0
 var _positions := [Vector2(40, 0), Vector2(420, 0), Vector2(820, 0), Vector2(1210, 0), Vector2(1540, 0)]
@@ -34,9 +34,9 @@ func _draw_brazier(base: Vector2, phase: float) -> void:
 
 	# Hex plinth.
 	var plinth := MathArt.ngon(6, 15.0, PI / 6.0, base + Vector2(0, -9))
-	MathArt.px_poly(self, plinth, MathArt.STONE_2, Color(MathArt.AMBER_DIM, 0.65), 1.0)
-	MathArt.px_rect(self, Rect2(base.x - 13.0, base.y - 13.0, 26.0, 5.0), MathArt.STONE_3)
-	MathArt.px_rect(self, Rect2(base.x - 13.0, base.y - 13.0, 26.0, 1.0), Color(MathArt.AMBER_DIM, 0.55))
+	MathArt.px_poly(self, plinth, MathArt.STONE, Color(MathArt.MID_DIM, 0.65), 1.0)
+	MathArt.px_rect(self, Rect2(base.x - 13.0, base.y - 13.0, 26.0, 5.0), MathArt.STONE_HI)
+	MathArt.px_rect(self, Rect2(base.x - 13.0, base.y - 13.0, 26.0, 1.0), Color(MathArt.MID_DIM, 0.55))
 
 	# Flame: four stacked bands, widths from a rose curve.
 	var heights := [10.0, 8.0, 6.0, 4.0]

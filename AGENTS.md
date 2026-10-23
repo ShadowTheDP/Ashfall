@@ -18,16 +18,22 @@
   data tables, or decompiled output. Mechanics and genre are fair game;
   expression is not.
 - Keep the prototype runnable with the headless checks in `tools/check.ps1`.
-- **All art goes through `scripts/systems/math_art.gd` and is pixel-quantised.**
-  No textures, no `Sprite2D`, no imported images, and **never** call
-  `draw_circle` / `draw_arc` / `draw_polyline` / `draw_colored_polygon`
-  directly - they anti-alias and leave grey fringes after the x2 upscale.
-  If a shape cannot be expressed as a primitive (polygon, star, superellipse,
-  Lissajous, rose, phyllotaxis, spiral, harmonic, ballistic), add the
-  primitive to `MathArt` first, then rasterise it with the `px_*` helpers.
-- **Pixel pipeline invariants:** 640x360 logical resolution, integer scaling,
-  nearest filter, camera zoom 1.0, rounded camera position, camera rotation
-  always 0. Changing any of these breaks the whole look.
+- **All art goes through `scripts/systems/math_art.gd`.** No textures, no
+  `Sprite2D`, no imported images. If a shape cannot be expressed as a
+  primitive (polygon, star, superellipse, Lissajous, rose, phyllotaxis,
+  spiral, harmonic, ballistic), add the primitive to `MathArt` first.
+- **Monochrome only.** Never introduce hue. Colours must come from the
+  `MathArt` greyscale ramp or its semantic aliases (`PLAYER`, `ENEMY`, `BOSS`,
+  `PICKUP`). Readability comes from value contrast, outline weight and motion.
+- **Motion beats snapping.** Characters and camera use float positions and are
+  never rounded. Do not add `roundf()` to gameplay transforms.
+- **No limbs.** The player is a square; enemies are plain polygons. A "hand" is
+  a single dot. Do not add legs, arms, feet or faces.
+- **Particles use `Juice.*`** (a thin wrapper over Godot's `CPUParticles2D`).
+  Do not hand-write particle simulation.
+- **Pipeline invariants:** 768x480 logical, integer x2 window 1536x960,
+  120 Hz physics with `physics_interpolation=true`, camera in
+  `_physics_process`. Changing any of these breaks the whole feel.
 - Use `PHI`, `INV_PHI` and `GOLDEN_ANGLE` for scale and spacing. Random values
   are only allowed for deliberate noise (cracks, debris).
 - **Keyboard-only:** every action must have a keyboard binding; do not add

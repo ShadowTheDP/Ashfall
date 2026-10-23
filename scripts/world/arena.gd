@@ -5,11 +5,11 @@ extends Node2D
 
 const GROUND := Rect2(-150.0, 0.0, 1750.0, 160.0)
 const PLATFORMS := [
-	Rect2(120.0, -90.0, 240.0, 14.0),
+	Rect2(120.0, -128.0, 240.0, 14.0),
 	Rect2(470.0, -150.0, 300.0, 14.0),
-	Rect2(880.0, -90.0, 240.0, 14.0),
+	Rect2(880.0, -128.0, 240.0, 14.0),
 	Rect2(1180.0, -170.0, 280.0, 14.0),
-	Rect2(690.0, -52.0, 150.0, 12.0),
+	Rect2(690.0, -70.0, 150.0, 12.0),
 ]
 const WALLS := [
 	Rect2(-170.0, -520.0, 20.0, 680.0),
@@ -24,17 +24,17 @@ const GROUND_SPAWNS := [
 	Vector2(1430.0, -42.0),
 ]
 const PLATFORM_SPAWNS := [
-	Vector2(240.0, -128.0),
+	Vector2(240.0, -166.0),
 	Vector2(620.0, -188.0),
-	Vector2(1000.0, -128.0),
+	Vector2(1000.0, -166.0),
 	Vector2(1320.0, -196.0),
 ]
 
 const STONE := MathArt.STONE
-const STONE_2 := MathArt.STONE_2
-const STONE_3 := MathArt.STONE_3
-const EDGE := MathArt.EDGE
-const AMBER := MathArt.AMBER
+const STONE_2 := MathArt.STONE
+const STONE_3 := MathArt.STONE_HI
+const EDGE := MathArt.STONE_HI
+const AMBER := MathArt.PALE_DIM
 
 var _specks: Array[Vector3] = []
 var _cracks: Array[Vector4] = []
@@ -101,14 +101,14 @@ func _draw_rose_window() -> void:
 	var center := Vector2(720, -170)
 	for i in 3:
 		var radius := 210.0 - float(i) * 46.0
-		MathArt.px_ring(self, center, radius, Color(0.30, 0.42, 0.58, 0.10 + float(i) * 0.02), 1.0)
+		MathArt.px_ring(self, center, radius, Color(0.458, 0.458, 0.458, 0.10 + float(i) * 0.02), 1.0)
 	for i in 12:
 		var angle := TAU * float(i) / 12.0 - PI * 0.5
 		var inner := center + Vector2.from_angle(angle) * 120.0
 		var outer := center + Vector2.from_angle(angle) * 210.0
-		MathArt.px_line(self, inner, outer, Color(0.30, 0.42, 0.58, 0.07), 1.0)
+		MathArt.px_line(self, inner, outer, Color(0.458, 0.458, 0.458, 0.07), 1.0)
 	MathArt.px_poly(self, MathArt.star(12, 122.0, 96.0, -PI * 0.5, center),
-		Color(0, 0, 0, 0), Color(0.30, 0.42, 0.58, 0.06), 1.0)
+		Color(0, 0, 0, 0), Color(0.458, 0.458, 0.458, 0.06), 1.0)
 
 
 func _draw_monoliths() -> void:
@@ -116,12 +116,12 @@ func _draw_monoliths() -> void:
 		var x: float = column["x"]
 		var width: float = column["w"]
 		var top := -470.0
-		MathArt.px_rect(self, Rect2(x, top, width, 470.0), Color(0.070, 0.086, 0.118, 0.60))
-		MathArt.px_rect(self, Rect2(x + width - 3.0, top, 3.0, 470.0), Color(0.045, 0.055, 0.078, 0.60))
-		MathArt.px_rect(self, Rect2(x + 2.0, top, 1.0, 470.0), Color(0.16, 0.19, 0.24, 0.22))
+		MathArt.px_rect(self, Rect2(x, top, width, 470.0), Color(0.081, 0.081, 0.081, 0.62))
+		MathArt.px_rect(self, Rect2(x + width - 3.0, top, 3.0, 470.0), Color(0.050, 0.050, 0.050, 0.62))
+		MathArt.px_rect(self, Rect2(x + 2.0, top, 1.0, 470.0), Color(0.219, 0.219, 0.219, 0.24))
 		# Hex capital.
 		var cap := MathArt.ngon(6, width * 0.5, 0.0, Vector2(x + width * 0.5, top))
-		MathArt.px_poly(self, cap, Color(0.10, 0.12, 0.16, 0.6), Color(0.18, 0.21, 0.26, 0.4), 1.0)
+		MathArt.px_poly(self, cap, Color(0.120, 0.120, 0.120, 0.65), Color(0.259, 0.259, 0.259, 0.45), 1.0)
 		if bool(column["sigil"]):
 			var sigil := MathArt.ngon(6, width * 0.30, PI / 6.0, Vector2(x + width * 0.5, top + 110.0))
 			MathArt.px_poly(self, sigil, Color(0, 0, 0, 0), Color(AMBER, 0.16), 1.0)
@@ -134,12 +134,12 @@ func _draw_banners() -> void:
 		var width := roundf(22.0 * float(spec[1]))
 		var top := -290.0
 		var bottom := -180.0
-		MathArt.px_rect(self, Rect2(x - width * 0.5, top, width, bottom - top), Color(0.15, 0.07, 0.08, 0.55))
-		MathArt.px_rect(self, Rect2(x - width * 0.5, top, width, 2.0), Color(0.42, 0.30, 0.15, 0.55))
+		MathArt.px_rect(self, Rect2(x - width * 0.5, top, width, bottom - top), Color(0.140, 0.140, 0.140, 0.62))
+		MathArt.px_rect(self, Rect2(x - width * 0.5, top, width, 2.0), Color(0.439, 0.439, 0.439, 0.55))
 		# Pennant point.
 		for i in 4:
 			var w := width * (1.0 - float(i) / 4.0)
-			MathArt.px_rect(self, Rect2(x - w * 0.5, bottom + float(i) * 3.0, w, 3.0), Color(0.15, 0.07, 0.08, 0.55))
+			MathArt.px_rect(self, Rect2(x - w * 0.5, bottom + float(i) * 3.0, w, 3.0), Color(0.140, 0.140, 0.140, 0.62))
 		MathArt.px_poly(self, MathArt.ngon(3, width * 0.24, -PI * 0.5, Vector2(x, top + 40.0)),
 			Color(AMBER, 0.18), Color(AMBER, 0.30), 1.0)
 
@@ -147,7 +147,7 @@ func _draw_banners() -> void:
 func _draw_ground() -> void:
 	MathArt.px_rect(self, GROUND, STONE)
 	MathArt.px_rect(self, Rect2(GROUND.position, Vector2(GROUND.size.x, 3.0)), EDGE)
-	MathArt.px_rect(self, Rect2(GROUND.position + Vector2(0, 3), Vector2(GROUND.size.x, 1.0)), Color(MathArt.AMBER_DIM, 0.35))
+	MathArt.px_rect(self, Rect2(GROUND.position + Vector2(0, 3), Vector2(GROUND.size.x, 1.0)), Color(MathArt.MID_DIM, 0.35))
 
 	# Pixel noise.
 	for speck in _specks:
@@ -157,14 +157,14 @@ func _draw_ground() -> void:
 		elif shade > 0.55:
 			MathArt.px_rect(self, Rect2(speck.x, speck.y, 1, 1), Color(MathArt.INK, 0.35))
 		elif shade > 0.30:
-			MathArt.px_rect(self, Rect2(speck.x, speck.y, 1, 1), Color(MathArt.AMBER_DIM, 0.07))
+			MathArt.px_rect(self, Rect2(speck.x, speck.y, 1, 1), Color(MathArt.MID_DIM, 0.07))
 
 	# Cracks.
 	for crack in _cracks:
 		var depth: float = crack.y
 		var lean: float = crack.z
 		var shade: float = crack.w
-		var color := Color(MathArt.INK, 0.55) if shade > 0.4 else Color(MathArt.STEEL_DIM, 0.10)
+		var color := Color(MathArt.INK, 0.55) if shade > 0.4 else Color(MathArt.LIGHT_DIM, 0.10)
 		MathArt.px_line(self, Vector2(crack.x, 4.0), Vector2(crack.x + lean, depth), color, 1.0)
 		if shade > 0.7:
 			MathArt.px_line(self, Vector2(crack.x + lean, depth), Vector2(crack.x + lean + 3.0, depth + 6.0), color, 1.0)
@@ -176,7 +176,7 @@ func _draw_ground() -> void:
 func _draw_platform(rect: Rect2) -> void:
 	MathArt.px_rect(self, rect, STONE_2)
 	MathArt.px_rect(self, Rect2(rect.position, Vector2(rect.size.x, 2.0)), EDGE)
-	MathArt.px_rect(self, Rect2(rect.position + Vector2(0, 2), Vector2(rect.size.x, 1.0)), Color(MathArt.AMBER_DIM, 0.25))
+	MathArt.px_rect(self, Rect2(rect.position + Vector2(0, 2), Vector2(rect.size.x, 1.0)), Color(MathArt.MID_DIM, 0.25))
 	MathArt.px_rect(self, Rect2(rect.position + Vector2(0, rect.size.y - 2.0), Vector2(rect.size.x, 2.0)), Color(MathArt.INK, 0.8))
 	# Phi tick marks.
 	for fraction in [0.0, MathArt.INV_PHI * MathArt.INV_PHI, MathArt.INV_PHI, 1.0]:
@@ -195,4 +195,4 @@ func _draw_fog() -> void:
 		for band in 3:
 			var width := 90.0 - float(band) * 22.0
 			MathArt.px_rect(self, Rect2(roundf(x - width * 0.5), -20.0 + float(band) * 5.0, width, 3.0),
-				Color(0.16, 0.2, 0.28, 0.05))
+				Color(0.207, 0.207, 0.207, 0.05))

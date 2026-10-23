@@ -28,8 +28,10 @@
 | Build | 波間三選一（7 種 boon：生命/傷害/移速/無敵幀/飛刀/吸血/暴擊），鍵盤 1/2/3 或方向鍵+Enter |
 | 循環 | 4 波（3 普通 + Boss）、波間回血、細胞掉落磁吸、死亡/通關結算、R 重來 |
 | HUD | 生命、細胞、飛刀充能、Aegis 冷卻、波次、Boss 血條、連擊環、Perfect Dodge 計數、Build 摘要 |
-| 視覺 | **640×360 像素風**（整數 x2 放大）；零貼圖，全部 `MathArt.px_*` 量化繪製 |
-| 動畫 | 蓄力 → 實心 smear 楔形 → 2 幀白色 impact → 10–14° overshoot → 二次運動延遲 |
+| 視覺 | **768×480 單色**（整數 x2 = 1536×960）；零貼圖，全部 `MathArt` 幾何繪製 |
+| 動畫 | 蓄力 → 實心 smear → 2 幀白色 impact → 10–14° overshoot → 二次運動延遲 |
+| 角色 | **玩家是正方形**，每次跳躍翻轉 90° 落在新的一面；敵人全是純多邊形，**沒有手腳**，手是一個點 |
+| 粒子 | Godot 內建 `CPUParticles2D`（`scripts/systems/juice.gd`），9 種預設 |
 | 音效 | 18 個程式合成 SFX + 32 秒無縫數學音樂循環 |
 
 **刻意還沒有：**
@@ -45,7 +47,7 @@
 ## 2. 快速開始
 
 需求：Godot **4.7.2**（GL Compatibility 渲染器）。引擎放在 `.tools/`
-（已被 `.gitignore` 忽略）。
+（已被 `.gitignore` 忽略）。建議螢幕至少 1536×960，因為視窗以整數 ×2 開啟。
 
 ```powershell
 # 第一次：下載固定版本的 Godot 到 .tools\
@@ -151,9 +153,9 @@ DC-like/
    好處是沒有序列化資源要同步；代價是編輯器場景樹看不到細節。
 2. **零外部資產**：角色與敵人是 `_draw()` 畫的，音效是 Python 合成的。
    沒有授權風險，改顏色/形狀不需要開繪圖軟體。
-3. **數學是唯一視覺語言，而且是像素化的**：所有圖形都經過 `MathArt.px_*`，
-   邏輯解析度 640×360、整數放大、nearest 取樣、相機不旋轉。見
-   [`docs/design/math-art.md`](docs/design/math-art.md)。
+3. **數學是唯一視覺語言，而且是單色、流暢優先的**：邏輯解析度 768×480、
+   整數 ×2、浮點座標（不做像素吸附）、120 Hz 物理 + 插值、完全沒有色相。
+   見 [`docs/design/math-art.md`](docs/design/math-art.md)。
 
 ---
 
@@ -259,8 +261,10 @@ powershell -ExecutionPolicy Bypass -File tools\check.ps1
 - 只改這個專案；不要碰 `Code-Project/` 的其他專案。
 - 內容 schema（武器/敵人/boon/房間資料）視為「現在就該正確」的範圍，
   不受 Ponytail 的 YAGNI 裁決。
-- **視覺只能透過 `MathArt.px_*`**；不要引入貼圖、`Sprite2D`，也不要直接呼叫
-  `draw_circle` / `draw_arc` / `draw_polyline`（會抗鋸齒）。
+- **視覺只能透過 `MathArt`**；不要引入貼圖或 `Sprite2D`。
+- **不要新增色相**；所有顏色必須來自 `MathArt` 的灰階梯度。
+- **不要為角色加手腳**；手是一個點。
+- 粒子用 `Juice.*`（包裝 `CPUParticles2D`），不要自己寫粒子模擬。
 - **鍵盤優先**：任何新操作都必須有鍵盤綁定。
 - 手感原型允許拋棄式程式碼，但放在 `tests/` 或明確標記。
 - 設計決策要留下「為什麼選這個、放棄了什麼」兩行，寫進

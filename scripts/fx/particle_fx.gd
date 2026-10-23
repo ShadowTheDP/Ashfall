@@ -29,7 +29,7 @@ func setup_dust(count: int, direction: Vector2) -> void:
 			"pos": Vector2(randf_range(-7.0, 7.0), randf_range(-2.0, 2.0)),
 			"vel": Vector2(randf_range(-70.0, 70.0) - direction.x * 40.0, randf_range(-44.0, -8.0)),
 			"size": roundf(randf_range(1.0, 2.0)),
-			"color": Color(MathArt.STEEL_DIM, 0.55),
+			"color": Color(MathArt.LIGHT_DIM, 0.55),
 		})
 	_gravity = 110.0
 	_life = 0.42
