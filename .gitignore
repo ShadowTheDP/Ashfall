@@ -4,8 +4,9 @@
 # Local engine binaries used for headless validation
 .tools/
 
-# Build and capture output
-output/
+# Build and capture output (keep the Godot ignore marker trackable)
+output/*
+!output/.gdignore
 *.tmp
 *.log
 
