@@ -13,12 +13,17 @@ var max_roll := 0.018
 var _rng := RandomNumberGenerator.new()
 var _look := Vector2.ZERO
 var _punch := 0.0
+
+## 0.86 shows ~558 px of height instead of 480. Floors stack five decks 92 px
+## apart (460 px of climb), so without this the player cannot see where the
+## next deck is and the vertical layout is wasted.
+const BASE_ZOOM := 0.86
 var _punch_hold := 0.0
 
 
 func _ready() -> void:
 	_rng.randomize()
-	zoom = Vector2.ONE
+	zoom = Vector2.ONE * BASE_ZOOM
 	position_smoothing_enabled = false
 	limit_left = -180
 	limit_right = 1900
@@ -51,7 +56,7 @@ func _physics_process(delta: float) -> void:
 	elif _punch > 0.0:
 		_punch = maxf(0.0, _punch - real_delta * 7.0)
 	var punch_zoom := 1.0 + 0.025 * _punch
-	zoom = Vector2.ONE * punch_zoom
+	zoom = Vector2.ONE * BASE_ZOOM * punch_zoom
 
 	trauma = maxf(0.0, trauma - real_delta * trauma_decay)
 	var amount := trauma * trauma

@@ -14,7 +14,8 @@ const ENEMY_SCENE: PackedScene = preload("res://scenes/enemy.tscn")
 const WALL_W := 24.0
 const WALL_TOP := -560.0
 const WALL_H := 760.0
-const DOOR_REACH := 58.0
+const DOOR_REACH := 62.0
+const DOOR_HEIGHT := 260.0
 const SAFE_DISTANCE := 160.0
 
 # Palette 0-4 varies density and crack lean, never hue. Edge stays a lighter
@@ -97,8 +98,10 @@ func build(floor_index: int, seed_value: int) -> void:
 	for rect in _ground_sorted:
 		_make_body(rect)
 	for room in _rooms:
-		for platform in room["platforms"]:
-			_make_body(platform)
+		var platforms: Array = room["platforms"]
+		var oneway: Array = room["oneway"]
+		for i in platforms.size():
+			_make_body(platforms[i], bool(oneway[i]))
 	_make_body(Rect2(-WALL_W, WALL_TOP, WALL_W, WALL_H))
 	_make_body(Rect2(float(data["width"]), WALL_TOP, WALL_W, WALL_H))
 
@@ -147,15 +150,23 @@ func _player() -> Player:
 	return null
 
 
-func _make_body(rect: Rect2) -> void:
+func _make_body(rect: Rect2, oneway := false) -> void:
 	var body := StaticBody2D.new()
-	body.collision_layer = Layers.WORLD
+	# One-way decks sit on their own layer so the player can ignore them while
+	# rising; everything else is ordinary world geometry.
+	body.collision_layer = Layers.ONEWAY if oneway else Layers.WORLD
 	body.collision_mask = 0
 	body.position = rect.position + rect.size * 0.5
 	var collision := CollisionShape2D.new()
 	var shape := RectangleShape2D.new()
 	shape.size = rect.size
 	collision.shape = shape
+	if oneway:
+		# Godot's own one-way collision: solid from above, open from below.
+		# Far more reliable than toggling the player's collision mask, which
+		# can re-enable mid-jump and shove the body sideways.
+		collision.one_way_collision = true
+		collision.one_way_collision_margin = 6.0
 	body.add_child(collision)
 	add_child(body)
 
@@ -252,8 +263,13 @@ func _update_door(player: Player) -> void:
 		_door.open = enemies_remaining() == 0
 	if not _door.open or _cleared_emitted:
 		return
-	var gate: Vector2 = data["exit"] + Vector2(0.0, -30.0)
-	if player.global_position.distance_to(gate) < DOOR_REACH:
+	# The gate is a column, not a point. Multi-deck rooms put the player on a
+	# gallery directly above the door, and a point test would never fire there;
+	# a player standing over the exit has clearly arrived.
+	var gate: Vector2 = data["exit"]
+	var dx := absf(player.global_position.x - gate.x)
+	var dy := gate.y - player.global_position.y
+	if dx < DOOR_REACH and absf(dy) < DOOR_HEIGHT:
 		_cleared_emitted = true
 		cleared.emit()
 
@@ -290,8 +306,12 @@ func _build_decoration() -> void:
 		var rect: Rect2 = room["rect"]
 		if str(room["kind"]) == "hall":
 			# In a hall the platforms are column capitals, not floating slabs.
-			for platform in room["platforms"]:
-				var pr: Rect2 = platform
+			var platforms: Array = room["platforms"]
+			var oneway: Array = room["oneway"]
+			for j in platforms.size():
+				if bool(oneway[j]):
+					continue
+				var pr: Rect2 = platforms[j]
 				_columns.append({
 					"x": pr.get_center().x, "w": minf(pr.size.x * 0.5, 44.0),
 					"top": pr.position.y, "bottom": rect.position.y, "sigil": true,
@@ -307,15 +327,97 @@ func _build_decoration() -> void:
 
 
 func _draw() -> void:
+	_draw_vault()
 	_draw_monoliths()
 	_draw_rose_window()
 	for i in _ground_sorted.size():
 		_draw_ground(_ground_sorted[i], _specks[i], _cracks[i])
 	for room in _rooms:
-		for platform in room["platforms"]:
-			_draw_platform(platform)
+		var platforms: Array = room["platforms"]
+		var oneway: Array = room["oneway"]
+		for i in platforms.size():
+			var pr: Rect2 = platforms[i]
+			if bool(oneway[i]):
+				_draw_deck(pr)
+			elif pr.size.y > 40.0:
+				_draw_mass(pr)
+			else:
+				_draw_platform(pr)
 	_draw_bounds()
 	_draw_fog()
+
+
+## The space behind the geometry. Without it the multi-deck floors read as
+## slabs floating in a void: the fullscreen background shader is a spiral
+## field, not architecture, and the eye needs a wall to judge height against.
+## A far wall, then a nearer band, then a row of arch silhouettes, each a
+## slightly lighter value than the one behind it.
+func _draw_vault() -> void:
+	var width := float(data.get("width", 0.0))
+	if width <= 0.0:
+		return
+	var pal := _palette()
+	var depth := 640.0
+	# Far wall: one flat value, darker than any stone.
+	MathArt.px_rect(self, Rect2(-40.0, -depth, width + 80.0, depth + 60.0),
+		Color(MathArt.INK, 0.95))
+	# Courses 22 px apart. This is the only thing that gives the wall scale.
+	var y := -depth
+	var row := 0
+	while y < 40.0:
+		MathArt.px_rect(self, Rect2(-40.0, y, width + 80.0, 1.0),
+			Color(MathArt.MID, 0.055 if row % 2 == 0 else 0.03))
+		y += 22.0
+		row += 1
+
+	# Pilasters + arches, anchored so the arch FOOT sits on the floor line and
+	# the apex is 300 px above it. Anchoring to the top of the wall put every
+	# arch below the camera, which is why the background read as a black band.
+	var step := 250.0 + 26.0 * float(int(pal["column"]))
+	var foot := float(_rooms[0]["rect"].position.y) if not _rooms.is_empty() else 0.0
+	var rise := 300.0
+	var x := 30.0
+	while x < width:
+		MathArt.px_rect(self, Rect2(x, foot - depth, 11.0, depth),
+			Color(MathArt.BG_2, 0.62))
+		MathArt.px_rect(self, Rect2(x, foot - depth, 1.0, depth),
+			Color(MathArt.STONE_HI, 0.12))
+		MathArt.px_rect(self, Rect2(x + 10.0, foot - depth, 1.0, depth),
+			Color(MathArt.INK, 0.5))
+		var half := (step - 11.0) * 0.5
+		var cx := x + 11.0 + half
+		var top := foot - rise
+		# Two quarter-arcs meeting at the apex, then the jambs down to the floor.
+		MathArt.arc(self, Vector2(cx - half, top + half), half, -PI * 0.5, 0.0,
+			Color(MathArt.MID, 0.10), 1.0)
+		MathArt.arc(self, Vector2(cx + half, top + half), half, PI, PI * 1.5,
+			Color(MathArt.MID, 0.10), 1.0)
+		MathArt.px_rect(self, Rect2(cx - half, top + half, 1.0, foot - top - half),
+			Color(MathArt.MID, 0.075))
+		MathArt.px_rect(self, Rect2(cx + half, top + half, 1.0, foot - top - half),
+			Color(MathArt.MID, 0.075))
+		x += step
+
+	# One landmark per floor, keyed off the palette, so no two floors read alike.
+	var center := Vector2(width * 0.5, foot - rise - 150.0)
+	match int(data.get("palette", 0)) % 4:
+		0:
+			for i in 3:
+				MathArt.px_ring(self, center, 132.0 - float(i) * 34.0,
+					Color(MathArt.MID, 0.07 + float(i) * 0.02), 1.0)
+		1:
+			MathArt.px_poly(self, MathArt.star(14, 140.0, 108.0, -PI * 0.5, center),
+				Color(0, 0, 0, 0), Color(MathArt.MID, 0.09), 1.0)
+		2:
+			MathArt.px_poly(self, MathArt.ngon(8, 120.0, PI / 8.0, center),
+				Color(0, 0, 0, 0), Color(MathArt.MID, 0.09), 1.0)
+			MathArt.px_poly(self, MathArt.ngon(8, 120.0 * MathArt.INV_PHI, 0.0, center),
+				Color(0, 0, 0, 0), Color(MathArt.MID, 0.06), 1.0)
+		_:
+			var loop := PackedVector2Array()
+			for i in 61:
+				loop.append(center + MathArt.lissajous(TAU * float(i) / 60.0, 3.0, 2.0, PI * 0.5) * 120.0)
+			MathArt.px_poly(self, loop, Color(0, 0, 0, 0), Color(MathArt.MID, 0.08), 1.0)
 
 
 func _draw_monoliths() -> void:
@@ -382,6 +484,49 @@ func _draw_ground(rect: Rect2, specks: Array, cracks: Array) -> void:
 
 	MathArt.px_rect(self, Rect2(rect.position.x, rect.position.y + 5.0, rect.size.x, 1.0),
 		Color(MathArt.PALE_DIM, 0.10))
+
+
+## A pass-through deck: thin, bright top edge, and a dashed under-edge. The
+## dashes are the whole point - they are the only cue that says "you can jump
+## up through this one".
+func _draw_deck(rect: Rect2) -> void:
+	var pal := _palette()
+	MathArt.px_rect(self, Rect2(rect.position, Vector2(rect.size.x, rect.size.y)),
+		Color(MathArt.STONE_HI, 0.92))
+	MathArt.px_rect(self, Rect2(rect.position, Vector2(rect.size.x, 2.0)), pal["edge"])
+	# Dashed underside: 6 on, 5 off.
+	var x := rect.position.x
+	var bottom := rect.position.y + rect.size.y - 1.0
+	while x < rect.end.x:
+		var run := minf(6.0, rect.end.x - x)
+		MathArt.px_rect(self, Rect2(roundf(x), bottom, run, 1.0), Color(MathArt.INK, 0.55))
+		x += 11.0
+	for fraction in [0.0, MathArt.INV_PHI * MathArt.INV_PHI, 1.0]:
+		MathArt.px_rect(self, Rect2(roundf(rect.position.x + rect.size.x * float(fraction)),
+			rect.position.y + 2.0, 1, 3.0), Color(MathArt.PALE_DIM, 0.20))
+
+
+## A thick solid mass: a pillar, a lip or a vault floor. Reads as stone, not as
+## something you can slip through.
+func _draw_mass(rect: Rect2) -> void:
+	var pal := _palette()
+	MathArt.px_rect(self, rect, Color(MathArt.STONE, 0.96))
+	MathArt.px_rect(self, Rect2(rect.position, Vector2(rect.size.x, 3.0)), pal["edge"])
+	MathArt.px_rect(self, Rect2(rect.position + Vector2(rect.size.x - 3.0, 0), Vector2(3.0, rect.size.y)),
+		Color(MathArt.INK, 0.55))
+	MathArt.px_rect(self, Rect2(rect.position + Vector2(1.0, 3.0), Vector2(1.0, rect.size.y - 3.0)),
+		Color(MathArt.STONE_HI, 0.22))
+	var y := rect.position.y + 14.0
+	var row := 0
+	while y < rect.end.y - 6.0:
+		var offset := 0.0 if row % 2 == 0 else 18.0
+		var x := rect.position.x + 8.0 + offset
+		while x < rect.end.x - 10.0:
+			MathArt.px_rect(self, Rect2(roundf(x), roundf(y), 1.0, 1.0),
+				Color(MathArt.STONE_DIM, 0.5))
+			x += 36.0
+		y += 16.0
+		row += 1
 
 
 func _draw_platform(rect: Rect2) -> void:

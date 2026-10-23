@@ -40,7 +40,7 @@ func configure(kind_id: String, config: Dictionary, hp_scale: float = 1.0) -> vo
 
 func _ready() -> void:
 	collision_layer = Layers.ENEMY
-	collision_mask = Layers.WORLD | Layers.PLAYER
+	collision_mask = Layers.WORLD | Layers.ONEWAY | Layers.PLAYER
 	add_to_group("enemies")
 	z_index = 1
 	_build_nodes()

@@ -23,7 +23,12 @@ const STATIONS := [
 	{"id": "character", "name": "CHARACTER", "x": 1140.0, "sides": 10, "inner": "lissajous"},
 ]
 
+## Highest floor the player has unlocked (0 = nothing cleared yet).
 var floor_available := 0
+## Which floor the door will send them to. Starts at the NEXT unvisited floor,
+## not the last one reached: sending the player back to floor 1 forever was the
+## bug that made every run "floor 1 again".
+var floor_target := 1
 var ui: HubUi
 var player: Player
 
@@ -51,6 +56,20 @@ func _ready() -> void:
 ## How far the player may descend; 0 means a fresh profile (first floor).
 func setup(available: int) -> void:
 	floor_available = maxi(0, available)
+	# best_floor is the deepest floor REACHED, so the next one is +1.
+	floor_target = clampi(floor_available + 1, 1, maxi(1, Data.floors.size()))
+	queue_redraw()
+
+
+## The door is also a floor picker: left/right steps through every floor the
+## player has already unlocked, so a late-game player can farm an earlier one.
+func _step_floor(delta: int) -> void:
+	var top := clampi(floor_available + 1, 1, maxi(1, Data.floors.size()))
+	var next := clampi(floor_target + delta, 1, top)
+	if next == floor_target:
+		return
+	floor_target = next
+	Sfx.play("ui", -16)
 	queue_redraw()
 
 
@@ -113,11 +132,19 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if not (event is InputEventKey) or not event.pressed or event.echo:
 		return
+	if _near_door and event.physical_keycode in [KEY_LEFT, KEY_A]:
+		_step_floor(-1)
+		get_viewport().set_input_as_handled()
+		return
+	if _near_door and event.physical_keycode in [KEY_RIGHT, KEY_D]:
+		_step_floor(1)
+		get_viewport().set_input_as_handled()
+		return
 	if not (event.physical_keycode in [KEY_J, KEY_ENTER, KEY_KP_ENTER]):
 		return
 	if _near_door:
 		Sfx.play("wave", -12)
-		descend_requested.emit(floor_available)
+		descend_requested.emit(floor_target)
 	elif _near >= 0:
 		_open_station(_near)
 	else:
@@ -292,15 +319,15 @@ func _draw_door() -> void:
 	MathArt.px_rect(self, Rect2(DOOR_X - 3.0, -80.0, 6.0, 80.0), Color(MathArt.PALE, 0.08 + pulse * 0.16))
 
 	var font := ThemeDB.fallback_font
-	if floor_available <= 0:
-		draw_string(font, Vector2(DOOR_X - 70.0, -104.0), "DESCEND",
-			HORIZONTAL_ALIGNMENT_CENTER, 140.0, 9, tint)
-	else:
-		var floor_data: Dictionary = Data.floors.get(str(floor_available), {})
-		draw_string(font, Vector2(DOOR_X - 70.0, -120.0), "FLOOR %d" % floor_available,
-			HORIZONTAL_ALIGNMENT_CENTER, 140.0, 8, Color(tint, 0.75))
-		draw_string(font, Vector2(DOOR_X - 80.0, -105.0), str(floor_data.get("name", "")),
-			HORIZONTAL_ALIGNMENT_CENTER, 160.0, 9, tint)
+	var top := clampi(floor_available + 1, 1, maxi(1, Data.floors.size()))
+	var floor_data: Dictionary = Data.floors.get(str(floor_target), {})
+	draw_string(font, Vector2(DOOR_X - 70.0, -120.0), "FLOOR %d / %d" % [floor_target, top],
+		HORIZONTAL_ALIGNMENT_CENTER, 140.0, 8, Color(tint, 0.75))
+	draw_string(font, Vector2(DOOR_X - 90.0, -105.0), str(floor_data.get("name", "")),
+		HORIZONTAL_ALIGNMENT_CENTER, 180.0, 9, tint)
 	if bright:
 		draw_string(font, Vector2(DOOR_X - 20.0, 22.0), "[J]",
 			HORIZONTAL_ALIGNMENT_CENTER, 40.0, 9, Color(MathArt.WHITE, 0.55 + 0.45 * sin(_t * 4.0)))
+		if top > 1:
+			draw_string(font, Vector2(DOOR_X - 70.0, 36.0), "< A    D >",
+				HORIZONTAL_ALIGNMENT_CENTER, 140.0, 8, Color(MathArt.LIGHT, 0.6))

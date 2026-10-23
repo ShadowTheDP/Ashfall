@@ -1,7 +1,112 @@
 {
-	"1": {"name": "THE ASH GATE", "rooms": 3, "width": 2400, "enemies": [["grunt", 3], ["archer", 1]], "boss": "", "palette": 0, "reward": 2},
-	"2": {"name": "THE HOLLOW STAIR", "rooms": 4, "width": 3000, "enemies": [["grunt", 2], ["archer", 2], ["charger", 1]], "boss": "", "palette": 1, "reward": 2},
-	"3": {"name": "THE GEAR VAULT", "rooms": 4, "width": 3200, "enemies": [["grunt", 3], ["bulwark", 1], ["charger", 1]], "boss": "", "palette": 2, "reward": 3},
-	"4": {"name": "THE QUIET FOUNDRY", "rooms": 5, "width": 3600, "enemies": [["grunt", 3], ["archer", 2], ["bulwark", 1], ["charger", 2]], "boss": "", "palette": 3, "reward": 3},
-	"5": {"name": "THE WARDEN'S THRONE", "rooms": 1, "width": 1600, "enemies": [["grunt", 2]], "boss": "warden", "palette": 4, "reward": 0}
+	"1": {
+		"name": "THE ASH GATE",
+		"rooms": 4,
+		"width": 4200,
+		"enemies": [
+			[
+				"grunt",
+				4
+			],
+			[
+				"archer",
+				2
+			]
+		],
+		"boss": "",
+		"palette": 0,
+		"reward": 2
+	},
+	"2": {
+		"name": "THE HOLLOW STAIR",
+		"rooms": 5,
+		"width": 5200,
+		"enemies": [
+			[
+				"grunt",
+				4
+			],
+			[
+				"archer",
+				3
+			],
+			[
+				"charger",
+				2
+			]
+		],
+		"boss": "",
+		"palette": 1,
+		"reward": 2
+	},
+	"3": {
+		"name": "THE GEAR VAULT",
+		"rooms": 5,
+		"width": 5600,
+		"enemies": [
+			[
+				"grunt",
+				4
+			],
+			[
+				"bulwark",
+				2
+			],
+			[
+				"charger",
+				2
+			],
+			[
+				"archer",
+				2
+			]
+		],
+		"boss": "",
+		"palette": 2,
+		"reward": 3
+	},
+	"4": {
+		"name": "THE QUIET FOUNDRY",
+		"rooms": 6,
+		"width": 6400,
+		"enemies": [
+			[
+				"grunt",
+				5
+			],
+			[
+				"archer",
+				3
+			],
+			[
+				"bulwark",
+				2
+			],
+			[
+				"charger",
+				3
+			]
+		],
+		"boss": "",
+		"palette": 3,
+		"reward": 3
+	},
+	"5": {
+		"name": "THE WARDEN'S THRONE",
+		"rooms": 2,
+		"width": 2600,
+		"enemies": [
+			[
+				"grunt",
+				3
+			],
+			[
+				"archer",
+				2
+			]
+		],
+		"boss": "warden",
+		"palette": 4,
+		"reward": 0
+	}
 }

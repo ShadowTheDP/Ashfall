@@ -157,7 +157,7 @@ func _case(floor_index: int, seed_value: int) -> void:
 	# same code path without depending on a lucky jump.
 	for i in rooms.size():
 		var rect: Rect2 = rooms[i]["rect"]
-		_player.global_position = Vector2(rect.position.x + 20.0, rect.position.y - 30.0)
+		_player.global_position = Vector2(rect.position.x + rect.size.x * 0.5, rect.position.y - 40.0)
 		# physics_frame fires at the TOP of the step, so one await still sees the
 		# previous frame's room state; two is the first frame that is processed.
 		await get_tree().physics_frame
@@ -231,7 +231,7 @@ func _case(floor_index: int, seed_value: int) -> void:
 	# Re-entry into a cleared room must not respawn anything.
 	if rooms.size() > 1:
 		var rect: Rect2 = rooms[1]["rect"]
-		_player.global_position = Vector2(rect.position.x + 20.0, rect.position.y - 30.0)
+		_player.global_position = Vector2(rect.position.x + rect.size.x * 0.5, rect.position.y - 40.0)
 		for i in 4:
 			await get_tree().physics_frame
 		if not _enemies().is_empty() or int(_level.enemies_remaining()) != 0:

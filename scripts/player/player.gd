@@ -115,7 +115,7 @@ var _echo_cfg: Dictionary = {}
 
 func _ready() -> void:
 	collision_layer = Layers.PLAYER
-	collision_mask = Layers.WORLD | Layers.ENEMY
+	collision_mask = Layers.WORLD | Layers.ONEWAY | Layers.ENEMY
 	_apply_loadout()
 	# After the loadout: hp starts at the BODY's max, not at the base 120, or a
 	# 96 hp body spawns over-healed and a 150 hp body spawns wounded.

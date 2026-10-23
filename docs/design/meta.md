@@ -336,3 +336,60 @@ one-room floor (the boss arena) starts the player inside the only room, so the
 first `_physics_process` enters it and spawns — correct, not a leak. The probe
 therefore asserts `build()` spawned nothing and that
 `pending + already_spawned == planned`.
+
+### Vertical floors
+
+A floor is no longer a corridor. `LevelGen` builds rooms with 2-5 decks at
+`TIER = 92` px apart, and two surface kinds:
+
+| kind | collision | visual |
+|---|---|---|
+| pass-through deck | `one_way_collision = true`, on `Layers.ONEWAY` | thin, bright top edge, **dashed underside** |
+| solid mass | ordinary `Layers.WORLD` box | thick, block courses |
+
+The dashed underside is load-bearing: it is the only cue that says "jump up
+through this one". Do not remove it.
+
+Six room kinds: `gate` (route split), `hall` (column capitals + gallery),
+`shaft` (5-rung zigzag climb), `vault` (two chambers, solid floors with a
+hole), `bridge` (stepping stones at two heights), `well` (a solid wall inside
+the room, climbed over).
+
+Floors are 4200-6400 px wide, 4-6 rooms, 6-13 enemies.
+
+### Four softlock traps that had to be designed out
+
+These all produced a floor the player could not finish:
+
+1. **A wall on a room boundary.** `pit` put solid lips at `rect.position.x`
+   and `rect.end.x`. The player could never step into the room, so its
+   enemies never spawned and the gate never opened. `well` puts its wall at
+   `w * 0.44`, inside the room.
+2. **A step that does not touch its pillar.** The approach deck sat 96 px
+   before the pillar, leaving a drop between them. From the ledge the pillar
+   top (126-176 up) is out of reach because the apex is 110. The step is now
+   `left - step_w` so it abuts the pillar, and pillar height is capped at 176
+   so the climb from the step is 84 px.
+3. **Gaps computed before offsets.** A gap was chosen independently of the
+   height change, so a room 26 px up and 185 px away sat outside the 161 px
+   budget. Offsets are now generated first and the gap is clamped to
+   `JUMP_LENGTH * (1 - 0.45 * up / JUMP_HEIGHT) - 14`.
+4. **A point-sized exit gate.** Multi-deck rooms put the player on a gallery
+   directly above the door; a distance test to one point never fired. The
+   gate is now a column: `|dx| < 62 and |dy| < 260`.
+
+`tests/audit_a3.gd` drives the real player right through every floor and
+asserts it reaches the gate; `LevelGen._verify()` BFS-checks 300 layouts
+(floors 1-5 x seeds 1-60) with zero unreachable rooms.
+
+### Camera
+
+`PlayerCamera.BASE_ZOOM = 0.86`. At 1.0 the view is 480 px tall, which shows
+a slab and one deck but not the shaft above it. 0.86 shows ~558 px.
+
+### Floor picker
+
+`Hub.setup(best_floor)` sets `floor_target = best_floor + 1`. The door shows
+`FLOOR n / top` and `A/D` steps within `1..best_floor+1`, so a late-game
+player can farm an earlier floor. Sending the player back to floor 1 forever
+was the bug that made every run "floor 1 again".
