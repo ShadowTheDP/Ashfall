@@ -113,6 +113,27 @@ func shatter(at: Vector2, tint: Color, sides: int = 3, count: int = 14, speed: f
 	_add(fx)
 
 
+func dodge_burst(at: Vector2) -> void:
+	var fx := BurstFx.new()
+	fx.position = at
+	fx.setup("dodge", MathArt.CYAN)
+	_add(fx)
+
+
+func block_burst(at: Vector2, facing: int) -> void:
+	var fx := BurstFx.new()
+	fx.position = at
+	fx.setup("block", MathArt.AMBER, facing)
+	_add(fx)
+
+
+func hurt_burst(at: Vector2, facing: int) -> void:
+	var fx := BurstFx.new()
+	fx.position = at
+	fx.setup("hurt", MathArt.RED_HI, facing)
+	_add(fx)
+
+
 func _add(node: Node2D) -> void:
 	var root: Node = Game.fx_root
 	if not is_instance_valid(root):

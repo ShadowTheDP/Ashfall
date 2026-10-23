@@ -1,25 +1,37 @@
 class_name PlayerVisual
 extends Node2D
-## The player is drawn as a small set of mathematical primitives:
-## a superellipse-derived torso, harmonic two-segment legs, a Lissajous scarf,
-## a golden-ratio sword and a rotating hexagon for the roll. No sprite assets.
+## The player is a pure geometric sigil: a rotating diamond body, a square
+## core and a blade that is literally a line.
+##
+## Animation follows the action-game read, in this order of importance:
+##   1. anticipation — the blade stops for 2 frames before the swing
+##   2. smear        — one solid wedge frame on the swing arc
+##   3. impact       — handled by the target (white silhouette + hitstop)
+##   4. follow-through — the blade overshoots 10-14 degrees, then eases back
+##   5. secondary motion — body lags the blade by one frame
 
-const CLOAK := Color("#2b3d50")
-const CLOAK_DARK := Color("#1a2734")
-const CLOAK_LIGHT := Color("#3d5873")
-const TRIM := Color("#e8a33d")
-const TRIM_DIM := Color("#8a5a1f")
-const MASK := Color("#e9e2d2")
-const EYE := Color("#8fe3ff")
-const STEEL := Color("#c6d4e2")
-const STEEL_DARK := Color("#7c8fa3")
-const GRIP := Color("#3a2a1a")
+const BODY := MathArt.STONE_3
+const BODY_DARK := MathArt.STONE_2
+const RIM := MathArt.STEEL_HI
+const CORE := MathArt.CYAN
+const CORE_HI := MathArt.WHITE
+const CYAN := MathArt.CYAN
+const BLADE := MathArt.STEEL_HI
+const GRIP := MathArt.AMBER_DIM
+
+const REST_ANGLE := 0.62
 
 var p: Player
 var _t := 0.0
 var _shadow_y := 24.0
 var _shadow_alpha := 0.0
 var _shadow_scale := 1.0
+var _prev_blade_angle := REST_ANGLE
+var _blade_lag_angle := REST_ANGLE
+var _body_lag := Vector2.ZERO
+var _body_lag_target := Vector2.ZERO
+var _smear_start := 0.0
+var _smear_fired := false
 
 
 func _ready() -> void:
@@ -30,6 +42,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_t += delta
 	_update_shadow()
+	_update_lag(delta)
 	queue_redraw()
 
 
@@ -46,20 +59,26 @@ func _update_shadow() -> void:
 	if hit.is_empty():
 		return
 	var distance: float = hit["position"].y - p.global_position.y
-	_shadow_y = distance - 2.0
-	var falloff := clampf(1.0 - maxf(0.0, distance - 26.0) / 260.0, 0.0, 1.0)
-	_shadow_alpha = 0.10 + 0.30 * falloff
+	_shadow_y = roundf(distance - 2.0)
+	var falloff := clampf(1.0 - maxf(0.0, distance - 26.0) / 240.0, 0.0, 1.0)
+	_shadow_alpha = 0.14 + 0.34 * falloff
 	_shadow_scale = 0.45 + 0.55 * falloff
+
+
+func _update_lag(delta: float) -> void:
+	# Secondary motion: the body reaches its target one frame later than the
+	# blade, so the swing reads as weight rather than as a rigid rotation.
+	_body_lag = _body_lag.lerp(_body_lag_target, 1.0 - exp(-22.0 * delta))
+	_blade_lag_angle = lerp_angle(_blade_lag_angle, _prev_blade_angle, 1.0 - exp(-26.0 * delta))
 
 
 func _draw() -> void:
 	if p == null:
 		return
 	if _shadow_alpha > 0.0:
-		draw_set_transform(Vector2(0, _shadow_y), 0.0, Vector2(_shadow_scale, 0.22))
-		draw_circle(Vector2.ZERO, 18.0, Color(0, 0, 0, _shadow_alpha))
-		MathArt.draw_ring(self, Vector2.ZERO, 18.0, Color(0.91, 0.64, 0.24, _shadow_alpha * 0.25), 1.0, 32)
-		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		var width := roundf(14.0 * _shadow_scale)
+		MathArt.px_rect(self, Rect2(-width, _shadow_y, width * 2.0, 3.0), Color(0.0, 0.0, 0.0, _shadow_alpha))
+		MathArt.px_rect(self, Rect2(-width * 0.55, _shadow_y - 1.0, width * 1.1, 1.0), Color(0.0, 0.0, 0.0, _shadow_alpha * 0.7))
 
 	if p.state == Player.State.DEAD:
 		_draw_dead()
@@ -67,9 +86,8 @@ func _draw() -> void:
 
 	var alpha := 1.0
 	if p.invuln > 0.0 and fmod(_t * 26.0, 2.0) < 0.85:
-		alpha = 0.38
+		alpha = 0.4
 
-	_draw_aegis(alpha)
 	if p.state == Player.State.ROLL:
 		_draw_roll(alpha)
 		return
@@ -78,287 +96,281 @@ func _draw() -> void:
 	var air := not p.is_on_floor()
 	var bob := 0.0
 	if p.state == Player.State.IDLE:
-		bob = sin(_t * 2.4) * 1.1
+		bob = roundf(sin(_t * 2.6))
 	elif p.state == Player.State.RUN:
-		bob = sin(_t * 15.0) * 1.4 * speed_ratio
+		bob = roundf(sin(_t * 16.0) * 1.5 * speed_ratio)
+
 	var lean := 0.0
 	if p.state == Player.State.RUN:
-		lean = 0.14 * speed_ratio
+		lean = 0.16 * speed_ratio
 	elif p.state == Player.State.ATTACK:
-		lean = 0.10
-	var squash_x := 1.0 + (p.squash - 1.0) * 0.45
-	var squash_y := 1.0 - (p.squash - 1.0) * 0.35
-	draw_set_transform(
-		Vector2(0, bob),
-		lean * float(p.facing),
-		Vector2(float(p.facing) * squash_x, squash_y)
-	)
+		lean = _anticipation_lean()
 
-	_draw_edge_aura(alpha)
-	_draw_scarf(alpha, speed_ratio, air)
-	_draw_leg(alpha, -1, speed_ratio, air)
-	_draw_cape(alpha)
-	_draw_torso(alpha)
-	_draw_leg(alpha, 1, speed_ratio, air)
-	_draw_head(alpha)
-	_draw_arm(alpha, -1)
-	_draw_sword_arm(alpha)
+	draw_set_transform(
+		Vector2(roundf(_body_lag.x), roundf(bob + _body_lag.y)),
+		lean * float(p.facing),
+		Vector2(float(p.facing), 1.0)
+	)
+	_draw_aegis(alpha)
+	_draw_legs(alpha, speed_ratio, air)
+	_draw_body(alpha)
+	_draw_core(alpha)
+	_draw_blade(alpha)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _tint(color: Color, alpha: float) -> Color:
-	var out := Color(1, 1, 1, 1) if p.flash > 0.0 else color
+	var out := MathArt.WHITE if p.flash > 0.0 else color
 	out.a *= alpha
 	return out
 
 
-func _draw_edge_aura(alpha: float) -> void:
-	if Game.edge_timer <= 0.0:
-		return
-	var count := 5
-	var rotation := _t * 2.4
-	for i in count:
-		var angle := rotation + TAU * float(i) / float(count)
-		var point := Vector2.from_angle(angle) * 27.0
-		draw_circle(point, 1.7, Color(EYE, alpha * 0.75))
-	MathArt.draw_ring(self, Vector2.ZERO, 29.0, Color(EYE, alpha * 0.18), 1.0, 40)
+# --- Attack phases -----------------------------------------------------------
+
+func _phase() -> Dictionary:
+	var cfg := p.attack_cfg
+	var windup := maxf(0.001, float(cfg.get("windup", 0.08)))
+	var active := maxf(0.001, float(cfg.get("active", 0.07)))
+	var recovery := maxf(0.001, float(cfg.get("recovery", 0.2)))
+	var t := p.attack_t
+	if t < windup:
+		return {"name": "windup", "k": t / windup, "windup": windup, "active": active, "recovery": recovery}
+	if t < windup + active:
+		return {"name": "active", "k": (t - windup) / active, "windup": windup, "active": active, "recovery": recovery}
+	return {"name": "recovery", "k": (t - windup - active) / recovery, "windup": windup, "active": active, "recovery": recovery}
 
 
-func _draw_scarf(alpha: float, speed_ratio: float, air: bool) -> void:
-	# Lissajous ribbon: x is the length axis, y is a 3:2 harmonic.
-	var base := Vector2(-5, -13)
-	var length := 23.0 + speed_ratio * 6.0
-	var phase := _t * 8.5
-	var lift := 4.0 if air else 0.0
-	var top := PackedVector2Array()
-	var bottom := PackedVector2Array()
-	var samples := 7
-	for i in samples:
-		var k := float(i) / float(samples - 1)
-		var x := -length * k
-		var y := sin(k * TAU * 1.5 + phase) * (2.2 + 3.2 * k) - lift * k
-		var width := lerpf(3.0, 0.6, k)
-		top.append(base + Vector2(x, y - width))
-		bottom.append(base + Vector2(x, y + width))
-	var ribbon := PackedVector2Array()
-	ribbon.append_array(top)
-	for i in range(bottom.size() - 1, -1, -1):
-		ribbon.append(bottom[i])
-	MathArt.draw_poly(self, ribbon, _tint(TRIM, alpha * 0.9), Color(TRIM_DIM, alpha * 0.4), 1.0)
-	var centerline := PackedVector2Array()
-	for i in samples:
-		var k := float(i) / float(samples - 1)
-		centerline.append(base + Vector2(-length * k, sin(k * TAU * 1.5 + phase) * (2.2 + 3.2 * k) - lift * k))
-	draw_polyline(centerline, _tint(TRIM_DIM, alpha * 0.5), 1.0, true)
-
-	# A second, shorter ribbon at 1/phi length.
-	var short_length := length * MathArt.INV_PHI
-	var short := PackedVector2Array([
-		base + Vector2(0, -2),
-		base + Vector2(-short_length * 0.5, sin(phase + 1.0) * 2.0 + 2.0),
-		base + Vector2(-short_length, sin(phase + 2.2) * 3.0 + 4.0),
-		base + Vector2(-short_length, sin(phase + 2.2) * 3.0 + 5.5),
-		base + Vector2(-short_length * 0.5, sin(phase + 1.0) * 2.0 + 3.5),
-		base + Vector2(0, 2),
-	])
-	MathArt.draw_poly(self, short, _tint(CLOAK_LIGHT, alpha * 0.55))
+func _start_angle() -> float:
+	match p.attack_index:
+		1:
+			return 0.95
+		2:
+			return -2.95
+		_:
+			return -2.05
 
 
-func _draw_leg(alpha: float, side: int, speed_ratio: float, air: bool) -> void:
-	var hip := Vector2(4.5 * float(side), 7.0)
-	var phase := _t * 15.0 + (0.0 if side > 0 else PI)
-	var swing := sin(phase) * 8.0 * speed_ratio
-	var knee := Vector2(4.5 * float(side) + swing * 0.45, 15.0)
-	var foot := Vector2(4.5 * float(side) + swing, 23.0)
+func _end_angle() -> float:
+	match p.attack_index:
+		1:
+			return -2.05
+		2:
+			return 1.05
+		_:
+			return 0.80
+
+
+func _overshoot() -> float:
+	return 0.24 if p.attack_index == 2 else 0.17
+
+
+func _anticipation_angle() -> float:
+	# Pull back past the start angle: the extra 0.35 rad is the "coil".
+	return _start_angle() - 0.35 * float(p.facing)
+
+
+func _anticipation_lean() -> float:
+	var phase := _phase()
+	if phase["name"] == "windup":
+		return -0.20 * clampf(float(phase["k"]) * 2.0, 0.0, 1.0)
+	return 0.10
+
+
+func _attack_angle() -> float:
+	var phase := _phase()
+	var from_angle := _anticipation_angle()
+	var to_angle := _end_angle() + _overshoot() * float(p.facing)
+	match phase["name"]:
+		"windup":
+			# Reach the coil in the first 60% of the windup, then HOLD. The hold
+			# is what makes the attack readable at 640x360.
+			var k := clampf(float(phase["k"]) / 0.6, 0.0, 1.0)
+			return lerpf(REST_ANGLE, from_angle, ease(k, 0.6))
+		"active":
+			# The blade travels during the active window, not during recovery.
+			return lerpf(from_angle, to_angle, ease(float(phase["k"]), 0.45))
+		_:
+			# Overshoot holds for the first ~2 frames, then eases back in three
+			# uneven steps (55 / 30 / 15) so it never reads as a linear return.
+			var k := clampf(float(phase["k"]), 0.0, 1.0)
+			if k < 0.08:
+				return to_angle
+			var stepped := k - 0.08
+			var weight := 0.0
+			if stepped < 0.18:
+				weight = lerpf(0.0, 0.55, stepped / 0.18)
+			elif stepped < 0.55:
+				weight = lerpf(0.55, 0.85, (stepped - 0.18) / 0.37)
+			else:
+				weight = lerpf(0.85, 1.0, clampf((stepped - 0.55) / 0.45, 0.0, 1.0))
+			return lerpf(to_angle, REST_ANGLE, ease(weight, 1.6))
+
+
+func _smear_window() -> bool:
+	var phase := _phase()
+	if phase["name"] != "active":
+		return false
+	# One smear frame for hits 1-2, two for the finisher.
+	var limit := 0.55 if p.attack_index == 2 else 0.34
+	return float(phase["k"]) <= limit
+
+
+# --- Body -------------------------------------------------------------------
+
+func _draw_legs(alpha: float, speed_ratio: float, air: bool) -> void:
+	var swing := 0.0
+	if p.state == Player.State.RUN:
+		swing = roundf(sin(_t * 16.0) * 4.0 * speed_ratio)
+	var left := Vector2(-4, 8 + swing)
+	var right := Vector2(2, 8 - swing)
 	if air:
-		knee = Vector2(4.5 * float(side), 13.0)
-		foot = Vector2(7.0 * float(side), 18.0)
-	var dark := CLOAK_DARK if side > 0 else CLOAK_DARK.darkened(0.25)
-	draw_line(hip, knee, _tint(dark, alpha), 5.0)
-	draw_line(knee, foot, _tint(dark, alpha), 4.0)
-	draw_circle(knee, 2.0, _tint(TRIM_DIM, alpha * 0.7))
-	draw_line(foot, foot + Vector2(3.0 * float(side), 2.0), _tint(STEEL_DARK, alpha), 3.0)
+		left = Vector2(-5, 6)
+		right = Vector2(3, 9)
+	MathArt.px_rect(self, Rect2(left.x, left.y, 3, 8), _tint(BODY_DARK, alpha))
+	MathArt.px_rect(self, Rect2(right.x, right.y, 3, 8), _tint(BODY_DARK, alpha))
+	MathArt.px_rect(self, Rect2(left.x - 1, left.y + 8, 5, 1), _tint(MathArt.STEEL_DIM, alpha))
+	MathArt.px_rect(self, Rect2(right.x - 1, right.y + 8, 5, 1), _tint(MathArt.STEEL_DIM, alpha))
 
 
-func _draw_cape(alpha: float) -> void:
-	var cape := PackedVector2Array([
-		Vector2(-8, -14), Vector2(-13, 0), Vector2(-11, 14),
-		Vector2(-6, 9), Vector2(-4, -6),
+func _draw_body(alpha: float) -> void:
+	# Anticipation squash: the diamond compresses along the swing axis.
+	var squash := 1.0
+	if p.state == Player.State.ATTACK and _phase()["name"] == "windup":
+		squash = 0.86
+	var half_w := roundf(11.0 * squash)
+	var diamond := PackedVector2Array([
+		Vector2(0, -20), Vector2(half_w, -4), Vector2(0, 12), Vector2(-half_w, -4),
 	])
-	MathArt.draw_poly(self, cape, _tint(CLOAK_DARK, alpha * 0.95), Color(CLOAK_LIGHT, alpha * 0.25), 1.0)
-	# Golden ratio seam on the cloak.
-	draw_line(Vector2(-8, -12), Vector2(-9, 10), _tint(TRIM_DIM, alpha * 0.4), 1.0)
+	MathArt.px_poly(self, diamond, _tint(BODY, alpha), _tint(RIM, alpha * 0.45), 1.0)
+	var facet := PackedVector2Array([
+		Vector2(0, -14), Vector2(roundf(half_w * 0.55), -4), Vector2(0, 6), Vector2(-roundf(half_w * 0.55), -4),
+	])
+	MathArt.px_poly(self, facet, _tint(BODY_DARK, alpha * 0.85))
+	MathArt.px_line(self, Vector2(-half_w, -4), Vector2(0, 12), _tint(MathArt.INK, alpha * 0.5), 1.0)
+	MathArt.px_rect(self, Rect2(7, -9, 2, 2), _tint(MathArt.AMBER, alpha * 0.9))
+	MathArt.px_rect(self, Rect2(-9, -9, 2, 2), _tint(MathArt.AMBER, alpha * 0.45))
 
 
-func _draw_torso(alpha: float) -> void:
-	# A superellipse torso with a pentagonal belt line.
-	var torso := MathArt.superellipse(10.0, 14.0, 2.6, 18, 0.0, Vector2(0, -2))
-	var shifted := PackedVector2Array()
-	for point in torso:
-		shifted.append(point + Vector2(0, -2))
-	MathArt.draw_poly(self, shifted, _tint(CLOAK, alpha), Color(CLOAK_LIGHT, alpha * 0.45), 1.0)
-	draw_line(Vector2(-8, 4), Vector2(8, 3), _tint(TRIM_DIM, alpha), 3.0)
-	draw_circle(Vector2(6.5, 3.2), 2.0, _tint(TRIM, alpha))
-	draw_line(Vector2(1, -14), Vector2(4, -2), _tint(CLOAK_LIGHT, alpha), 1.6)
-	# Defensive sigil: a small triangle at the chest.
-	MathArt.draw_poly(self, MathArt.ngon(3, 4.2, -PI * 0.5, Vector2(0, -3)),
-		Color(TRIM, alpha * 0.18), Color(TRIM, alpha * 0.55), 0.8)
+func _draw_core(alpha: float) -> void:
+	var pulse := 0.75 + 0.25 * sin(_t * 6.0)
+	MathArt.px_rect(self, Rect2(-2, -6, 5, 5), _tint(MathArt.INK, alpha))
+	MathArt.px_rect(self, Rect2(-1, -5, 3, 3), _tint(CORE, alpha * pulse))
+	MathArt.px_rect(self, Rect2(0, -4, 1, 1), _tint(CORE_HI, alpha))
+	if pulse > 0.92:
+		MathArt.px_ring(self, Vector2(0, -4), 7.0, _tint(CORE, alpha * 0.20), 1.0)
 
 
-func _draw_head(alpha: float) -> void:
-	draw_circle(Vector2(2, -23), 8.2, _tint(CLOAK_DARK, alpha))
-	MathArt.draw_ring(self, Vector2(2, -23), 10.0, Color(TRIM, alpha * 0.16), 1.0, 24, -2.4, 0.2)
-	draw_circle(Vector2(3, -22.5), 5.6, _tint(MASK, alpha))
-	draw_line(Vector2(0.0, -24), Vector2(9.0, -22), _tint(Color("#242a33"), alpha), 1.6)
-	draw_circle(Vector2(7.2, -22), 1.5, _tint(EYE, alpha))
-	# A short halo arc, aligned with the head's golden angle.
-	draw_arc(Vector2(2, -23), 11.5, -2.2 + sin(_t) * 0.08, -1.0 + sin(_t) * 0.08, 10,
-		Color(EYE, alpha * 0.18), 1.0, true)
+# --- Blade ------------------------------------------------------------------
 
-
-func _draw_arm(alpha: float, side: int) -> void:
-	if side > 0:
-		return
-	var shoulder := Vector2(-5, -13)
-	var elbow := Vector2(-11, -4)
-	var hand := Vector2(-9, 3)
-	draw_line(shoulder, elbow, _tint(CLOAK_DARK, alpha), 4.0)
-	draw_line(elbow, hand, _tint(CLOAK_DARK, alpha), 3.0)
-	draw_circle(hand, 2.0, _tint(MASK, alpha * 0.8))
-
-
-func _draw_sword_arm(alpha: float) -> void:
-	var hand := Vector2(8.0, -8.0)
-	var angle := 0.55
+func _draw_blade(alpha: float) -> void:
+	var hand := Vector2(6, -8)
+	var angle := REST_ANGLE
 	if p.state == Player.State.ATTACK:
-		hand = Vector2(10.0, -12.0)
+		hand = Vector2(7, -10)
 		angle = _attack_angle()
 	elif p.state == Player.State.RUN:
-		angle = 0.55 + sin(_t * 15.0) * 0.08
+		angle = REST_ANGLE + sin(_t * 16.0) * 0.10
 	else:
-		angle = 0.55 + sin(_t * 2.4) * 0.04
+		angle = REST_ANGLE + sin(_t * 2.6) * 0.05
+	_prev_blade_angle = angle
 
-	draw_line(Vector2(4, -13), hand, _tint(CLOAK_DARK, alpha), 5.0)
-	draw_circle(hand, 2.6, _tint(MASK, alpha))
+	MathArt.px_line(self, Vector2(3, -12), hand, _tint(BODY_DARK, alpha), 2.0)
+	MathArt.px_rect(self, Rect2(hand.x - 1, hand.y - 1, 3, 3), _tint(MathArt.PALE, alpha))
 
 	var direction := Vector2.from_angle(angle)
-	var side := direction.orthogonal()
-	var amplitude := 1.2 + (1.4 if p.state == Player.State.ATTACK else 0.0)
-	var top := PackedVector2Array()
-	var bottom := PackedVector2Array()
-	var samples := 9
-	for i in samples:
-		var k := float(i) / float(samples - 1)
-		var along := 4.0 + 28.0 * k
-		var wave := sin(k * TAU * 1.25 + _t * 6.0) * amplitude * k
-		var half := lerpf(2.4, 0.7, k)
-		top.append(hand + direction * along + side * (half + wave))
-		bottom.append(hand + direction * along - side * (half - wave))
-	var blade := PackedVector2Array()
-	blade.append_array(top)
-	for i in range(bottom.size() - 1, -1, -1):
-		blade.append(bottom[i])
-	MathArt.draw_poly(self, blade, _tint(STEEL, alpha), Color(1.0, 1.0, 1.0, alpha * 0.55), 1.0)
-	draw_line(hand + side * 4.5, hand - side * 4.5, _tint(TRIM_DIM, alpha), 3.0)
-	draw_line(hand - direction * 5.0, hand, _tint(GRIP, alpha), 3.0)
-	# A thin bright centerline makes the sine function readable at speed.
-	draw_polyline(top, Color(1.0, 1.0, 1.0, alpha * 0.20), 0.8, true)
+	var tip := hand + direction * 21.0
+	var side := direction.orthogonal() * 1.5
+
+	# Trailing tip ghost: one frame of lag reads as weight.
+	if p.state == Player.State.ATTACK:
+		var lag_dir := Vector2.from_angle(_blade_lag_angle)
+		var lag_tip := hand + lag_dir * 19.0
+		MathArt.px_rect(self, Rect2(roundf(lag_tip.x), roundf(lag_tip.y), 1, 1), Color(BLADE, alpha * 0.35))
+
+	MathArt.px_line(self, hand + direction * 3.0, tip, _tint(BLADE, alpha), 2.0)
+	MathArt.px_line(self, hand + direction * 3.0 + side, tip, _tint(MathArt.WHITE, alpha * 0.5), 1.0)
+	MathArt.px_line(self, hand + side * 3.0, hand - side * 3.0, _tint(GRIP, alpha), 2.0)
+	MathArt.px_line(self, hand - direction * 4.0, hand, _tint(GRIP, alpha), 2.0)
+	MathArt.px_rect(self, Rect2(tip.x - 1, tip.y - 1, 2, 2), _tint(MathArt.WHITE, alpha * 0.8))
 
 	if p.state == Player.State.ATTACK:
-		_draw_attack_trail(alpha, hand)
+		_draw_smear(alpha, hand)
+
+
+func _draw_smear(alpha: float, hand: Vector2) -> void:
+	if not _smear_window():
+		return
+	var phase := _phase()
+	var current := _attack_angle()
+	# The wedge spans from the angle the blade had at the start of the active
+	# window to its current angle.
+	var k := clampf(float(phase["k"]) / (0.55 if p.attack_index == 2 else 0.34), 0.0, 1.0)
+	var from_angle := lerpf(_anticipation_angle(), _end_angle() + _overshoot() * float(p.facing), 0.0)
+	var span := current - from_angle
+	if absf(span) < 0.10:
+		return
+	var radius := 21.0
+	# Solid wedge (not thin lines): this is what reads as a smear.
+	var wedge := PackedVector2Array([hand])
+	var steps := 9
+	for i in steps + 1:
+		var a := lerpf(from_angle, current, float(i) / float(steps))
+		wedge.append(hand + Vector2.from_angle(a) * radius)
+	MathArt.px_poly(self, wedge, Color(CYAN, alpha * 0.55 * (1.0 - k * 0.35)), Color(0, 0, 0, 0))
+	# A 1px white leading edge on the wedge's outer arc.
+	MathArt.px_arc(self, hand, radius, from_angle, current, Color(MathArt.WHITE, alpha * 0.85), 1.0)
+	# Ghost of the previous frame at 35% alpha.
+	var ghost_from := lerpf(from_angle, current, -0.35)
+	MathArt.px_arc(self, hand, radius - 2.0, ghost_from, from_angle, Color(CYAN, alpha * 0.35), 2.0)
+	var edge := hand + Vector2.from_angle(current) * (radius + 3.0)
+	MathArt.px_rect(self, Rect2(roundf(edge.x) - 1.0, roundf(edge.y) - 1.0, 3, 3), Color(MathArt.WHITE, alpha * 0.9))
 
 
 func _draw_aegis(alpha: float) -> void:
 	if p.aegis_t <= 0.0:
 		return
 	var life_k := clampf(p.aegis_t / p.aegis_time, 0.0, 1.0)
-	var center := Vector2(0, -8)
+	var center := Vector2(0, -6)
 	for ring in 3:
-		var points := PackedVector2Array()
-		for i in 56:
-			var theta := TAU * float(i) / 56.0
-			var radius := 38.0 + 8.0 * sin(3.0 * theta + _t * 7.0 + float(ring) * 0.7)
-			points.append(center + Vector2.from_angle(theta + float(ring) * 0.4) * radius)
-		points.append(points[0])
-		draw_polyline(points, Color(EYE, alpha * life_k * 0.48), 1.6, true)
-	MathArt.draw_ring(self, center, 41.0, Color(EYE, alpha * life_k * 0.25), 1.4, 56)
-	for i in 5:
-		var angle := _t * 3.0 + TAU * float(i) / 5.0
-		draw_circle(center + Vector2.from_angle(angle) * 44.0, 1.9, Color(EYE, alpha * life_k * 0.85))
+		var radius := 26.0 + float(ring) * 5.0
+		var wobble := sin(_t * 7.0 + float(ring) * 0.8) * 1.5
+		MathArt.px_ring(self, center, radius + wobble, Color(CYAN, alpha * life_k * (0.42 - float(ring) * 0.10)), 1.0)
+	for i in 6:
+		var angle := _t * 2.6 + TAU * float(i) / 6.0
+		var point := center + Vector2.from_angle(angle) * (30.0 + float(i % 2) * 4.0)
+		MathArt.px_rect(self, Rect2(roundf(point.x), roundf(point.y), 2, 2), Color(CYAN, alpha * life_k * 0.9))
 
 
-func _draw_attack_trail(alpha: float, hand: Vector2) -> void:
-	var current := _attack_angle()
-	var start := _attack_start_angle()
-	if absf(current - start) < 0.15:
-		return
-	var outer := PackedVector2Array()
-	var inner := PackedVector2Array()
-	var samples := 8
-	for i in samples:
-		var k := float(i) / float(samples - 1)
-		var angle := lerpf(start, current, k)
-		outer.append(hand + Vector2.from_angle(angle) * 30.0)
-		inner.append(hand + Vector2.from_angle(angle) * 13.0)
-	var trail := PackedVector2Array()
-	trail.append_array(outer)
-	for i in range(inner.size() - 1, -1, -1):
-		trail.append(inner[i])
-	MathArt.draw_poly(self, trail, Color(EYE, alpha * 0.08), Color(EYE, alpha * 0.22), 1.0)
-
-
-func _attack_start_angle() -> float:
-	var from_angle := -1.95
-	match p.attack_index:
-		1:
-			from_angle = 0.85
-		2:
-			from_angle = -2.85
-	return from_angle
-
-
-func _attack_angle() -> float:
-	var progress := clampf(p.attack_t / maxf(p.attack_total, 0.001), 0.0, 1.0)
-	var from_angle := _attack_start_angle()
-	var to_angle := 0.72
-	match p.attack_index:
-		1:
-			to_angle = -1.95
-		2:
-			to_angle = 0.95
-	var sweep_start := 0.20
-	var sweep_end := 0.58
-	if p.attack_index == 2:
-		sweep_start = 0.26
-		sweep_end = 0.62
-	return lerpf(from_angle, to_angle, smoothstep(sweep_start, sweep_end, progress))
-
+# --- Roll / death -----------------------------------------------------------
 
 func _draw_roll(alpha: float) -> void:
 	var k := clampf(p.roll_t / p.roll_time, 0.0, 1.0)
-	draw_set_transform(
-		Vector2(0, 2),
-		-float(p.facing) * k * TAU * 1.1,
-		Vector2(float(p.facing), 1.0)
-	)
-	var hexagon := MathArt.ngon(6, 15.0, _t * 4.0)
-	MathArt.draw_poly(self, hexagon, _tint(CLOAK, alpha), _tint(TRIM, alpha * 0.55), 1.2)
-	MathArt.draw_spiral(self, Vector2.ZERO, 13.5, 1.6, Color(EYE, alpha * 0.35), 1.0, 32, _t * 2.0)
-	draw_circle(Vector2(3, -2), 8.0, _tint(MASK, alpha))
+	var spin := -k * TAU * 1.25
+	draw_set_transform(Vector2(0, 0), spin * float(p.facing), Vector2(float(p.facing), 1.0))
+	var diamond := PackedVector2Array([
+		Vector2(0, -13), Vector2(12, 0), Vector2(0, 13), Vector2(-12, 0),
+	])
+	MathArt.px_poly(self, diamond, _tint(BODY, alpha), _tint(CYAN, alpha * 0.55), 1.0)
+	MathArt.px_rect(self, Rect2(-2, -2, 4, 4), _tint(CORE, alpha))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	for i in 3:
-		var offset := Vector2(-float(p.facing) * (18.0 + float(i) * 6.0), -4.0 + float(i) * 4.0)
-		draw_line(offset, offset - Vector2(float(p.facing) * 10.0, 0), _tint(CLOAK_LIGHT, alpha * 0.35), 1.5)
-		draw_circle(offset, 1.0, Color(EYE, alpha * 0.25))
+	for i in 4:
+		var offset := Vector2(-float(p.facing) * (14.0 + float(i) * 7.0), -3.0 + float(i) * 2.0)
+		var size := 3 - i
+		MathArt.px_rect(self, Rect2(offset.x, offset.y, size, size), Color(CYAN, alpha * 0.22 * (1.0 - float(i) * 0.22)))
+
+	# i-frame cue: a 1px white outline only on the first and last frame of the
+	# invulnerable window. A continuous glow would hide the timing.
+	var in_iframes := p.roll_t >= p.roll_iframe_start and p.roll_t <= p.roll_iframe_end
+	if in_iframes:
+		var since := p.roll_t - p.roll_iframe_start
+		var until := p.roll_iframe_end - p.roll_t
+		if since < 0.034 or until < 0.034:
+			MathArt.px_ring(self, Vector2(0, 0), 15.0, Color(MathArt.WHITE, alpha * 0.9), 1.0)
 
 
 func _draw_dead() -> void:
-	draw_set_transform(Vector2(0, 22), float(p.facing) * 1.4, Vector2.ONE)
-	# Collapse into three golden-ratio shards.
 	for i in 3:
-		var center := Vector2(-12.0 + float(i) * 11.0, -3.0 - float(i) * 2.0)
-		var points := MathArt.ngon(3, 6.0 - float(i), float(i) * 0.8, center)
-		MathArt.draw_poly(self, points, Color(CLOAK_DARK, 0.9), Color(TRIM_DIM, 0.4), 1.0)
-	draw_circle(Vector2(-16, -3), 5.5, MASK)
-	draw_line(Vector2(4, 2), Vector2(28, 6), STEEL_DARK, 2.5)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		var center := Vector2(-9.0 + float(i) * 9.0, -2.0 - float(i) * 3.0)
+		var points := MathArt.ngon(3, 5.0 - float(i), float(i) * 0.9, center)
+		MathArt.px_poly(self, points, Color(BODY_DARK, 0.9), Color(MathArt.AMBER_DIM, 0.4), 1.0)
+	MathArt.px_rect(self, Rect2(-16, -6, 3, 3), Color(CORE, 0.6))

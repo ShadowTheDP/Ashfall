@@ -9,20 +9,19 @@ var direction := Vector2.RIGHT
 var speed := 320.0
 var damage := 7.0
 var knockback := 150.0
-var tint := Color("#b76bd6")
+var tint := MathArt.VIOLET
 var source: Node2D = null
 var crit_mult := 1.0
 var spin := false
 var ballistic := false
 var gravity_accel := 0.0
-var pierce := false
 var visual := "bolt"
 var ignore_world := false
 var hitstop_time := 0.05
 
 var _t := 0.0
 var _life := 2.6
-var _radius := 6.0
+var _radius := 4.0
 var _velocity := Vector2.ZERO
 var _trail: Array[Vector2] = []
 var _hit_bodies: Array[Node] = []
@@ -55,7 +54,7 @@ func setup_player(velocity: Vector2, p_damage: float, p_tint: Color, p_source: N
 	crit_mult = p_crit
 	spin = true
 	gravity_accel = KUNAI_GRAVITY
-	_radius = 5.0
+	_radius = 3.0
 	_life = 1.1
 	knockback = 160.0
 	hitstop_time = 0.035
@@ -67,11 +66,11 @@ func setup_wave(aim: Vector2, p_speed: float, p_damage: float, p_tint: Color, p_
 	source = p_source
 	visual = "wave"
 	ignore_world = true
-	_radius = 20.0
+	_radius = 14.0
 	_life = 1.25
 	knockback = 260.0
 	hitstop_time = 0.02
-	position.y = -18.0
+	position.y = -16.0
 
 
 func _ready() -> void:
@@ -108,7 +107,7 @@ func _physics_process(delta: float) -> void:
 		rotation = direction.angle()
 	if visual != "wave":
 		_trail.push_front(global_position)
-		if _trail.size() > 7:
+		if _trail.size() > 6:
 			_trail.pop_back()
 	queue_redraw()
 
@@ -116,17 +115,12 @@ func _physics_process(delta: float) -> void:
 func _on_body_entered(body: Node) -> void:
 	if body == source:
 		return
-	if pierce and _hit_bodies.has(body):
-		return
 	if body.has_method("take_hit"):
-		if pierce:
-			_hit_bodies.append(body)
 		var crit := false
 		if source != null and source.has_method("is_crit_against"):
 			crit = source.is_crit_against(body)
-		var final_damage := Damage.compute(damage, 0, crit, crit_mult)
 		body.take_hit({
-			"damage": final_damage,
+			"damage": Damage.compute(damage, 0, crit, crit_mult),
 			"crit": crit,
 			"knockback": knockback,
 			"hitstop": hitstop_time,
@@ -134,12 +128,10 @@ func _on_body_entered(body: Node) -> void:
 			"point": global_position,
 		})
 		Combat.spark(global_position, -direction, crit, tint)
-		if not pierce:
-			queue_free()
-		return
-	Combat.burst(global_position, tint, 6, 120.0)
-	if not pierce:
 		queue_free()
+		return
+	Combat.burst(global_position, tint, 5, 110.0)
+	queue_free()
 
 
 func _draw() -> void:
@@ -153,45 +145,30 @@ func _draw() -> void:
 
 
 func _draw_bolt() -> void:
-	var previous := Vector2.ZERO
-	var has_previous := false
 	for index in _trail.size():
 		var point := to_local(_trail[index])
-		if has_previous:
-			draw_line(previous, point, Color(tint, 0.30 * (1.0 - float(index) / 8.0)), 2.5)
-		previous = point
-		has_previous = true
-	draw_circle(Vector2.ZERO, 5.0, Color(tint, 0.9))
-	draw_circle(Vector2.ZERO, 9.0, Color(tint, 0.18))
-	draw_line(Vector2(-6, 0), Vector2(4, 0), Color(1, 1, 1, 0.85), 1.4)
+		var alpha := 0.35 * (1.0 - float(index) / 7.0)
+		MathArt.px_rect(self, Rect2(roundf(point.x), roundf(point.y), 1, 1), Color(tint, alpha))
+	MathArt.px_rect(self, Rect2(-2, -2, 4, 4), Color(tint, 0.95))
+	MathArt.px_rect(self, Rect2(-1, -1, 2, 2), Color(MathArt.WHITE, 0.9))
 
 
 func _draw_kunai() -> void:
 	for index in _trail.size():
 		var point := to_local(_trail[index])
-		draw_circle(point, 2.2 * (1.0 - float(index) / 8.0), Color(tint, 0.22))
-	var blade := PackedVector2Array([
-		Vector2(11, 0), Vector2(2, -4), Vector2(-3, 0), Vector2(2, 4),
-	])
-	MathArt.draw_poly(self, blade, Color(tint, 0.95), Color(1, 1, 1, 0.8), 1.0)
-	draw_line(Vector2(-3, 0), Vector2(-9, 0), Color("#e8a33d"), 2.0)
-	draw_circle(Vector2(-9, 0), 2.0, Color("#e8a33d"))
-	draw_circle(Vector2.ZERO, 8.0, Color(tint, 0.10))
+		MathArt.px_rect(self, Rect2(roundf(point.x), roundf(point.y), 1, 1), Color(tint, 0.30 * (1.0 - float(index) / 7.0)))
+	# A 4px diamond blade on a 1px grip.
+	MathArt.px_poly(self, PackedVector2Array([Vector2(6, 0), Vector2(0, -3), Vector2(-3, 0), Vector2(0, 3)]),
+		Color(tint, 0.95), Color(MathArt.WHITE, 0.8), 1.0)
+	MathArt.px_rect(self, Rect2(-6, -1, 4, 1), MathArt.AMBER)
+	MathArt.px_rect(self, Rect2(-7, -1, 1, 2), MathArt.AMBER_DIM)
 
 
 func _draw_wave() -> void:
-	var phase := fmod(_t * 6.0, TAU)
-	for ring in 3:
-		var offset := phase * 0.4 + float(ring) * 0.6
-		var alpha := 0.55 - float(ring) * 0.14
-		var points := PackedVector2Array()
-		for i in 9:
-			var x := -24.0 + float(i) * 6.0
-			var y := -sin(float(i) * 0.8 + offset) * (7.0 + float(ring) * 3.0)
-			points.append(Vector2(x, y))
-		for i in range(8, -1, -1):
-			var x := -24.0 + float(i) * 6.0
-			var y := -sin(float(i) * 0.8 + offset) * (7.0 + float(ring) * 3.0) + 5.0
-			points.append(Vector2(x, y))
-		MathArt.draw_poly(self, points, Color(tint, alpha * 0.35), Color(tint, alpha * 0.5), 1.0)
-	draw_circle(Vector2.ZERO, 18.0, Color(tint, 0.10))
+	var phase := fmod(_t * 7.0, TAU)
+	for i in 16:
+		var k := float(i) / 15.0
+		var x := roundf(lerpf(-20.0, 20.0, k))
+		var y := roundf(sin(k * TAU * 1.6 + phase) * 5.0)
+		MathArt.px_rect(self, Rect2(x, y - 3, 1, 7), Color(tint, 0.45))
+		MathArt.px_rect(self, Rect2(x, y - 1, 1, 2), Color(MathArt.WHITE, 0.5))

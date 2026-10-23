@@ -384,7 +384,9 @@ func take_hit(info: Dictionary) -> void:
 	Combat.hitstop(0.10)
 	Combat.shake(0.6)
 	Combat.damage_number(global_position + Vector2(0, -46), int(damage), false)
-	Combat.spark(global_position + Vector2(0, -16), Vector2(dir, 0), false, Color("#ff6b6b"))
+	Combat.spark(global_position + Vector2(0, -16), Vector2(dir, 0), false, MathArt.RED_HI)
+	Combat.hurt_burst(global_position + Vector2(float(dir) * 9.0, -12.0), int(dir))
+	Combat.burst(global_position + Vector2(float(dir) * 6.0, -12.0), MathArt.RED_HI, 6, 150.0)
 	Sfx.play("hurt", -6)
 	Game.hurt_flash = 0.32
 	Game.combo_break()
@@ -482,8 +484,10 @@ func _cast_aegis() -> void:
 func _aegis_block() -> void:
 	aegis_t = 0.0
 	Combat.block_number(global_position + Vector2(0, -50))
-	Combat.spark(global_position + Vector2(0, -12), Vector2.UP, false, Color("#8fe3ff"))
-	Combat.ring(global_position + Vector2(0, -8), Color("#8fe3ff"), 58.0)
+	Combat.spark(global_position + Vector2(0, -12), Vector2.UP, false, MathArt.CYAN)
+	Combat.block_burst(global_position + Vector2(0, -8), facing)
+	Combat.ring(global_position + Vector2(0, -8), MathArt.CYAN, 44.0)
+	Combat.burst(global_position + Vector2(float(facing) * 10.0, -8.0), MathArt.CYAN, 8, 200.0)
 	Combat.shake(0.22)
 	Sfx.play("block", -6, 1.1)
 	for enemy in get_tree().get_nodes_in_group("enemies"):

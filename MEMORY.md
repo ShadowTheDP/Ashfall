@@ -11,14 +11,40 @@
 
 ## Stable Decisions
 
-- **Engine:** Godot 4.7.2, GL Compatibility renderer, 1280×720 base,
-  `canvas_items` stretch. No .NET, no third-party runtime dependencies.
+- **Engine:** Godot 4.7.2, GL Compatibility renderer.
+- **Pixel pipeline (hard rule):** logical resolution **640x360**, window
+  1280x720, `stretch/mode="viewport"` + `scale_mode="integer"`, nearest
+  texture filter. Camera `zoom = 1.0`, position rounded every frame, and
+  **rotation disabled** (`ignore_rotation = true`) - sub-pixel motion or roll
+  shimmers the whole upscaled image.
+- **No anti-aliased drawing.** Never call `draw_circle`, `draw_arc`,
+  `draw_polyline` or `draw_colored_polygon` directly. Use `MathArt.px_*`,
+  which rasterises circles/rings/arcs as 1px-tall `draw_rect` rows using
+  `dx = floor(sqrt(r^2 - dy^2))`. The legacy AA helpers were deleted from
+  `math_art.gd` so nothing can bypass the pipeline.
 - **Zero art assets:** every visual is drawn in `_draw()` through
   `scripts/systems/math_art.gd`. No textures, no `Sprite2D`. See
   `docs/design/math-art.md`. This is a hard rule, not a temporary state.
-- **Weapons are functions:** Sine Edge is a sine ribbon (finisher releases it as
-  a travelling wave); Kunai solves a ballistic `v0` and previews the parabola;
-  Aegis is a radial `r = R + A·sin(3θ+ωt)` field.
+- **Weapons are functions:** Sine Edge is a straight blade driven by an angle
+  function (readability comes from smear + overshoot, not from bending the
+  blade); the finisher releases a travelling sine wave drawn as 1px columns;
+  Kunai solves a ballistic `v0` and previews the parabola; Aegis is three
+  concentric pixel rings plus six orbiting dots.
+- **Player silhouette is a diamond** (rotated square) with a square core; it is
+  the only glowing shape, so the eye always finds it.
+- **Animation priority order:** anticipation -> smear -> impact frame ->
+  follow-through -> secondary motion. Concretely:
+  - windup holds the blade at the coil angle (body squashes to 0.86 width);
+  - the blade only travels during the active window;
+  - one solid smear wedge (two on the finisher) with a 1px white leading edge;
+  - 10-14 degree overshoot held 2 frames, then a 55/30/15 ease-out;
+  - the tip lags the body by 1 frame and the body lags the blade by 1 frame.
+- **Impact frame:** `Enemy.impact = 0.034s` (2 frames) renders the whole
+  silhouette pure white, then a 1px white outline fades over `flash`.
+  Never invert the whole screen.
+- **Defensive feedback** lives in `scripts/fx/burst_fx.gd` (three modes:
+  dodge / block / hurt). i-frame cues only flash on the FIRST and LAST frame of
+  the invulnerable window - a continuous glow would hide the timing.
 - **Enemy shape language:** sides encode threat tier — triangle (Husk),
   square (Ram), hexagon (Bulwark), pentagon+pentagram (Warden), circle/orbit
   (Watcher). Player alone uses curves (superellipse) because it is the only
@@ -48,6 +74,8 @@
   stays crisp while the world glows.
 - **Title screen pauses the tree** at `_ready()` and resumes on Enter/Space/J.
   Tests instantiate `main.tscn` with `skip_title = true`.
+- **HUD font sizes are tuned for 640x360**: labels 6, values 7-9, headings
+  10-18, run-summary title 28. Nothing below 6 is used.
 - **Boon picker is a real pause**: `get_tree().paused = true`, keyboard 1/2/3
   or arrows+Enter. The encounter resumes only after a choice.
 - **Perfect Dodge:** rolling through an attack grants 2.5 s of +25% damage and
@@ -108,7 +136,10 @@ python tools\make_sfx.py
 - `title_capture.tscn`: title pauses the tree, ENTER resumes and creates the
   player.
 - `capture_scene.tscn`: 13 screenshots render on an RTX 4060 with OpenGL
-  Compatibility, including the function wave, kunai parabola and reward screen.
+  Compatibility at 640x360, including the function wave, kunai parabola and
+  reward screen.
+- `title_capture.tscn`: the title pauses the tree and ENTER resumes; the rose
+  window star is drawn from `star()` points without re-offsetting the centre.
 
 ## Known Risks / Limits
 
@@ -127,8 +158,14 @@ python tools\make_sfx.py
   autoloads.
 - Screenshot and soak harnesses are dev-only; they are not part of the game
   boot path.
+- `MathArt.draw_poly` / `draw_ring` / `draw_glow` / `draw_spiral` /
+  `draw_sigil` were removed. If an old call site is restored it will silently
+  reintroduce anti-aliasing.
+- Subagent audits live in `output/agent-reports/` (gitignored). They are
+  read-only findings; re-run them rather than trusting stale line numbers.
 
 ## Cold-Start Order
 
 `README.md` → `AGENTS.md` → `MEMORY.md` →
-`docs/agent/current-state.md` → `docs/design/combat-feel.md` → target script.
+`docs/agent/current-state.md` → `docs/design/math-art.md` →
+`docs/design/combat-feel.md` → target script.

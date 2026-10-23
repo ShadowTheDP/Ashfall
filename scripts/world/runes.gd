@@ -1,15 +1,14 @@
 class_name Runes
 extends Node2D
-## Floating geometric runes that make the background feel like a mathematical
-## diagram rather than empty air. Purely decorative.
+## Floating pixel sigils. Each is a regular polygon with a 1/phi inner outline.
 
 var _t := 0.0
 var _runes := [
-	{"pos": Vector2(210, -270), "sides": 3, "radius": 26.0, "color": Color("#e8a33d"), "speed": 0.22, "phase": 0.4},
-	{"pos": Vector2(560, -340), "sides": 6, "radius": 20.0, "color": Color("#8fe3ff"), "speed": -0.16, "phase": 1.8},
-	{"pos": Vector2(930, -250), "sides": 4, "radius": 24.0, "color": Color("#9b6bff"), "speed": 0.18, "phase": 3.1},
-	{"pos": Vector2(1260, -330), "sides": 5, "radius": 22.0, "color": Color("#e8a33d"), "speed": -0.14, "phase": 4.4},
-	{"pos": Vector2(1470, -190), "sides": 7, "radius": 18.0, "color": Color("#8fe3ff"), "speed": 0.20, "phase": 5.2},
+	{"pos": Vector2(210, -240), "sides": 3, "radius": 20.0, "color": MathArt.AMBER, "speed": 0.20, "phase": 0.4},
+	{"pos": Vector2(560, -290), "sides": 6, "radius": 15.0, "color": MathArt.CYAN, "speed": -0.15, "phase": 1.8},
+	{"pos": Vector2(930, -225), "sides": 4, "radius": 18.0, "color": MathArt.VIOLET, "speed": 0.17, "phase": 3.1},
+	{"pos": Vector2(1260, -280), "sides": 5, "radius": 17.0, "color": MathArt.AMBER, "speed": -0.13, "phase": 4.4},
+	{"pos": Vector2(1470, -180), "sides": 7, "radius": 14.0, "color": MathArt.CYAN, "speed": 0.19, "phase": 5.2},
 ]
 
 
@@ -29,9 +28,9 @@ func _draw() -> void:
 		var pulse := 0.55 + 0.45 * sin(_t * 1.3 + float(rune["phase"]))
 		var rotation := _t * float(rune["speed"]) + float(rune["phase"])
 		var radius: float = rune["radius"]
-		MathArt.draw_poly(self, MathArt.ngon(int(rune["sides"]), radius, rotation, center),
-			Color(tint, 0.035 * pulse), Color(tint, 0.16 * pulse), 1.0)
-		MathArt.draw_poly(self, MathArt.ngon(int(rune["sides"]), radius * MathArt.INV_PHI, -rotation, center),
-			Color(0, 0, 0, 0), Color(tint, 0.10 * pulse), 1.0)
-		MathArt.draw_ring(self, center, radius * 1.35, Color(tint, 0.055 * pulse), 1.0, 32)
-		draw_circle(center, 1.4, Color(tint, 0.35 * pulse))
+		var sides := int(rune["sides"])
+		MathArt.px_poly(self, MathArt.ngon(sides, radius, rotation, center),
+			Color(tint, 0.05 * pulse), Color(tint, 0.22 * pulse), 1.0)
+		MathArt.px_poly(self, MathArt.ngon(sides, radius * MathArt.INV_PHI, -rotation, center),
+			Color(0, 0, 0, 0), Color(tint, 0.14 * pulse), 1.0)
+		MathArt.px_rect(self, Rect2(roundf(center.x), roundf(center.y), 1, 1), Color(tint, 0.5 * pulse))

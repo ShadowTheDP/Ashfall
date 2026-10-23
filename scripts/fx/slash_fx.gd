@@ -1,13 +1,14 @@
 class_name SlashFx
 extends Node2D
-## Crescent used to sell the reach of a swing.
+## Pixel smear arc for a swing. Three bands of decreasing width give the arc
+## volume without blurring the sprite.
 
 var facing := 1
-var color := Color("#cfe8ff")
-var radius := 62.0
-var arc := 2.1
+var color := MathArt.CYAN
+var radius := 21.0
+var arc := 2.2
 var _t := 0.0
-var _life := 0.14
+var _life := 0.15
 
 
 func setup(attack_index: int, is_facing: int, tint: Color) -> void:
@@ -16,14 +17,14 @@ func setup(attack_index: int, is_facing: int, tint: Color) -> void:
 	scale.x = float(facing)
 	match attack_index:
 		0:
-			arc = 2.0
-			radius = 60.0
-		1:
 			arc = 2.1
-			radius = 62.0
+			radius = 20.0
+		1:
+			arc = 2.2
+			radius = 21.0
 		_:
-			arc = 2.7
-			radius = 74.0
+			arc = 2.9
+			radius = 26.0
 	z_index = 7
 
 
@@ -37,17 +38,13 @@ func _process(delta: float) -> void:
 
 func _draw() -> void:
 	var k := clampf(_t / _life, 0.0, 1.0)
-	var a0 := -arc * 0.5 + k * 0.7
-	var a1 := arc * 0.5 + k * 0.7
-	var outer := radius * (0.92 + 0.12 * k)
-	var inner := radius * 0.52
-	var points := PackedVector2Array()
-	for i in 11:
-		var a := lerpf(a0, a1, float(i) / 10.0)
-		points.append(Vector2.from_angle(a) * outer)
-	for i in 11:
-		var a := lerpf(a1, a0, float(i) / 10.0)
-		points.append(Vector2.from_angle(a) * inner)
-	draw_colored_polygon(points, Color(color, 0.22 * (1.0 - k)))
-	draw_arc(Vector2.ZERO, outer, a0, a1, 18, Color(color, 0.9 * (1.0 - k)), 3.0, true)
-	draw_arc(Vector2.ZERO, inner, a0, a1, 18, Color(color, 0.45 * (1.0 - k)), 1.5, true)
+	var alpha := 1.0 - k
+	var a0 := -arc * 0.5 + k * 0.9
+	var a1 := arc * 0.5 + k * 0.9
+	var outer := radius * (0.95 + 0.10 * k)
+	MathArt.px_arc(self, Vector2.ZERO, outer, a0, a1, Color(color, alpha * 0.20), 4.0)
+	MathArt.px_arc(self, Vector2.ZERO, outer - 3.0, a0, a1, Color(color, alpha * 0.40), 3.0)
+	MathArt.px_arc(self, Vector2.ZERO, outer - 6.0, a0, a1, Color(MathArt.WHITE, alpha * 0.65), 1.0)
+	# Leading edge cap.
+	var edge := Vector2.from_angle(a1) * outer
+	MathArt.px_rect(self, Rect2(roundf(edge.x) - 1.0, roundf(edge.y) - 1.0, 3, 3), Color(MathArt.WHITE, alpha * 0.9))

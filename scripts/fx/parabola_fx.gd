@@ -1,11 +1,12 @@
 class_name ParabolaFx
 extends Node2D
-## Dotted preview of a ballistic function: p(t) = v0*t + 1/2*g*t^2.
+## Dotted preview of the ballistic function: p(t) = v0*t + 1/2*g*t^2.
+## 1px dots, drawn in a dashed pattern so it reads as a guide, not a laser.
 
 var _velocity := Vector2.ZERO
 var _gravity := 900.0
 var _t := 0.0
-var _life := 0.38
+var _life := 0.36
 
 
 func setup(velocity: Vector2, gravity: float) -> void:
@@ -24,10 +25,11 @@ func _process(delta: float) -> void:
 
 func _draw() -> void:
 	var fade := 1.0 - _t / _life
-	for i in 24:
-		var time := 0.52 * (float(i) / 23.0)
+	for i in 26:
+		var time := 0.55 * (float(i) / 25.0)
 		var point := _velocity * time + Vector2(0.0, 0.5 * _gravity * time * time)
-		var alpha := fade * (1.0 - float(i) / 26.0)
-		draw_circle(point, 1.4, Color(0.56, 0.89, 1.0, alpha * 0.75))
-		if i % 4 == 0:
-			draw_circle(point, 3.4, Color(0.56, 0.89, 1.0, alpha * 0.12))
+		var alpha := fade * (1.0 - float(i) / 28.0)
+		if i % 3 == 0:
+			MathArt.px_rect(self, Rect2(roundf(point.x), roundf(point.y), 2, 2), Color(MathArt.CYAN, alpha * 0.75))
+		else:
+			MathArt.px_rect(self, Rect2(roundf(point.x), roundf(point.y), 1, 1), Color(MathArt.CYAN, alpha * 0.40))

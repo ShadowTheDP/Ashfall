@@ -1,16 +1,16 @@
 class_name FunctionWave
 extends Area2D
-## The Sine Edge finisher: a travelling sine ribbon that pierces enemies.
-## It is literally the weapon's function released into the world.
+## The Sine Edge finisher: the blade's function released as a travelling wave.
+## Drawn as a stack of 1px pixel columns so it matches the rest of the art.
 
 var source: Node2D = null
 var damage := 8.0
 var crit_mult := 1.5
 var direction := 1
 var speed := 540.0
-var tint := Color("#8fe3ff")
+var tint := MathArt.CYAN
 var _t := 0.0
-var _life := 0.45
+var _life := 0.42
 var _hit: Array[Node] = []
 
 
@@ -31,7 +31,7 @@ func _ready() -> void:
 	z_index = 7
 	var shape := CollisionShape2D.new()
 	var rect := RectangleShape2D.new()
-	rect.size = Vector2(96.0, 74.0)
+	rect.size = Vector2(88.0, 68.0)
 	shape.shape = rect
 	add_child(shape)
 	body_entered.connect(_on_body_entered)
@@ -61,31 +61,19 @@ func _on_body_entered(body: Node) -> void:
 		"source_pos": global_position,
 		"point": body.global_position,
 	})
-	Combat.spark(body.global_position + Vector2(0, -18), Vector2(float(direction), 0), crit, tint)
+	Combat.spark(body.global_position + Vector2(0, -16), Vector2(float(direction), 0), crit, tint)
 
 
 func _draw() -> void:
 	var fade := clampf(1.0 - _t / _life, 0.0, 1.0)
-	var top := PackedVector2Array()
-	var bottom := PackedVector2Array()
-	var samples := 18
+	var samples := 30
 	for i in samples:
 		var k := float(i) / float(samples - 1)
-		var x := lerpf(-46.0, 46.0, k)
-		var y := sin(k * TAU * 1.6 + _t * 24.0) * 11.0
-		var width := lerpf(2.0, 7.0, sin(k * PI)) * fade + 1.0
-		top.append(Vector2(x, y - width))
-		bottom.append(Vector2(x, y + width))
-	var ribbon := PackedVector2Array()
-	ribbon.append_array(top)
-	for i in range(bottom.size() - 1, -1, -1):
-		ribbon.append(bottom[i])
-	MathArt.draw_poly(self, ribbon, Color(tint, 0.16 * fade), Color(tint, 0.75 * fade), 1.2)
-	var centerline := PackedVector2Array()
-	for i in samples:
-		var k := float(i) / float(samples - 1)
-		centerline.append(Vector2(lerpf(-46.0, 46.0, k), sin(k * TAU * 1.6 + _t * 24.0) * 11.0))
-	draw_polyline(centerline, Color(1, 1, 1, 0.45 * fade), 1.0, true)
-	for i in 3:
-		draw_circle(Vector2(-30.0 + float(i) * 30.0, sin(float(i) * 2.1 + _t * 24.0) * 11.0),
-			1.6, Color(tint, 0.6 * fade))
+		var x := roundf(lerpf(-40.0, 40.0, k))
+		var y := roundf(sin(k * TAU * 1.7 + _t * 26.0) * 10.0)
+		var height := roundf(lerpf(1.0, 5.0, sin(k * PI)) * fade) + 1.0
+		# Two-tone column: cyan body, white crest.
+		MathArt.px_rect(self, Rect2(x, y - height, 1, height * 2.0), Color(tint, 0.55 * fade))
+		MathArt.px_rect(self, Rect2(x, y - 1, 1, 2), Color(MathArt.WHITE, 0.75 * fade))
+		if i % 6 == 0:
+			MathArt.px_rect(self, Rect2(x, y - height - 2, 1, 2), Color(tint, 0.45 * fade))

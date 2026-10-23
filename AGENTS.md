@@ -18,10 +18,16 @@
   data tables, or decompiled output. Mechanics and genre are fair game;
   expression is not.
 - Keep the prototype runnable with the headless checks in `tools/check.ps1`.
-- **All art goes through `scripts/systems/math_art.gd`.** No textures, no
-  `Sprite2D`, no imported images. If a shape cannot be expressed as a
-  primitive (polygon, star, superellipse, Lissajous, rose, phyllotaxis,
-  spiral, harmonic, ballistic), add the primitive to `MathArt` first.
+- **All art goes through `scripts/systems/math_art.gd` and is pixel-quantised.**
+  No textures, no `Sprite2D`, no imported images, and **never** call
+  `draw_circle` / `draw_arc` / `draw_polyline` / `draw_colored_polygon`
+  directly - they anti-alias and leave grey fringes after the x2 upscale.
+  If a shape cannot be expressed as a primitive (polygon, star, superellipse,
+  Lissajous, rose, phyllotaxis, spiral, harmonic, ballistic), add the
+  primitive to `MathArt` first, then rasterise it with the `px_*` helpers.
+- **Pixel pipeline invariants:** 640x360 logical resolution, integer scaling,
+  nearest filter, camera zoom 1.0, rounded camera position, camera rotation
+  always 0. Changing any of these breaks the whole look.
 - Use `PHI`, `INV_PHI` and `GOLDEN_ANGLE` for scale and spacing. Random values
   are only allowed for deliberate noise (cracks, debris).
 - **Keyboard-only:** every action must have a keyboard binding; do not add

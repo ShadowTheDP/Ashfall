@@ -1,6 +1,6 @@
 class_name RewardScreen
 extends Control
-## Keyboard-only between-wave boon picker. Pauses the tree while open.
+## Keyboard-only between-wave boon picker, drawn as three pixel cards.
 
 signal chosen(id: String)
 
@@ -82,30 +82,29 @@ func _draw() -> void:
 	var font := ThemeDB.fallback_font
 	if font == null:
 		return
-	var viewport_size := get_viewport_rect().size
-	draw_rect(Rect2(Vector2.ZERO, viewport_size), Color(0.008, 0.012, 0.022, 0.80))
-	draw_string(font, Vector2(viewport_size.x * 0.5 - 400.0, viewport_size.y * 0.20),
-		"WAVE CLEARED", HORIZONTAL_ALIGNMENT_CENTER, 800.0, 36, Color("#e9e2d2"))
-	draw_string(font, Vector2(viewport_size.x * 0.5 - 400.0, viewport_size.y * 0.20 + 30.0),
-		"CHOOSE A BOON", HORIZONTAL_ALIGNMENT_CENTER, 800.0, 13, Color("#7c8fa3"))
-	MathArt.draw_ring(self, Vector2(viewport_size.x * 0.5, viewport_size.y * 0.20 + 14.0), 180.0,
-		Color(0.91, 0.64, 0.24, 0.20), 1.0, 64, PI * 0.08, PI * 0.92)
+	var size := get_viewport_rect().size
+	MathArt.px_rect(self, Rect2(0, 0, size.x, size.y), Color(0.02, 0.028, 0.04, 0.86))
+	var mid_x := roundf(size.x * 0.5)
+	var title_y := roundf(size.y * 0.17)
+	draw_string(font, Vector2(mid_x - 160.0, title_y), "WAVE CLEARED",
+		HORIZONTAL_ALIGNMENT_CENTER, 320.0, 18, MathArt.PALE)
+	draw_string(font, Vector2(mid_x - 160.0, title_y + 12.0), "CHOOSE A BOON",
+		HORIZONTAL_ALIGNMENT_CENTER, 320.0, 7, MathArt.STEEL)
+	MathArt.px_rect(self, Rect2(mid_x - 46.0, title_y + 17.0, 92, 1), Color(MathArt.AMBER, 0.7))
 
-	var card_w := 280.0
-	var card_h := 214.0
-	var gap := 26.0
+	var card_w := 148.0
+	var card_h := 108.0
+	var gap := 14.0
 	var total_w := card_w * 3.0 + gap * 2.0
-	var start_x := (viewport_size.x - total_w) * 0.5
-	var card_y := viewport_size.y * 0.34
+	var start_x := roundf((size.x - total_w) * 0.5)
+	var card_y := roundf(size.y * 0.30)
 
 	for i in _choices.size():
-		var x := start_x + float(i) * (card_w + gap)
-		_draw_card(font, i, Rect2(x, card_y, card_w, card_h))
+		_draw_card(font, i, Rect2(start_x + float(i) * (card_w + gap), card_y, card_w, card_h))
 
-	var footer_y := card_y + card_h + 34.0
-	draw_string(font, Vector2(viewport_size.x * 0.5 - 420.0, footer_y),
-		"LEFT / RIGHT  SELECT        1 / 2 / 3  QUICK PICK        ENTER  CONFIRM",
-		HORIZONTAL_ALIGNMENT_CENTER, 840.0, 11, Color("#7c8fa3"))
+	draw_string(font, Vector2(mid_x - 220.0, card_y + card_h + 22.0),
+		"LEFT/RIGHT SELECT      1/2/3 QUICK PICK      ENTER CONFIRM",
+		HORIZONTAL_ALIGNMENT_CENTER, 440.0, 6, MathArt.STEEL)
 
 
 func _draw_card(font: Font, index: int, rect: Rect2) -> void:
@@ -113,67 +112,71 @@ func _draw_card(font: Font, index: int, rect: Rect2) -> void:
 	var data: Dictionary = Data.rewards.get(id, {})
 	var tint := Color(data.get("color", "#e8a33d"))
 	var selected := index == _index
-	var center := rect.position + Vector2(rect.size.x * 0.5, 0)
-	var card_color := Color(0.035, 0.048, 0.075, 0.96) if selected else Color(0.025, 0.035, 0.055, 0.92)
-	draw_rect(rect, card_color)
-	draw_rect(rect, Color(tint, 0.85 if selected else 0.28), false, 2.0 if selected else 1.0)
+	var center := Vector2(roundf(rect.position.x + rect.size.x * 0.5), rect.position.y)
+
+	MathArt.px_rect(self, rect, Color(0.055, 0.075, 0.105, 0.97) if selected else Color(0.035, 0.048, 0.068, 0.94))
+	MathArt.px_rect(self, Rect2(rect.position, Vector2(rect.size.x, 1)), Color(tint, 0.9 if selected else 0.3))
+	MathArt.px_rect(self, Rect2(rect.position + Vector2(0, rect.size.y - 1.0), Vector2(rect.size.x, 1)), Color(tint, 0.55 if selected else 0.2))
+	MathArt.px_rect(self, Rect2(rect.position, Vector2(1, rect.size.y)), Color(tint, 0.55 if selected else 0.2))
+	MathArt.px_rect(self, Rect2(rect.position + Vector2(rect.size.x - 1.0, 0), Vector2(1, rect.size.y)), Color(tint, 0.55 if selected else 0.2))
 	if selected:
-		var pulse := 0.45 + 0.25 * sin(_t * 4.0)
-		draw_rect(rect.grow(4.0), Color(tint, 0.16 * pulse), false, 1.0)
-		MathArt.draw_ring(self, Vector2(center.x, rect.position.y + 74.0), 44.0,
-			Color(tint, 0.28), 1.0, 48)
+		var pulse := 0.35 + 0.35 * sin(_t * 5.0)
+		draw_rect(Rect2(rect.position.x - 2.0, rect.position.y - 2.0, rect.size.x + 4.0, rect.size.y + 4.0),
+			Color(tint, 0.10 * pulse), false, 1.0)
 
-	# Card index (1/2/3)
-	draw_string(font, rect.position + Vector2(12, 24), str(index + 1),
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(tint, 0.9))
+	draw_string(font, rect.position + Vector2(6, 12), str(index + 1),
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(tint, 0.9))
 
-	_draw_sigil(id, Vector2(center.x, rect.position.y + 74.0), 32.0, tint)
-	draw_string(font, Vector2(rect.position.x, rect.position.y + 128.0),
-		str(data.get("name", id)), HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 20, Color("#e9e2d2"))
+	var sigil_center := Vector2(center.x, rect.position.y + 42.0)
+	_draw_sigil(id, sigil_center, 17.0, tint)
 
-	var desc := str(data.get("desc", "")).split("\n")
-	for line in desc.size():
-		draw_string(font, Vector2(rect.position.x, rect.position.y + 156.0 + float(line) * 18.0),
-			desc[line], HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 12, Color("#9fb0c3"))
+	draw_string(font, Vector2(rect.position.x, rect.position.y + 68.0), str(data.get("name", id)),
+		HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 10, MathArt.PALE)
 
-	var key_label := "1" if index == 0 else ("2" if index == 1 else "3")
-	draw_string(font, Vector2(rect.position.x, rect.position.y + rect.size.y - 12.0),
-		"PRESS " + key_label, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 9, Color(tint, 0.65))
+	var lines: PackedStringArray = str(data.get("desc", "")).split("\n")
+	for line in lines.size():
+		draw_string(font, Vector2(rect.position.x, rect.position.y + 82.0 + float(line) * 9.0),
+			lines[line], HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 6, Color(0.62, 0.70, 0.80))
+
+	var key_label := str(index + 1)
+	draw_string(font, Vector2(rect.position.x, rect.position.y + rect.size.y - 6.0),
+		"PRESS " + key_label, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 5, Color(tint, 0.6))
 
 
 func _draw_sigil(id: String, center: Vector2, radius: float, tint: Color) -> void:
 	match id:
 		"vitality":
+			# Cardioid: x = 16 sin^3 t, y = 13 cos t - 5 cos 2t - 2 cos 3t - cos 4t
 			var points := PackedVector2Array()
 			var scale := radius / 17.0
-			for i in 48:
-				var theta := TAU * float(i) / 48.0
+			for i in 32:
+				var theta := TAU * float(i) / 32.0
 				var x := 16.0 * pow(sin(theta), 3.0)
 				var y := 13.0 * cos(theta) - 5.0 * cos(2.0 * theta) - 2.0 * cos(3.0 * theta) - cos(4.0 * theta)
 				points.append(center + Vector2(x, -y) * scale)
-			MathArt.draw_poly(self, points, Color(tint, 0.18), Color(tint, 0.9), 1.4)
+			MathArt.px_poly(self, points, Color(tint, 0.22), tint, 1.0)
 		"edge":
-			MathArt.draw_poly(self, MathArt.ngon(3, radius, -PI * 0.5, center),
-				Color(tint, 0.16), tint, 1.6)
+			MathArt.px_poly(self, MathArt.ngon(3, radius, -PI * 0.5, center), Color(tint, 0.20), tint, 1.0)
 		"swift":
 			for i in 3:
-				var y := center.y - 12.0 + float(i) * 12.0
-				draw_line(Vector2(center.x - 18, y + 6), Vector2(center.x, y - 4), Color(tint, 0.9), 2.0)
-				draw_line(Vector2(center.x, y - 4), Vector2(center.x + 18, y + 6), Color(tint, 0.9), 2.0)
+				var y := center.y - 7.0 + float(i) * 7.0
+				MathArt.px_line(self, Vector2(center.x - 11, y + 4), Vector2(center.x, y - 3), tint, 1.0)
+				MathArt.px_line(self, Vector2(center.x, y - 3), Vector2(center.x + 11, y + 4), tint, 1.0)
 		"ghost":
-			MathArt.draw_ring(self, center, radius, Color(tint, 0.8), 1.4)
-			MathArt.draw_ring(self, center, radius * 0.62, Color(tint, 0.35), 1.0)
+			MathArt.px_ring(self, center, radius, tint, 1.0)
+			MathArt.px_ring(self, center, radius * MathArt.INV_PHI, Color(tint, 0.5), 1.0)
 			for i in 6:
-				var angle := _t * 0.8 + TAU * float(i) / 6.0
-				draw_circle(center + Vector2.from_angle(angle) * radius * 0.82, 2.0, Color(tint, 0.9))
+				var angle := _t * 0.9 + TAU * float(i) / 6.0
+				var point := center + Vector2.from_angle(angle) * radius * 0.82
+				MathArt.px_rect(self, Rect2(roundf(point.x), roundf(point.y), 1, 1), tint)
 		"armory":
-			MathArt.draw_poly(self, MathArt.ngon(4, radius, PI * 0.25, center),
-				Color(tint, 0.16), tint, 1.5)
-			draw_line(center + Vector2(-radius * 0.7, 0), center + Vector2(radius * 0.7, 0), Color(tint, 0.55), 1.0)
+			MathArt.px_poly(self, MathArt.ngon(4, radius * 0.8, PI * 0.25, center), Color(tint, 0.20), tint, 1.0)
+			MathArt.px_line(self, center + Vector2(-radius * 0.6, 0), center + Vector2(radius * 0.6, 0), Color(tint, 0.7), 1.0)
 		"leech":
-			MathArt.draw_spiral(self, center, radius, 2.2, Color(tint, 0.9), 1.5, 48, _t * 0.3)
+			var spiral := MathArt.spiral(radius, 1.8, 26, _t * 0.4)
+			for point in spiral:
+				MathArt.px_rect(self, Rect2(roundf(center.x + point.x), roundf(center.y + point.y), 1, 1), tint)
 		"hunter":
-			MathArt.draw_poly(self, MathArt.star(5, radius, radius * 0.42, -PI * 0.5, center),
-				Color(tint, 0.16), tint, 1.4)
+			MathArt.px_poly(self, MathArt.star(5, radius, radius * 0.42, -PI * 0.5, center), Color(tint, 0.20), tint, 1.0)
 		_:
-			MathArt.draw_sigil(self, center, radius, 6, _t * 0.2, tint)
+			MathArt.px_poly(self, MathArt.ngon(6, radius, _t * 0.2, center), Color(0, 0, 0, 0), tint, 1.0)

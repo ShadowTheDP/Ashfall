@@ -150,8 +150,12 @@ func perfect_dodge() -> void:
 	perfect_dodges += 1
 	if player != null:
 		player.refund_knife()
-		Combat.burst(player.global_position + Vector2(0, -10), Color("#8fe3ff"), 16, 230.0)
+		var at := player.global_position + Vector2(0, -8)
+		Combat.dodge_burst(at)
+		Combat.burst(at, MathArt.CYAN, 10, 190.0)
 	Combat.shake(0.14)
+	# A 2-frame freeze sells the read without a screen flash.
+	Combat.hitstop(0.033)
 	Sfx.play("dodge", -5)
 	announce("PERFECT DODGE", 0.6)
 

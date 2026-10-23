@@ -17,6 +17,7 @@ var state: EState = EState.IDLE
 var state_t := 0.0
 var facing := -1
 var flash := 0.0
+var impact := 0.0
 var attack_cd := 0.0
 var hitbox: Hitbox
 var visual: EnemyVisual
@@ -87,6 +88,7 @@ func _physics_process(delta: float) -> void:
 
 	state_t += delta
 	flash = maxf(0.0, flash - delta)
+	impact = maxf(0.0, impact - delta)
 	attack_cd = maxf(0.0, attack_cd - delta)
 	_spawn_t = maxf(0.0, _spawn_t - delta)
 
@@ -323,7 +325,10 @@ func take_hit(info: Dictionary) -> void:
 		hp -= 1.0
 		flash = 0.06
 		Combat.block_number(global_position + Vector2(0, -54))
-		Combat.spark(global_position + Vector2(facing * 18.0, -10.0), Vector2(facing, 0.0), false, Color("#8fe3ff"))
+		var shield_point := global_position + Vector2(float(facing) * 18.0, -10.0)
+		Combat.spark(shield_point, Vector2(float(facing), 0.0), false, MathArt.CYAN)
+		Combat.block_burst(shield_point, facing)
+		Combat.burst(shield_point, MathArt.CYAN, 5, 130.0)
 		Sfx.play("block", -8)
 		Combat.shake(0.06)
 		if hp <= 0.0:
@@ -331,6 +336,8 @@ func take_hit(info: Dictionary) -> void:
 		return
 
 	hp -= damage
+	# Impact frame: 2 frames of a pure white silhouette, then a fading outline.
+	impact = 0.034
 	flash = 0.10
 	if not bool(cfg.get("boss", false)):
 		state = EState.HURT
@@ -340,9 +347,12 @@ func take_hit(info: Dictionary) -> void:
 	var scale := float(cfg.get("knockback_scale", 1.0))
 	velocity = Vector2(dir * float(info.get("knockback", 180.0)) * scale, -20.0 if bool(cfg.get("boss", false)) else -90.0 * scale)
 
+	var contact: Vector2 = info.get("point", global_position + Vector2(0, -18))
+	var tint := Color(cfg.get("color", "#b23a48"))
 	Combat.hitstop(float(info.get("hitstop", 0.05)))
 	Combat.shake(0.34 if crit else 0.18)
-	Combat.spark(global_position + Vector2(0, -18), Vector2(dir, 0), crit, Color(cfg.get("color", "#b23a48")))
+	Combat.spark(contact, Vector2(dir, 0), crit, tint)
+	Combat.burst(contact, tint, 6 if crit else 4, 150.0)
 	Combat.damage_number(global_position + Vector2(0, -50), int(damage), crit)
 	Game.combo_hit()
 	Sfx.play("crit" if crit else "hit", -7)

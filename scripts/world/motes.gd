@@ -1,28 +1,25 @@
 class_name Motes
 extends Node2D
-## Ambient dust placed by a phyllotaxis spiral. Motion is a slow harmonic
-## drift, so the field never repeats visibly.
+## Ambient pixel dust placed by a phyllotaxis spiral, drifting on a harmonic.
 
 var _motes: Array[Dictionary] = []
 
 
 func _ready() -> void:
 	z_index = -6
-	var center := Vector2(720, -160)
-	for i in 90:
-		var radius := 520.0 * sqrt(randf())
-		var angle := float(i) * MathArt.GOLDEN_ANGLE + randf() * 0.35
+	var center := Vector2(720, -140)
+	for i in 70:
+		var radius := 500.0 * sqrt(randf())
+		var angle := float(i) * MathArt.GOLDEN_ANGLE + randf() * 0.4
 		var position := center + Vector2.from_angle(angle) * radius
-		position.x = clampf(position.x, -150.0, 1600.0)
-		position.y = clampf(position.y, -470.0, 70.0)
+		position.x = clampf(position.x, -140.0, 1580.0)
+		position.y = clampf(position.y, -440.0, 60.0)
 		_motes.append({
 			"pos": position,
-			"vel": Vector2(randf_range(-6.0, 6.0), randf_range(-16.0, -4.0)),
-			"radius": randf_range(0.7, 2.2),
-			"alpha": randf_range(0.08, 0.34),
+			"vel": Vector2(randf_range(-5.0, 5.0), randf_range(-14.0, -4.0)),
+			"alpha": randf_range(0.10, 0.40),
 			"phase": randf() * TAU,
-			"shape": i % 3,
-			"color": Color("#8fe3ff") if i % 5 != 0 else Color("#e8a33d"),
+			"color": MathArt.CYAN if i % 5 != 0 else MathArt.AMBER,
 		})
 
 
@@ -30,15 +27,15 @@ func _process(delta: float) -> void:
 	for mote in _motes:
 		var position: Vector2 = mote["pos"]
 		var velocity: Vector2 = mote["vel"]
-		mote["phase"] = float(mote["phase"]) + delta * 0.7
+		mote["phase"] = float(mote["phase"]) + delta * 0.8
 		position += Vector2(velocity.x + sin(float(mote["phase"])) * 4.0, velocity.y) * delta
-		if position.y < -470.0:
-			position.y = 90.0
-			position.x = randf_range(-150.0, 1600.0)
-		if position.x < -160.0:
-			position.x = 1610.0
-		elif position.x > 1610.0:
-			position.x = -160.0
+		if position.y < -450.0:
+			position.y = 80.0
+			position.x = randf_range(-140.0, 1580.0)
+		if position.x < -150.0:
+			position.x = 1590.0
+		elif position.x > 1590.0:
+			position.x = -150.0
 		mote["pos"] = position
 	queue_redraw()
 
@@ -47,16 +44,6 @@ func _draw() -> void:
 	var time := Time.get_ticks_msec() / 1000.0
 	for mote in _motes:
 		var tint: Color = mote["color"]
-		var pulse := 0.6 + 0.4 * sin(time * 1.7 + float(mote["phase"]))
-		tint.a = float(mote["alpha"]) * pulse
+		tint.a = float(mote["alpha"]) * (0.55 + 0.45 * sin(time * 1.6 + float(mote["phase"])))
 		var position: Vector2 = mote["pos"]
-		var radius: float = mote["radius"]
-		match int(mote["shape"]):
-			0:
-				draw_circle(position, radius, tint)
-			1:
-				MathArt.draw_poly(self, MathArt.ngon(4, radius * 1.4, float(mote["phase"]), position),
-					Color(tint, tint.a * 0.8))
-			_:
-				MathArt.draw_poly(self, MathArt.ngon(3, radius * 1.5, -float(mote["phase"]), position),
-					Color(tint, tint.a * 0.7))
+		MathArt.px_rect(self, Rect2(roundf(position.x), roundf(position.y), 1, 1), tint)

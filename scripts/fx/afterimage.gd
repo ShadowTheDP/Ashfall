@@ -1,11 +1,11 @@
 class_name Afterimage
 extends Node2D
-## Fading geometric echo used during rolls.
+## Pixel ghost of the player's diamond, used during rolls and dodges.
 
 var _t := 0.0
-var _life := 0.22
+var _life := 0.2
 var _facing := 1
-var _color := Color("#6fb8e8")
+var _color := MathArt.CYAN
 
 
 func setup(is_facing: int, tint: Color) -> void:
@@ -24,8 +24,9 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
-	var a := (1.0 - _t / _life) * 0.28
-	var body := MathArt.ngon(6, 14.0, _t * 2.0, Vector2(0, -10))
-	MathArt.draw_poly(self, body, Color(_color, a), Color(_color, a * 1.4), 1.0)
-	draw_circle(Vector2(2, -23), 6.0, Color(_color, a * 1.2))
-	MathArt.draw_poly(self, MathArt.ngon(3, 4.0, _t * 3.0, Vector2(0, 6)), Color(_color, a * 0.6))
+	var a := (1.0 - _t / _life) * 0.30
+	var diamond := PackedVector2Array([
+		Vector2(0, -13), Vector2(9, -2), Vector2(0, 11), Vector2(-9, -2),
+	])
+	MathArt.px_poly(self, diamond, Color(_color, a * 0.7), Color(_color, a), 1.0)
+	MathArt.px_rect(self, Rect2(-1, -4, 2, 2), Color(_color, a * 1.4))

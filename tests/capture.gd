@@ -24,7 +24,7 @@ func _ready() -> void:
 	Game.wave_total = 4
 	Game.announce_t = 0.0
 
-	var dummy := _spawn_enemy("grunt", Vector2(72.0, 0.0), 999.0)
+	var dummy := _spawn_enemy("grunt", Vector2(64.0, 0.0), 999.0)
 	await get_tree().create_timer(0.5).timeout
 	await _shot("01_idle")
 	_report("idle")
@@ -76,7 +76,7 @@ func _ready() -> void:
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		enemy.queue_free()
 	await get_tree().create_timer(0.15).timeout
-	_spawn_enemy("grunt", Vector2(330.0, -10.0), 999.0)
+	_spawn_enemy("grunt", Vector2(250.0, -10.0), 999.0)
 	await get_tree().create_timer(0.2).timeout
 	Input.action_press("throw")
 	await get_tree().create_timer(0.03).timeout
@@ -93,11 +93,11 @@ func _ready() -> void:
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		enemy.queue_free()
 	await get_tree().create_timer(0.2).timeout
-	_spawn_enemy("grunt", Vector2(90.0, -10.0))
-	_spawn_enemy("archer", Vector2(210.0, -150.0))
-	_spawn_enemy("charger", Vector2(-170.0, -10.0))
-	_spawn_enemy("bulwark", Vector2(-300.0, -10.0))
-	_spawn_enemy("warden", Vector2(360.0, -30.0))
+	_spawn_enemy("grunt", Vector2(78.0, -10.0))
+	_spawn_enemy("archer", Vector2(150.0, -110.0))
+	_spawn_enemy("charger", Vector2(-120.0, -10.0))
+	_spawn_enemy("bulwark", Vector2(-215.0, -10.0))
+	_spawn_enemy("warden", Vector2(240.0, -20.0))
 	await get_tree().create_timer(0.45).timeout
 	await _shot("10_bestiary")
 	_report("bestiary")

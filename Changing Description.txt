@@ -66,3 +66,37 @@ After each meaningful completed task, append:
   - `title_capture.tscn`: title pauses, ENTER resumes and spawns the player.
   - `capture_scene.tscn`: 13 screenshots verified visually.
 - Ready to push: yes.
+
+2026-10-23 11:40
+- Summary: Milestone 2 - full pixel-art conversion plus action-game animation
+  grammar. Logical resolution is now 640x360 with integer x2 upscaling, nearest
+  filtering, camera zoom 1.0 with rounded position and no rotation. Every
+  drawing call goes through new `MathArt.px_*` rasterisers (px_rect,
+  px_circle, px_ring, px_arc, px_line, px_poly); all anti-aliased helpers were
+  deleted. Characters are now pure geometric sigils (player = diamond + square
+  core + line blade; enemies = triangle/square/hexagon/pentagon/circle) with
+  particle trails doing the motion work. Combat animation now follows
+  anticipation -> smear -> impact -> follow-through -> secondary motion.
+- Subagent audits (three parallel `pi -p` scouts) produced
+  `output/agent-reports/{scout-animation,scout-animation-spec,scout-pixel-qa}.md`
+  and drove the fix list below.
+- Key files changed: `project.godot` (640x360, viewport stretch, integer
+  scale, nearest filter), `scripts/systems/math_art.gd` (palette + px_*
+  rasterisers, AA helpers removed), `scripts/player/player_visual.gd`
+  (diamond sigil, anticipation coil, solid smear wedge, overshoot, secondary
+  lag, i-frame cue), `scripts/player/player_camera.gd` (no rotation, rounded
+  position), `scripts/enemies/enemy_visual.gd` (pixel polygons, impact
+  silhouette, hit outline), `scripts/enemies/enemy.gd` (impact timer, contact
+  point bursts), `scripts/fx/*` (pixel particles, impact-frame spark, smear
+  arc, burst_fx for dodge/block/hurt), `scripts/combat/function_wave.gd` (1px
+  column wave), `scripts/world/*` (pixel arena, braziers, runes, motes),
+  `scripts/ui/*` (640x360 HUD, title, reward cards), `shaders/*` (dithered
+  vignette, tight nearest bloom, subtler background), docs.
+- Verification notes:
+  - `run_tests.gd`: 111 checks pass.
+  - `combat_probe.tscn`: PROBE OK.
+  - `reward_probe.tscn`: REWARD OK.
+  - `soak.tscn`: SOAK OK (4 waves incl. Warden, bulwark rules, boons).
+  - `title_capture.tscn`: TITLE OK.
+  - `capture_scene.tscn`: 13 screenshots at 640x360, visually inspected.
+- Ready to push: yes.
