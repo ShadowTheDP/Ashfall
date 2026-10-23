@@ -9,6 +9,8 @@ extends Node2D
 ##   Bulwark 6  hexagon    slow, always presents a flat face
 ##   Warden  5  pentagon   ritual pacing, fixed rhythm
 ##   Watcher 0  circle     keeps distance, orbits
+##   Spitter 7  star       slow, lobs a glob that pools where it lands
+##   Leaper  3  thin triangle  hops decks, slams on the player's x
 
 const OUTLINE := MathArt.BLACK
 
@@ -62,6 +64,10 @@ func _draw() -> void:
 			_draw_bulwark(flash)
 		"warden":
 			_draw_warden(flash)
+		"spitter":
+			_draw_spitter(flash)
+		"leaper":
+			_draw_leaper(flash)
 		_:
 			_draw_husk(flash)
 
@@ -90,6 +96,10 @@ func _sides() -> int:
 			return 5
 		"archer":
 			return 0
+		"spitter":
+			return 7
+		"leaper":
+			return 3
 		_:
 			return 3
 
@@ -186,6 +196,51 @@ func _draw_ram(flash: bool) -> void:
 		_c(MathArt.WHITE, flash, 0.9), 2.0)
 	MathArt.line(self, Vector2(r * 0.6, -r * 0.9), Vector2(r * 0.6 + horn * 0.4, -r * 0.9 - horn),
 		_c(MathArt.WHITE, flash, 0.9), 2.0)
+
+
+## Seven points, slowly counter-rotating: the only body whose silhouette is
+## concave, so it reads as "not a melee threat" at a glance. The glob gathers
+## as a swelling dot on the leading point.
+func _draw_spitter(flash: bool) -> void:
+	var r := _radius()
+	var spin := -_t * 0.45
+	MathArt.px_poly(self, MathArt.star(7, r * 1.10, r * 0.74, -PI * 0.5 + spin, Vector2(0, -2)),
+		_c(_body_fill(), flash), Color(OUTLINE, 0.9), 2.0)
+	MathArt.px_poly(self, MathArt.ngon(7, r * 0.46, -PI * 0.5 + spin, Vector2(0, -2)),
+		_c(MathArt.STONE, flash, 0.92))
+	var pull := 0.0
+	if e.state == Enemy.EState.WINDUP:
+		pull = clampf(e.state_t / maxf(0.001, float(e.cfg.get("windup", 0.6))), 0.0, 1.0)
+	var hand := Vector2(r * 1.05, -6).rotated(spin * 0.5)
+	MathArt.disc(self, hand, lerpf(2.6, 5.2, pull), _c(MathArt.WHITE, flash))
+	MathArt.ring(self, hand, 6.0 + 8.0 * pull, _c(MathArt.PALE, flash, 0.20 + 0.5 * pull), 1.0)
+	# Three beads on a contracting triangle: the glob's mass gathering.
+	for i in 3:
+		var a := TAU * float(i) / 3.0 + _t * 1.4
+		var radius := lerpf(r * 0.85, r * 0.35, pull)
+		MathArt.disc(self, Vector2(cos(a) * radius, -2.0 + sin(a) * radius), 1.5,
+			_c(MathArt.PALE, flash, 0.55))
+
+
+## Thin is the whole read: a tall narrow triangle, narrower than every other
+## body, so "it can leave the ground" is visible before it moves.
+func _draw_leaper(flash: bool) -> void:
+	var r := _radius()
+	var h := float(e.cfg.get("body_height", 40.0)) * 0.5
+	MathArt.px_poly(self, PackedVector2Array([
+		Vector2(0, -h), Vector2(r * 0.92, h * 0.80), Vector2(-r * 0.92, h * 0.80),
+	]), _c(_body_fill(), flash), Color(OUTLINE, 0.9), 2.0)
+	MathArt.px_poly(self, PackedVector2Array([
+		Vector2(0, -h * 0.44), Vector2(r * 0.32, h * 0.28), Vector2(-r * 0.32, h * 0.28),
+	]), _c(MathArt.STONE, flash, 0.92))
+	# A coil under the body: two arcs that tighten through the windup.
+	var coil := 0.0
+	if e.state == Enemy.EState.WINDUP:
+		coil = clampf(e.state_t / maxf(0.001, float(e.cfg.get("windup", 0.5))), 0.0, 1.0)
+	for i in 2:
+		MathArt.arc(self, Vector2(0, h * (0.55 + 0.25 * float(i))), r * (1.1 + 0.5 * float(i)) - 3.0 * coil,
+			PI * 0.15, PI * 0.85, _c(MathArt.WHITE, flash, (0.22 + 0.45 * coil) - 0.10 * float(i)), 2.0)
+	MathArt.disc(self, Vector2(0, -h * 0.62), 2.2, _c(MathArt.WHITE, flash, 0.9))
 
 
 func _draw_bulwark(flash: bool) -> void:
@@ -299,6 +354,10 @@ func _draw_telegraph() -> void:
 	elif e.kind == "archer":
 		MathArt.ring(self, Vector2(0, -2), _radius() + 8.0 + 6.0 * progress, tint, 2.0)
 		_draw_arrow_prediction()
+	elif e.kind == "spitter":
+		_draw_glob_prediction(progress)
+	elif e.kind == "leaper":
+		_draw_hop_prediction(progress)
 	elif e.kind == "bulwark":
 		MathArt.arc(self, Vector2(6, -2), 24.0, -1.1, 1.1, tint, 3.0)
 	else:
@@ -319,6 +378,58 @@ func _draw_arrow_prediction() -> void:
 		local.x *= float(e.facing)
 		if i % 2 == 0:
 			MathArt.px_rect(self, Rect2(local.x - 1.0, local.y - 1.0, 2.0, 2.0), Color(MathArt.WHITE, 0.35))
+
+
+## The glob's real arc plus the pool it will leave. Fair play: the ring is where
+## standing still gets you punished, so it has to be drawn before the throw.
+func _draw_glob_prediction(progress: float) -> void:
+	var player := Game.player
+	if player == null:
+		return
+	var origin := e.global_position + Vector2(float(e.facing) * _radius(), -12.0)
+	var target := player.global_position + Vector2(0, -10)
+	var velocity := MathArt.ballistic_velocity(origin, target, float(e.cfg.get("projectile_speed", 250.0)), 700.0)
+	for i in 20:
+		var time := 0.85 * float(i) / 19.0
+		var world := origin + velocity * time + Vector2(0.0, 0.5 * 700.0 * time * time)
+		var local := to_local(world)
+		local.x *= float(e.facing)
+		if i % 2 == 0:
+			MathArt.px_rect(self, Rect2(local.x - 1.0, local.y - 1.0, 2.0, 2.0), Color(MathArt.WHITE, 0.30))
+	# Landing point: solve the arc against the player's feet, in world space.
+	var feet := player.global_position.y + 22.0
+	var a := 0.5 * 700.0
+	var disc := velocity.y * velocity.y - 4.0 * a * (origin.y - feet)
+	if disc < 0.0:
+		return
+	var t_land := (-velocity.y + sqrt(disc)) / (2.0 * a)
+	var land := origin + velocity * t_land + Vector2(0.0, 0.5 * 700.0 * t_land * t_land)
+	var centre := to_local(land)
+	centre.x *= float(e.facing)
+	var radius := float(e.cfg.get("pool_radius", 30.0))
+	var ring := MathArt.star(7, radius, radius * 0.82, _t * 0.6)
+	for i in ring.size():
+		ring[i] = Vector2(ring[i].x, ring[i].y * 0.34) + centre
+	MathArt.px_poly(self, ring, Color(0, 0, 0, 0), Color(MathArt.WHITE, 0.22 + 0.35 * progress), 2.0)
+
+
+## The hop lands on the player's x, so the telegraph is a vertical guide to
+## that column plus the slam footprint. Nothing about it is hidden.
+func _draw_hop_prediction(progress: float) -> void:
+	var player := Game.player
+	var lift := e._hop_lift_for(player)
+	var apex := lift * lift / (2.0 * Enemy.GRAVITY)
+	if player != null:
+		var dx := (player.global_position.x - e.global_position.x) * float(e.facing)
+		var feet := player.global_position.y - e.global_position.y
+		MathArt.line(self, Vector2(dx, feet - apex), Vector2(dx, feet), Color(MathArt.WHITE, 0.16 + 0.22 * progress), 1.0)
+		var footprint := MathArt.ngon(12, 26.0 + 10.0 * progress, 0.0, Vector2(dx, feet))
+		for i in footprint.size():
+			footprint[i].y = feet + (footprint[i].y - feet) * 0.30
+		MathArt.px_poly(self, footprint, Color(0, 0, 0, 0), Color(MathArt.WHITE, 0.24 + 0.40 * progress), 2.0)
+	# The coil also reads as "about to leave the ground".
+	MathArt.arc(self, Vector2(0, 14), 16.0 + 10.0 * progress, PI * 0.1, PI * 0.9,
+		Color(MathArt.WHITE, 0.25 + 0.45 * progress), 2.0)
 
 
 func _draw_hit_outline(half_h: float) -> void:

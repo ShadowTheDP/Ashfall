@@ -8,6 +8,60 @@ signal died(enemy: Enemy)
 enum EState { IDLE, CHASE, WINDUP, ATTACK, RECOVER, HURT, DEAD }
 
 const GRAVITY := 1750.0
+## Bodies closer than this (plus both radii) push each other apart, so five
+## husks cannot stack into one silhouette in a corner.
+const SEPARATION := 6.0
+## Deadband for turning around. Without it `facing` flips every frame whenever
+## the player stands at the enemy's own x, the acceleration cancels itself, and
+## the body vibrates in place for the whole floor - on a deck that reads as an
+## enemy that never comes down.
+const TURN_DEADBAND := 6.0
+## One horizontal acceleration for every chase, in px/s^2.
+const ACCEL := 900.0
+
+
+## The spitter's glob leaves this behind: a short-lived damaging pool. A plain
+## distance check instead of an Area2D, because the pool must outlive the
+## spitter that made it.
+class GlobPool extends Node2D:
+	var radius := 30.0
+	var damage := 6.0
+	var life := 2.4
+	var source: Node2D = null
+	var _t := 0.0
+	var _tick := 0.0
+
+	func _physics_process(delta: float) -> void:
+		_t += delta
+		_tick -= delta
+		queue_redraw()
+		if _t >= life:
+			queue_free()
+			return
+		var player := Game.player
+		if player == null or _tick > 0.0:
+			return
+		if player.global_position.distance_to(global_position) < radius:
+			_tick = 0.45
+			player.take_hit({
+				"damage": damage,
+				"source_pos": source.global_position if is_instance_valid(source) else global_position,
+			})
+
+	func _draw() -> void:
+		# A flattened 7-point star: the spitter's own geometry, pooled on the
+		# floor. Dark fill, bright edge, five phyllotaxis bubbles.
+		var fade := clampf((life - _t) / 0.5, 0.0, 1.0)
+		var pulse := 0.5 + 0.5 * sin(_t * 11.0)
+		var ring := MathArt.star(7, radius, radius * 0.82, _t * 0.6)
+		for i in ring.size():
+			ring[i].y *= 0.34
+		MathArt.px_poly(self, ring, Color(MathArt.INK, 0.62 * fade),
+			Color(MathArt.WHITE, (0.30 + 0.35 * pulse) * fade), 2.0)
+		for i in 5:
+			var bubble := MathArt.phyllotaxis(i + 1, radius * 0.26)
+			MathArt.disc(self, Vector2(bubble.x, bubble.y * 0.34), 2.0,
+				Color(MathArt.PALE, (0.25 + 0.4 * pulse) * fade))
 
 var kind := "grunt"
 var cfg: Dictionary = {}
@@ -29,6 +83,12 @@ var _was_on_floor := true
 var _pending_attack := "cleave"
 var _pattern := 0
 var _slam_done := false
+var _slam_at := 0.0
+var _stuck := 0.0
+var _recover_cd := 0.0
+var _glob: Projectile = null
+var _glob_fired := false
+var _glob_at := Vector2.ZERO
 
 
 func configure(kind_id: String, config: Dictionary, hp_scale: float = 1.0) -> void:
@@ -46,6 +106,7 @@ func _ready() -> void:
 	_build_nodes()
 	state_t = 0.0
 	_spawn_t = randf_range(0.1, 0.4)
+	_deembed.call_deferred()
 	if bool(cfg.get("boss", false)):
 		z_index = 2
 		Game.boss = self
@@ -92,6 +153,8 @@ func _physics_process(delta: float) -> void:
 	impact = maxf(0.0, impact - delta)
 	attack_cd = maxf(0.0, attack_cd - delta)
 	_spawn_t = maxf(0.0, _spawn_t - delta)
+	_recover_cd = maxf(0.0, _recover_cd - delta)
+	_track_glob()
 
 	if is_on_floor():
 		velocity.y = 0.0
@@ -109,6 +172,21 @@ func _physics_process(delta: float) -> void:
 	if on_floor and not _was_on_floor and absf(velocity.y) > 120.0:
 		Juice.land_dust(get_parent(), global_position + Vector2(0, 22), 0.45)
 	_was_on_floor = on_floor
+
+	# A body pressed into a wall has to give up on that direction, or it stands
+	# in the corner for the rest of the floor. Reverse, then hop: a step deck or
+	# a low lip is cleared by the hop, a tall pillar is not, so this cannot
+	# launch a body into geometry it could not walk to.
+	if state == EState.CHASE and is_on_wall() and absf(velocity.x) < 20.0:
+		_stuck += delta
+	else:
+		_stuck = 0.0
+	if _stuck > 0.30 and _recover_cd <= 0.0:
+		_stuck = 0.0
+		_recover_cd = 0.9
+		facing = -facing
+		velocity.x = facing * float(cfg.get("speed", 80.0))
+		velocity.y = -340.0
 
 	match state:
 		EState.HURT:
@@ -131,13 +209,27 @@ func _tick_chase(player: Player, delta: float) -> void:
 		return
 	var delta_pos := player.global_position - global_position
 	var distance := delta_pos.length()
-	facing = 1 if delta_pos.x > 0.0 else -1
+	# Deadband: the player standing on the enemy's own x used to flip `facing`
+	# every frame, which cancelled the acceleration and left the body vibrating
+	# in place for the whole floor.
+	# A melee body whose target is a deck lower is not walking to the player's x,
+	# it is walking to the edge: widen the deadband to infinity so it commits to
+	# one direction and actually drops, instead of shuffling on the deck.
+	var deadband := TURN_DEADBAND
+	if delta_pos.y > 56.0 and not kind in ["archer", "spitter", "leaper"]:
+		deadband = 1.0e9
+	if absf(delta_pos.x) > deadband:
+		facing = 1 if delta_pos.x > 0.0 else -1
 	var speed := float(cfg.get("speed", 80.0))
 	var attack_range := float(cfg.get("attack_range", 60.0))
+	# A crowd must never pin a body in place: two enemies sharing a spot pushed
+	# each other with a force larger than their own speed, so neither moved and
+	# the fight stalled. The push is capped relative to speed.
+	var push := clampf(_separation(), -speed * 0.6, speed * 0.6)
 
 	match kind:
 		"warden":
-			if attack_cd <= 0.0 and _spawn_t <= 0.0:
+			if attack_cd <= 0.0:
 				if distance < 150.0:
 					_pending_attack = "cleave"
 				else:
@@ -145,27 +237,75 @@ func _tick_chase(player: Player, delta: float) -> void:
 					_pending_attack = "charge" if _pattern % 2 == 1 else "slam"
 				_enter_windup()
 				return
-			velocity.x = move_toward(velocity.x, facing * speed, 520.0 * delta)
-		"archer":
-			if attack_cd <= 0.0 and distance < attack_range and absf(delta_pos.y) < 180.0:
+			velocity.x = move_toward(velocity.x, _gate(facing, player) * speed + push, ACCEL * delta)
+		"archer", "spitter":
+			# No line of fire means no shot, and walking at the player is the only
+			# way an archer ever gets around the pillar it is hiding behind.
+			if not _clear_shot(player.global_position):
+				velocity.x = move_toward(velocity.x, _gate(facing, player) * speed + push, ACCEL * delta)
+				return
+			if attack_cd <= 0.0 and distance < attack_range and absf(delta_pos.y) < 200.0:
 				_enter_windup()
 				return
+			var hold := 0.0
 			if distance < 170.0:
-				velocity.x = move_toward(velocity.x, -facing * speed, 900.0 * delta)
+				hold = -facing * speed
 			elif distance > 360.0:
-				velocity.x = move_toward(velocity.x, facing * speed, 900.0 * delta)
-			else:
-				velocity.x = move_toward(velocity.x, 0.0, 1200.0 * delta)
+				hold = _gate(facing, player) * speed
+			velocity.x = move_toward(velocity.x, hold + push, 1200.0 * delta)
+		"leaper":
+			# The hop is the whole threat: it fires whenever the player is above
+			# it, which is exactly the high deck it punishes.
+			if attack_cd <= 0.0 and distance < attack_range and absf(delta_pos.y) < 280.0:
+				_enter_windup()
+				return
+			velocity.x = move_toward(velocity.x, _gate(facing, player) * speed + push, ACCEL * delta)
 		"charger":
 			if attack_cd <= 0.0 and distance < attack_range and absf(delta_pos.y) < 120.0:
 				_enter_windup()
 				return
-			velocity.x = move_toward(velocity.x, facing * speed, 700.0 * delta)
+			velocity.x = move_toward(velocity.x, _gate(facing, player) * speed + push, ACCEL * delta)
 		_:
 			if distance < attack_range and absf(delta_pos.y) < 56.0:
 				_enter_windup()
 				return
-			velocity.x = move_toward(velocity.x, facing * speed, 900.0 * delta)
+			velocity.x = move_toward(velocity.x, _gate(facing, player) * speed + push, ACCEL * delta)
+
+
+## The direction to actually move in: `dir` when the ground holds, 0 when the
+## body would walk off a deck it has no reason to leave.
+func _gate(dir: int, player: Player) -> int:
+	return dir if _may_walk(dir, player) else 0
+
+
+## True when there is solid ground within `reach` px ahead of `dir`.
+## Uses a short downward ray from just in front of the body.
+func _ground_ahead(dir: int, reach := 16.0) -> bool:
+	if not is_inside_tree():
+		return true
+	var from := global_position + Vector2(float(dir) * reach, -6.0)
+	var query := PhysicsRayQueryParameters2D.create(
+		from, from + Vector2(0.0, 40.0), Layers.WORLD | Layers.ONEWAY)
+	query.exclude = [get_rid()]
+	var hit := get_world_2d().direct_space_state.intersect_ray(query)
+	return not hit.is_empty()
+
+
+## A ground body must not walk off a deck unless dropping is the way to reach
+## the player. Returns true when it is safe to keep moving in `dir`.
+func _may_walk(dir: int, player: Player) -> bool:
+	if not is_on_floor():
+		return true
+	if _ground_ahead(dir):
+		return true
+	# No ground ahead. Step off only if the player is genuinely below: an enemy
+	# that drops to chase must not then walk off into the void on the flat.
+	# There is no height cap - enemies take no fall damage, and a cap stopped a
+	# body on a high deck from ever reaching a player on the bottom ledge.
+	if player == null:
+		return false
+	var below := player.global_position.y - global_position.y
+	return below > 24.0
 
 
 func _enter_windup() -> void:
@@ -178,6 +318,8 @@ func _enter_windup() -> void:
 		Sfx.play("swing", -18, 0.55)
 	elif kind == "warden":
 		Sfx.play("boss", -14, 0.9 if _pending_attack == "slam" else 1.0)
+	elif kind == "leaper":
+		Sfx.play("jump", -18, 0.7)
 	else:
 		Sfx.play("swing", -20, 1.35)
 
@@ -195,6 +337,13 @@ func _begin_attack() -> void:
 	if kind == "archer":
 		_shoot()
 		Sfx.play("shoot", -8)
+		return
+	if kind == "spitter":
+		_spit()
+		Sfx.play("throw", -9, 0.8)
+		return
+	if kind == "leaper":
+		_hop()
 		return
 	if kind == "warden":
 		match _pending_attack:
@@ -229,6 +378,31 @@ func _enable_hitbox(size: Vector2, offset_x: float, offset_y: float, damage: flo
 
 
 func _tick_attack(delta: float) -> void:
+	if kind == "leaper":
+		# The hitbox only opens on the frame the body lands: the arc above is the
+		# telegraph, so a slam that never lands never deals damage.
+		if not _slam_done and state_t > 0.06 and is_on_floor():
+			_slam_done = true
+			_slam_at = state_t
+			velocity.x = 0.0
+			# Centred and tall: the slam has to connect whether the body came
+			# down on the slab next to the player or on the player itself.
+			_enable_hitbox(Vector2(104.0, 76.0), 0.0, 6.0, float(cfg.get("damage", 12.0)))
+			Combat.shake(0.30)
+			Combat.dust(global_position + Vector2(0, 20), 12, Vector2(0, 1))
+			Juice.land_dust(get_parent(), global_position + Vector2(0, 22), 1.0)
+			Sfx.play("land", -8, 0.75)
+		# A hop spends ~0.9 s in the air, so the normal `active` window would
+		# expire before the body ever lands and the slam could not happen.
+		if _slam_done and state_t >= _slam_at + float(cfg.get("active", 0.12)):
+			hitbox.disable()
+			state = EState.RECOVER
+			state_t = 0.0
+		elif state_t > 2.5:
+			hitbox.disable()
+			state = EState.RECOVER
+			state_t = 0.0
+		return
 	if kind == "charger":
 		velocity.x = facing * float(cfg.get("lunge", 450.0))
 		if is_on_wall():
@@ -269,6 +443,179 @@ func _bow_offset() -> float:
 	return float(cfg.get("body_radius", 10.0)) + 4.0
 
 
+## A deliberate hop to the player's x. Flight time is fixed (2*v/g), so the
+## horizontal speed that lands on the player is dx / flight, clamped: the
+## leaper commits to a spot, it does not track mid-air.
+## Only as much lift as the player's deck needs: a fixed lift overshoots and
+## lands the body on a deck it was never aiming for.
+func _hop_lift_for(player: Player) -> float:
+	var rise := float(cfg.get("hop_rise", 260.0))
+	if player == null:
+		return sqrt(2.0 * GRAVITY * rise * 0.5)
+	var dy := (player.global_position.y - 22.0) - global_position.y
+	# The floor of this clamp is a REAL hop, not a nudge: at 24 the leaper rose
+	# 30 px when the player was level with it, which reads as a stumble rather
+	# than a pounce and never clears a deck edge.
+	return sqrt(2.0 * GRAVITY * clampf(-dy + 30.0, 74.0, rise))
+
+
+func _hop() -> void:
+	var player := Game.player
+	var lift := _hop_lift_for(player)
+	var dx := 0.0
+	var dy := 0.0
+	if player != null:
+		dx = player.global_position.x - global_position.x
+		dy = (player.global_position.y - 22.0) - global_position.y
+	# Later root of -lift*t + g*t^2/2 = dy: when the body falls back to the
+	# player's feet, it must be at the player's x.
+	var flight := (lift + sqrt(maxf(lift * lift + 2.0 * GRAVITY * dy, 1.0))) / GRAVITY
+	velocity.x = clampf(dx / maxf(flight, 0.2), -float(cfg.get("hop_speed", 420.0)),
+		float(cfg.get("hop_speed", 420.0)))
+	velocity.y = -lift
+	facing = 1 if velocity.x > 0.0 else -1
+	Juice.jump_burst(get_parent(), global_position + Vector2(0, 18))
+	Sfx.play("jump", -12, 0.85)
+
+
+func _spit() -> void:
+	var player := Game.player
+	if player == null:
+		return
+	var spawn := global_position + Vector2(facing * _bow_offset(), -12.0)
+	var target := player.global_position + Vector2(0, -10)
+	var velocity := MathArt.ballistic_velocity(spawn, target,
+		float(cfg.get("projectile_speed", 250.0)), 700.0)
+	var glob := Projectile.new()
+	glob.position = spawn
+	glob.setup_ballistic(velocity, float(cfg.get("damage", 8.0)), Color(cfg.get("color", "#b8bec8")), self)
+	var root := Game.fx_root
+	if is_instance_valid(root):
+		root.add_child(glob)
+		_glob = glob
+		_glob_fired = true
+		_glob_at = spawn
+	Combat.burst(spawn, MathArt.WHITE, 4, 80.0)
+
+
+## The glob is a shared Projectile, so its landing point is not reported: poll
+## it and drop the pool where it was last seen. shortcut: a glob that expires
+## in mid air would pool there; the floors all have a continuous bottom ledge,
+## so it always lands first.
+func _track_glob() -> void:
+	# A freed Object compares EQUAL to null in GDScript, so `if _glob == null`
+	# returned early on exactly the frame the glob died and the pool was never
+	# created. Track "did we fire" with a flag instead of the reference.
+	if not _glob_fired:
+		return
+	if is_instance_valid(_glob):
+		_glob_at = _glob.global_position
+		return
+	_glob = null
+	_glob_fired = false
+	_spawn_pool(_glob_at)
+
+
+func _spawn_pool(at: Vector2) -> void:
+	var root := Game.fx_root
+	if not is_instance_valid(root):
+		return
+	var pool := GlobPool.new()
+	pool.name = "GlobPool"
+	pool.position = at
+	pool.radius = float(cfg.get("pool_radius", 30.0))
+	pool.damage = float(cfg.get("pool_damage", 6.0))
+	pool.life = float(cfg.get("pool_time", 2.4))
+	pool.source = self
+	root.add_child(pool)
+	Juice.shatter(root, at, MathArt.PALE_DIM, 6)
+	Sfx.play("land", -14, 1.4)
+
+
+## Anything solid between the eye and the target cancels the shot.
+func _clear_shot(target: Vector2) -> bool:
+	if not is_inside_tree():
+		return true
+	var space := get_world_2d().direct_space_state
+	var query := PhysicsRayQueryParameters2D.create(
+		global_position + Vector2(0.0, -10.0), target + Vector2(0.0, -14.0), Layers.WORLD)
+	return space.intersect_ray(query).is_empty()
+
+
+## Soft body separation. Physics cannot do it: enemies do not collide with each
+## other, and 13 bodies that all want the player's exact x would stack.
+func _separation() -> float:
+	var push := 0.0
+	for other in get_tree().get_nodes_in_group("enemies"):
+		if other == self or not is_instance_valid(other):
+			continue
+		var delta_pos: Vector2 = global_position - (other as Node2D).global_position
+		if absf(delta_pos.y) > 30.0:
+			continue
+		var reach := float(cfg.get("body_radius", 12.0)) + float(other.cfg.get("body_radius", 12.0)) + SEPARATION
+		if absf(delta_pos.x) >= reach:
+			continue
+		var dir := signf(delta_pos.x)
+		if dir == 0.0:
+			dir = 1.0 if get_instance_id() > other.get_instance_id() else -1.0
+		push += dir * (reach - absf(delta_pos.x)) * 4.0
+	return clampf(push, -180.0, 180.0)
+
+
+## level.gd's last-resort spawn point is the room centre, which is exactly where
+## a "well" room stands its wall. Lift the body out of solid stone before the
+## first physics step, or it never leaves it. One-way decks are ignored on
+## purpose: a body under a deck is legal, it just jumps up through it.
+func _deembed() -> void:
+	if not is_inside_tree() or _dead:
+		return
+	var space := get_world_2d().direct_space_state
+	var offsets: Array = []
+	for step in 14:
+		offsets.append(Vector2(0.0, -8.0 * float(step)))
+	for side in [1.0, -1.0]:
+		for step in 4:
+			offsets.append(Vector2(side * (14.0 + 12.0 * float(step)), 0.0))
+	for offset in offsets:
+		if not _buried(space, global_position + offset):
+			global_position += offset
+			return
+
+
+func _buried(space: PhysicsDirectSpaceState2D, at: Vector2) -> bool:
+	var params := PhysicsShapeQueryParameters2D.new()
+	var capsule := CapsuleShape2D.new()
+	capsule.radius = float(cfg.get("body_radius", 12.0))
+	capsule.height = float(cfg.get("body_height", 42.0))
+	params.shape = capsule
+	params.transform = Transform2D(0.0, at)
+	params.collision_mask = Layers.WORLD
+	params.collide_with_bodies = true
+	return not space.intersect_shape(params, 1).is_empty()
+
+
+## Cells were dropped at the death point and sank through the slab into stone,
+## 300 px under a player who was standing right on top of them. Settle the drop
+## onto the first surface below instead. Deferred because a ray query is not
+## legal while the physics space is flushing (death happens in a signal).
+func _settle_pickup(pickup: CellPickup) -> void:
+	if not is_instance_valid(pickup) or not is_inside_tree():
+		return
+	var space := get_world_2d().direct_space_state
+	for lift in [48.0, 150.0, 300.0]:
+		var from := global_position + Vector2(0.0, -lift)
+		var query := PhysicsRayQueryParameters2D.create(from, from + Vector2(0.0, lift + 260.0),
+			Layers.WORLD | Layers.ONEWAY)
+		var hit := space.intersect_ray(query)
+		if hit.is_empty():
+			continue
+		var point: Vector2 = hit["position"]
+		if point.distance_to(from) < 4.0:
+			continue
+		pickup.global_position = point + Vector2(0.0, -12.0)
+		return
+
+
 func _spawn_shockwaves() -> void:
 	Combat.shake(0.5)
 	Sfx.play("slam", -7, 0.85)
@@ -289,7 +636,9 @@ func _spawn_shockwaves() -> void:
 
 
 func _tick_recover() -> void:
-	velocity.x = move_toward(velocity.x, 0.0, 1000.0 * get_physics_process_delta_time())
+	# Recovery drifts onto the separation push instead of onto zero: a body that
+	# has just attacked is the one the others were queued behind.
+	velocity.x = move_toward(velocity.x, _separation(), 1000.0 * get_physics_process_delta_time())
 	if state_t >= float(cfg.get("recovery", 0.45)):
 		state = EState.CHASE
 		state_t = 0.0
@@ -399,6 +748,10 @@ func _die() -> void:
 	match kind:
 		"archer":
 			sides = 8
+		"spitter":
+			sides = 7
+		"leaper":
+			sides = 3
 		"charger":
 			sides = 4
 		"bulwark":
@@ -432,6 +785,7 @@ func _die() -> void:
 		# Death can happen inside a physics signal flush; defer the add so the
 		# pickup's Area2D setup is legal.
 		root.call_deferred("add_child", pickup)
+		_settle_pickup.call_deferred(pickup)
 
 	if Game.boss == self:
 		Game.boss = null

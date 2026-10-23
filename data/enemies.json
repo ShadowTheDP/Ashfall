@@ -32,7 +32,7 @@
     "color": "#b8bec8",
     "body_radius": 10.0,
     "body_height": 44.0,
-    "projectile_speed": 320.0
+    "projectile_speed": 620.0
   },
   "charger": {
     "name": "Ram",
@@ -69,6 +69,46 @@
     "body_height": 50.0,
     "shield": true,
     "knockback_scale": 0.55
+  },
+  "spitter": {
+    "name": "Spitter",
+    "hp": 38.0,
+    "speed": 62.0,
+    "damage": 8.0,
+    "attack_range": 420.0,
+    "windup": 0.62,
+    "active": 0.10,
+    "recovery": 0.50,
+    "lunge": 0.0,
+    "knockback": 180.0,
+    "cooldown": 1.7,
+    "cells": 1,
+    "color": "#b8bec8",
+    "body_radius": 13.0,
+    "body_height": 44.0,
+    "projectile_speed": 560.0,
+    "pool_damage": 6.0,
+    "pool_radius": 30.0,
+    "pool_time": 2.4
+  },
+  "leaper": {
+    "name": "Leaper",
+    "hp": 46.0,
+    "speed": 104.0,
+    "damage": 12.0,
+    "attack_range": 240.0,
+    "windup": 0.5,
+    "active": 0.12,
+    "recovery": 0.45,
+    "lunge": 0.0,
+    "knockback": 260.0,
+    "cooldown": 1.2,
+    "cells": 1,
+    "color": "#b8bec8",
+    "body_radius": 9.0,
+    "body_height": 40.0,
+    "hop_speed": 420.0,
+    "hop_rise": 260.0
   },
   "warden": {
     "name": "The Warden",

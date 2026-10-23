@@ -98,6 +98,14 @@ func _build_walls() -> void:
 
 
 func _build_player() -> void:
+	# A floor's projectiles are parented to the persistent world (Game.fx_root),
+	# not to the level, so freeing the level does not free them. One still in
+	# flight would keep flying in the hub and could hit the new player.
+	for node in get_parent().get_children():
+		if node is Projectile or node is FunctionWave:
+			node.set_physics_process(false)
+			node.monitoring = false
+			node.queue_free()
 	player = PLAYER_SCENE.instantiate() as Player
 	player.position = Vector2(110.0, -40.0)
 	add_child(player)
@@ -319,7 +327,9 @@ func _draw_door() -> void:
 	MathArt.px_rect(self, Rect2(DOOR_X - 3.0, -80.0, 6.0, 80.0), Color(MathArt.PALE, 0.08 + pulse * 0.16))
 
 	var font := ThemeDB.fallback_font
-	var top := clampi(floor_available + 1, 1, maxi(1, Data.floors.size()))
+	# The picker's ceiling is the unlocked top; the label quotes the whole game,
+	# so a new player reads "FLOOR 1 / 5" and not "FLOOR 1 / 1".
+	var top := maxi(1, Data.floors.size())
 	var floor_data: Dictionary = Data.floors.get(str(floor_target), {})
 	draw_string(font, Vector2(DOOR_X - 70.0, -120.0), "FLOOR %d / %d" % [floor_target, top],
 		HORIZONTAL_ALIGNMENT_CENTER, 140.0, 8, Color(tint, 0.75))
@@ -328,6 +338,6 @@ func _draw_door() -> void:
 	if bright:
 		draw_string(font, Vector2(DOOR_X - 20.0, 22.0), "[J]",
 			HORIZONTAL_ALIGNMENT_CENTER, 40.0, 9, Color(MathArt.WHITE, 0.55 + 0.45 * sin(_t * 4.0)))
-		if top > 1:
+		if floor_available > 0:
 			draw_string(font, Vector2(DOOR_X - 70.0, 36.0), "< A    D >",
 				HORIZONTAL_ALIGNMENT_CENTER, 140.0, 8, Color(MathArt.LIGHT, 0.6))

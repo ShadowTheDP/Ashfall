@@ -173,6 +173,11 @@ func _activate(row: Dictionary) -> void:
 	var kind := str(row["kind"])
 	if kind == "enemy":
 		return
+	# `unlock_floor` is content gating, not a price: a body from a deeper floor
+	# stays locked however many cells the player has banked.
+	if bool(row.get("lock", false)):
+		_fail(_index)
+		return
 	if kind == "upgrade":
 		if Profile.buy_upgrade(id):
 			Sfx.play("reward", -10)
@@ -215,13 +220,19 @@ func _rows() -> Array:
 			var bodies: Array = []
 			for id in Data.characters:
 				var cfg: Dictionary = Data.characters[id]
+				var gate := int(cfg.get("unlock_floor", 0))
+				var locked := gate > Profile.best_floor
 				bodies.append({
 					"id": id, "kind": "character", "name": str(cfg.get("name", id)),
 					"info": "HP %d   SPD %d   KNIVES %d   %s" % [
 						int(cfg.get("hp", 0.0)), int(cfg.get("speed", 0.0)),
 						int(cfg.get("knives", 0)), str(cfg.get("passive_text", ""))],
-					"right": _status("character", id, int(cfg.get("cost", 0)), Profile.selected_character),
-					"state": 2 if Profile.selected_character == id else (1 if Profile.is_unlocked("character", id) else 0),
+					"right": "FLOOR %d" % gate if locked else _status(
+						"character", id, int(cfg.get("cost", 0)), Profile.selected_character),
+					"lock": locked,
+					"state": 0 if locked else (
+						2 if Profile.selected_character == id else (
+							1 if Profile.is_unlocked("character", id) else 0)),
 				})
 			return bodies
 	return []
@@ -314,8 +325,10 @@ func _draw_row(font: Font, row: Dictionary, slot: int, selected: bool) -> void:
 	if row.has("level"):
 		_draw_level(rect, int(row["level"]), int(row["max"]))
 	else:
+		# A locked row ends its label before the padlock instead of under it.
+		var pad := 24.0 if bool(row.get("lock", false)) else 8.0
 		_canvas.draw_string(font, rect.position + Vector2(0.0, 15.0), str(row.get("right", "")),
-			HORIZONTAL_ALIGNMENT_RIGHT, rect.size.x - 8.0, 9, MathArt.STONE_HI if dim else MathArt.PALE)
+			HORIZONTAL_ALIGNMENT_RIGHT, rect.size.x - pad, 9, MathArt.STONE_HI if dim else MathArt.PALE)
 	if row.has("price"):
 		_canvas.draw_string(font, rect.position + Vector2(0.0, 30.0), str(row.get("price", "")),
 			HORIZONTAL_ALIGNMENT_RIGHT, rect.size.x - 8.0, 9, MathArt.LIGHT)

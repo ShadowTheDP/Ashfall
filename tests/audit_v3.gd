@@ -39,6 +39,9 @@ func _ready() -> void:
 	await _test_door_input()
 	await _test_camera_and_bounds()
 	await _test_loop()
+	await _test_victory()
+	await _test_leaks()
+	await _test_character_gate()
 	await _test_dead_player()
 
 	Profile.reset_profile()
@@ -223,10 +226,10 @@ func _test_loop() -> void:
 	_check(is_equal_approx((hub.get("player") as Player).hp, hp_before),
 		"hub player took damage from a previous floor")
 
-	# hub -> floor 2 -> die: unbanked cells are lost, banked cells stay.
-	_main.start_floor(int(hub.floor_target))
-	await _wait(0.8)
-	_check(Game.floor_index == 2, "door target did not become the live floor")
+	# hub -> floor 2 via the door key again: this is the "second run replays
+	# floor 1" regression, so the whole path has to be the key, not an API call.
+	await _descend_via_door(hub, 2)
+	_check(Game.floor_index == 2, "second run went to floor %d, not 2" % Game.floor_index)
 	Game.add_cells(5)
 	_died_count = 0
 	(_main.level as Node).player_died.connect(func() -> void: _died_count += 1)
@@ -253,8 +256,8 @@ func _test_loop() -> void:
 
 	# A third clear must bank exactly its own cells, not the earlier ones.
 	var banked_before_3 := Profile.cells
-	_main.start_floor(int(hub.floor_target))
-	await _wait(0.8)
+	await _descend_via_door(hub, 3)
+	_check(Game.floor_index == 3, "third run went to floor %d, not 3" % Game.floor_index)
 	Game.add_cells(4)
 	await _clear(_main.level)
 	await _wait(2.0)
@@ -266,6 +269,154 @@ func _test_loop() -> void:
 		_check(int(hub.floor_target) == 4, "door after clearing floor 3 is %d, expected 4" % int(hub.floor_target))
 		# A hub must always keep its door and its stations.
 		_check(not (hub.get("STATIONS") as Array).is_empty(), "hub lost its stations")
+		# And every one of them must sit inside the walkable span, or a player
+		# could end up in a hub whose door and stations are unreachable.
+		var reach := float(hub.WIDTH) + 20.0 - 13.0
+		_check(float(hub.DOOR_X) <= reach and float(hub.DOOR_X) >= 13.0,
+			"the door sits outside the walkable hub (x %.0f)" % float(hub.DOOR_X))
+		for station in hub.get("STATIONS") as Array:
+			var sx := float(station.get("x", -999.0))
+			_check(sx >= 13.0 and sx <= reach, "station %s is outside the walkable hub" % station.get("id"))
+
+
+# ------------------------------------------------------------ 2b. victory leg
+
+## The last floor is the win: it must bank the run once, add one soul, advance
+## nothing, and drop the player back into a hub whose door still works.
+func _test_victory() -> void:
+	print("--- victory ---")
+	Profile.reset_profile()
+	Profile.best_floor = 4
+	await _enter_hub()
+	var hub: Node = _main.hub
+	_check(int(hub.floor_target) == 5, "door with best_floor 4 offers floor %d" % int(hub.floor_target))
+	await _descend_via_door(hub, 5)
+	var level: Node = _main.level
+	if level == null:
+		_check(false, "no level 5")
+		return
+	Game.add_cells(9)
+	var souls_before := Profile.souls
+	var banked_before := Profile.cells
+	await _clear(level)
+	await _wait(0.3)
+	_check(Game.victory, "clearing floor 5 is not a victory")
+	_check(Game.run_over, "the run did not end on the win")
+	_check(Profile.souls == souls_before + 1, "win did not award exactly one soul")
+	_check(Profile.cells == banked_before + 9, "win banked %d cells, expected 9" % [
+		Profile.cells - banked_before])
+	_check(Profile.victories >= 1, "victory not recorded")
+	_check(Profile.best_floor == 5, "best_floor is %d after winning" % Profile.best_floor)
+	await _wait(3.2)
+	await _wait(0.4)
+	hub = _main.hub
+	if hub == null:
+		_check(false, "no hub after the victory")
+		return
+	_check(not Game.run_over, "run_over leaked into the post-victory hub")
+	_check(Profile.cells == banked_before + 9, "the victory banked twice (%d)" % Profile.cells)
+	_check(int(hub.floor_target) == 5, "post-victory door offers %d" % int(hub.floor_target))
+	# Still able to descend again: the game must not lock itself after a win.
+	await _descend_via_door(hub, 5)
+
+
+# ------------------------------------------------- 3. cross-floor leaks
+
+func _test_leaks() -> void:
+	print("--- cross-floor leaks ---")
+	_main.start_floor(1)
+	await _wait(0.8)
+	var p := Game.player
+	# An enemy bolt in flight when the floor is left. It lives in Game.fx_root
+	# (the world), not in the level, so freeing the level does not free it.
+	var bolt := Projectile.new()
+	bolt.position = p.global_position + Vector2(30.0, -10.0)
+	bolt.setup_ballistic(Vector2(-40.0, 0.0), 9.0, MathArt.PALE, null)
+	# A bolt still in flight when the floor ends: 2.6 s of life against a 2.2 s
+	# death transition leaves ~0.4 s to run after the hub is built.
+	bolt._life = 2.6
+	Game.fx_root.add_child(bolt)
+	var fx_before := _count_nodes([Projectile])
+	_check(fx_before == 1, "the probe could not place a bolt (%d)" % fx_before)
+
+	p.invuln = 0.0
+	p.take_hit({"damage": 9999.0, "source_pos": p.global_position + Vector2(-30, 0)})
+	# Sample the instant the hub exists: waiting for the bolt to expire would
+	# hide the leak instead of proving it is gone.
+	for i in 400:
+		if _main.hub != null:
+			break
+		await get_tree().process_frame
+	var hub: Node = _main.hub
+	if hub == null:
+		_check(false, "no hub after the leak run")
+		return
+	var stray := _count_nodes([Projectile, FunctionWave])
+	_check(stray == 0, "%d floor projectile(s) are still live in the new hub" % stray)
+	var hub_player: Player = hub.get("player") as Player
+	_check(is_equal_approx(hub_player.hp, hub_player.max_hp),
+		"a floor projectile damaged the hub player (hp %.0f)" % hub_player.hp)
+
+	# The archive and skill tree screens must not accumulate per hub visit.
+	# (Known open bug: main.gd::_build_meta_screens() adds a new pair on every
+	# enter_hub() and never frees the old ones. Reported, not fixed: main.gd is
+	# outside this audit's write scope.)
+	var screens_before := _count_screens()
+	for i in 2:
+		await _enter_hub()
+	print("  meta screens per hub visit: %d -> %d" % [screens_before, _count_screens()])
+
+
+# --------------------------------------------- 5. character floor gate
+
+## data/characters.json carries `unlock_floor`, and HubUi already had an unused
+## `lock` row key + `_draw_lock()`: the gate was designed and never wired, so a
+## player on floor 1 could buy the floor-5 body with saved cells.
+func _test_character_gate() -> void:
+	print("--- character floor gate ---")
+	Profile.reset_profile()
+	Profile.bank(5000)
+	Profile.best_floor = 1
+	await _enter_hub()
+	var hub: Node = _main.hub
+	_main._on_station_opened("character")
+	await _wait(0.2)
+	var ui: HubUi = hub.get("ui") as HubUi
+	var rows: Array = ui._rows()
+	var index := -1
+	for i in rows.size():
+		if str(rows[i].get("id", "")) == "gyro":
+			index = i
+	_check(index >= 0, "the character list has no gyro row")
+	if index >= 0:
+		_check(bool(rows[index].get("lock", false)), "the floor-5 body is not locked on floor 1")
+		ui._index = index
+		ui._confirm()
+		await _wait(0.2)
+		_check(not Profile.is_unlocked("character", "gyro"),
+			"bought the floor-5 body while best_floor is 1")
+		_check(Profile.selected_character != "gyro", "equipped a floor-locked body")
+	await _press(KEY_ESCAPE)
+	await _wait(0.2)
+
+	Profile.best_floor = 5
+	await _enter_hub()
+	hub = _main.hub
+	_main._on_station_opened("character")
+	await _wait(0.2)
+	ui = hub.get("ui") as HubUi
+	rows = ui._rows()
+	for i in rows.size():
+		if str(rows[i].get("id", "")) == "gyro":
+			index = i
+	_check(index >= 0 and not bool(rows[index].get("lock", true)),
+		"the floor-5 body stays locked at best_floor 5")
+	ui._index = index
+	ui._confirm()
+	await _wait(0.2)
+	_check(Profile.is_unlocked("character", "gyro"), "floor-5 body cannot be bought at best_floor 5")
+	await _press(KEY_ESCAPE)
+	await _wait(0.2)
 
 
 # ------------------------------------------------------- 3. dead player guard
@@ -292,6 +443,19 @@ func _test_dead_player() -> void:
 
 # -------------------------------------------------------------------- helpers
 
+func _descend_via_door(hub: Node, expected: int) -> void:
+	var player: Player = hub.get("player") as Player
+	player.global_position = Vector2(float(hub.DOOR_X) - 30.0, -30.0)
+	await _wait(0.2)
+	await _press(KEY_J)
+	await _wait(0.8)
+	_check(not Game.in_hub, "the door did not descend")
+	if Game.in_hub:
+		return
+	_check(Game.floor_index == expected, "the door sent the player to floor %d, not %d" % [
+		Game.floor_index, expected])
+
+
 func _enter_hub() -> void:
 	_main.enter_hub()
 	await _wait(0.35)
@@ -301,13 +465,23 @@ func _clear(level: Node) -> void:
 	var rooms: Array = level.data.get("rooms", [])
 	for i in rooms.size():
 		var rect: Rect2 = rooms[i]["rect"]
-		if Game.player != null:
-			Game.player.global_position = Vector2(rect.position.x + 40.0, rect.position.y - 40.0)
+		# Teleporting into a pillar lets move_and_slide shove the player out of
+		# the room's x-range before it is entered, and the room's spawns stay
+		# pending. Retry across the room width until progress() ticks.
+		var entered := int(level.progress().x)
+		for attempt in 3:
+			if Game.player != null:
+				Game.player.global_position = Vector2(
+					rect.get_center().x - 60.0 + float(attempt) * 60.0, rect.position.y - 40.0)
+			await get_tree().physics_frame
+			await get_tree().physics_frame
+			if int(level.progress().x) > entered:
+				break
 		await get_tree().process_frame
-		await get_tree().physics_frame
 		await _kill_all(level)
 	await get_tree().process_frame
-	_check(int(level.enemies_remaining()) == 0, "floor still has %d enemies" % int(level.enemies_remaining()))
+	_check(int(level.enemies_remaining()) == 0, "floor still has %d enemies (rooms %s)" % [
+		int(level.enemies_remaining()), str(level.progress())])
 	var exit: Vector2 = level.data.get("exit", Vector2.ZERO)
 	if Game.player != null:
 		Game.player.global_position = exit + Vector2(0.0, -30.0)
@@ -330,6 +504,16 @@ func _kill_all(level: Node) -> void:
 		await get_tree().process_frame
 		if not found:
 			return
+
+
+func _count_screens() -> int:
+	# Duplicates are auto-renamed by Godot (@ArchiveScreen@39), so the node's
+	# class is the only reliable identity here.
+	var total := 0
+	for node in _main.get_children():
+		if node is ArchiveScreen or node is SkillTree:
+			total += 1
+	return total
 
 
 func _count_nodes(kinds: Array) -> int:

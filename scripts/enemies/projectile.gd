@@ -79,7 +79,11 @@ func _ready() -> void:
 	if visual == "kunai":
 		collision_mask = Layers.ENEMY | Layers.WORLD
 	monitoring = true
-	monitorable = false
+	# `monitorable = false` also stopped this Area from registering body
+	# overlaps in 4.7, so every arrow, glob and shockwave flew through walls
+	# and players. Nothing needs the projectile to be un-monitorable: no other
+	# area in the game has a mask that would pick it up.
+	monitorable = true
 	z_index = 8 if visual == "kunai" else 6
 	var shape := CollisionShape2D.new()
 	var circle := CircleShape2D.new()

@@ -119,3 +119,20 @@ playtest tuning, then breadth.
   **after** the body fill, otherwise the fill hides it. Crown ticks removed.
 - Shadows (player + enemies) are three stacked 20-gons, cumulative centre
   density ~0.30, no hard rectangle anywhere.
+
+## Session end (vertical floors)
+
+All work committed. **Read `HANDOVER.md` at the repo root before anything
+else** - it lists what this session built, every bug fixed with its cause,
+the full validation matrix, the fragile spots, and the next steps.
+
+State: 14 headless checks green (`tools/check.ps1` -> ALL CHECKS PASSED).
+Floors are vertical (2-5 decks, one-way vs solid, 6 room kinds, 4200-6400 px).
+Hub has 4 stations + a floor-picker door. Player is flat; only the Warden is
+pseudo-3D.
+
+Immediate follow-ups:
+1. Playtest the vertical floors (feel, not correctness - correctness is proven).
+2. Add `spitter` / `leaper` to `data/floors.json` (they exist but no floor
+   spawns them yet).
+3. Either wire `scripts/player/character_visual.gd` or delete it.

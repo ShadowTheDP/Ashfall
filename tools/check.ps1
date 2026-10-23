@@ -89,6 +89,9 @@ Invoke-Probe -Name "Audit: combat / weapons" -Scene "tests/audit_a1.tscn"
 Invoke-Probe -Name "Audit: save / economy" -Scene "tests/audit_a2.tscn"
 Invoke-Probe -Name "Audit: floors / spawns" -Scene "tests/audit_a3.tscn"
 Invoke-Probe -Name "Audit: UI / input" -Scene "tests/audit_a4.tscn"
+Invoke-Probe -Name "Audit: vertical traversal" -Scene "tests/audit_v1.tscn"
+Invoke-Probe -Name "Audit: enemies / encounters" -Scene "tests/audit_v2.tscn"
+Invoke-Probe -Name "Audit: run flow / progression" -Scene "tests/audit_v3.tscn"
 
 Write-Host ""
 Write-Host "ALL CHECKS PASSED" -ForegroundColor Green

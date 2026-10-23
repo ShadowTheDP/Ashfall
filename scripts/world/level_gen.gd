@@ -35,7 +35,10 @@ const LEDGE_H := 340.0
 const SLAB_H := 150.0
 const GAP_MIN := 70.0
 const GAP_MAX := 190.0
-const SPAWN_LIFT := 42.0
+## Centre of a spawn point above its surface. WHY 38 and not 42: the tightest
+## ceiling over any spawn surface is a 26 px solid mass exactly TIER (92) above
+## it, so lift + 25 (half of the tallest 50 px body) has to stay under 66.
+const SPAWN_LIFT := 38.0
 ## Widest body in data/enemies.json (the Warden). A spawn point must clear this
 ## much on both sides, or the enemy is born inside the platform above it.
 const SPAWN_RADIUS := 20.0
@@ -126,7 +129,7 @@ static func generate(floor_index: int, seed_value: int) -> Dictionary:
 	# from the final surface list, so the last mutation has to come first.
 	for i in room_count:
 		rooms[i]["spawns"] = _spawns_for(rooms[i]["rect"], rooms[i]["platforms"],
-			rooms[i]["oneway"], _spawn_half(plan[i]))
+			_spawn_half(plan[i]))
 
 	var first: Rect2 = rooms[0]["rect"]
 	var last: Rect2 = rooms[room_count - 1]["rect"]
@@ -188,7 +191,11 @@ static func _build_room(kind: String, rect: Rect2, rng: RandomNumberGenerator) -
 		"shaft":
 			# Narrow and tall: a zigzag climb to a high shelf. This is the room
 			# that makes a floor feel vertical instead of flat.
-			var sw := clampf(w * 0.62, 150.0, 240.0)
+			# WHY no upper cap on the rung width: the rungs alternate sides, so a
+			# cap (240) makes them 2 x 240 = 480 apart in a 700 px room, which is
+			# four times the horizontal budget of a 92 px climb. Keeping every
+			# rung at 62% of the room width leaves 24% of overlap at each step.
+			var sw := maxf(150.0, w * 0.62)
 			for i in 4:
 				var side := 0.0 if i % 2 == 0 else (w - sw)
 				deck.call(side, TIER * float(i + 1), sw, true)
@@ -219,16 +226,26 @@ static func _build_room(kind: String, rect: Rect2, rng: RandomNumberGenerator) -
 		"well":
 			# A solid wall across the middle of the room, taller than a single
 			# jump. The only way past is up: two stacked pass-through decks on
-			# the approach side, and the top deck overhangs the wall so the
-			# crossing reads as "climb, walk over, drop".
+			# the approach side, then over the wall and drop.
 			#
 			# The wall sits INSIDE the room, never on its boundary: a wall at
 			# the boundary blocks entry and the room can never be entered.
 			var wall_w := clampf(w * 0.09, 48.0, 70.0)
 			var wall_h := 168.0
 			mass.call(Rect2(x + w * 0.44, top - wall_h, wall_w, wall_h + 40.0))
-			deck.call(w * 0.14, TIER, w * 0.22, true)
-			deck.call(w * 0.18, TIER * 2.0, w * 0.34, true)
+			# WHY the lower step runs all the way to the wall's face (0.44): a
+			# pocket of slab between the last step and the wall is a dead end for
+			# anyone running right. The wall is 168 tall and the only thing
+			# overhead there is the TIER*2 deck, out of reach, so the player is
+			# walled in with the climb behind them.
+			deck.call(w * 0.06, TIER, w * 0.38, true)
+			# WHY the upper step stops at the wall's face instead of overhanging
+			# it: the wall top is a standable surface, and a deck TIER*2 up puts
+			# its underside 3 px over that top - a body standing there is born
+			# inside stone. There is no room to raise the deck (the wall is 168
+			# tall, a climb is capped at 192), so the crossing is
+			# step-off-the-deck, walk the wall, drop.
+			deck.call(w * 0.18, TIER * 2.0, w * 0.26, true)
 			deck.call(w * 0.66, TIER, w * 0.22, true)
 	return {"platforms": out, "oneway": flags}
 
@@ -332,18 +349,54 @@ static func _enemy_table() -> Dictionary:
 
 ## Spawn points live on every surface, not just the slab, so upper decks are
 ## populated and the player has a reason to climb.
-static func _spawns_for(rect: Rect2, platforms: Array, oneway: Array, half: float) -> Array:
+static func _spawns_for(rect: Rect2, platforms: Array, half: float) -> Array:
 	var out: Array = []
 	var span := maxf(60.0, rect.size.x - 80.0)
 	for i in 4:
 		var t := fposmod(float(i) * MathArt.INV_PHI, 1.0)
 		var x := rect.position.x + 40.0 + span * t
-		out.append(Vector2(x, _clear_y(x, rect.position.y - SPAWN_LIFT, platforms, half)))
+		out.append(_settle(x, rect.position.y - SPAWN_LIFT, platforms, half))
 	for pr in platforms:
 		var r: Rect2 = pr
-		var cx := r.get_center().x
-		out.append(Vector2(cx, _clear_y(cx, r.position.y - SPAWN_LIFT, platforms, half)))
+		out.append(_settle(r.get_center().x, r.position.y - SPAWN_LIFT, platforms, half))
 	return out
+
+
+## Lift a point out of stone, then re-anchor it over the surface it will
+## actually land on. Two rounds: the second x may belong to another platform.
+static func _settle(x: float, y: float, platforms: Array, half: float) -> Vector2:
+	var p := _clear_y(x, y, platforms, half)
+	for _round in 2:
+		p = _support(p, platforms, half)
+		p = _clear_y(p.x, p.y, platforms, half)
+	return p
+
+
+## WHY: a point can be lifted onto a platform whose top is a few px below the
+## body's feet, and land on a platform hanging over that one instead - perched
+## on its corner with the centre outside the edge. The first step of the chase
+## then drops the body off the level. Pull x inside the landing surface.
+static func _support(p: Vector2, platforms: Array, half: float) -> Vector2:
+	var feet := p.y + half
+	var best := 1.0e9
+	var under := Rect2()
+	for pr in platforms:
+		var r: Rect2 = pr
+		if p.x < r.position.x - SPAWN_RADIUS or p.x > r.end.x + SPAWN_RADIUS:
+			continue
+		# A top between the feet and one lift below is what the body lands on.
+		if r.position.y < feet - 1.0 or r.position.y > feet + SPAWN_LIFT + 2.0:
+			continue
+		if r.position.y < best:
+			best = r.position.y
+			under = r
+	if best > 1.0e8:
+		return p
+	if under.size.x > SPAWN_RADIUS * 2.0:
+		p.x = clampf(p.x, under.position.x + SPAWN_RADIUS, under.end.x - SPAWN_RADIUS)
+	else:
+		p.x = under.get_center().x
+	return p
 
 
 static func _spawn_half(groups: Array) -> float:
@@ -377,13 +430,15 @@ static func boss_spawn(rect: Rect2, platforms: Array) -> Vector2:
 	return Vector2(best, rect.position.y - 44.0)
 
 
-static func _clear_y(x: float, y: float, platforms: Array, half: float) -> float:
+static func _clear_y(x: float, y: float, platforms: Array, half: float) -> Vector2:
 	# WHY: decks hang 64-96 px over the slab, and a body lifted only SPAWN_LIFT
-	# (42) from the slab pokes through them. The enemy then starts embedded in
-	# stone and never lands. Spawn on top instead.
+	# from the slab pokes through them. The enemy then starts embedded in stone
+	# and never lands. Spawn on top instead - and pull x back over the platform
+	# it was lifted onto, or the body is left standing in the air beside it
+	# (the ±SPAWN_RADIUS reach test is wider than the platform itself).
 	# Five passes settle the stacked decks (shaft has five levels).
 	if half <= 0.0:
-		return y
+		return Vector2(x, y)
 	for _pass in 5:
 		for pr in platforms:
 			var r: Rect2 = pr
@@ -391,7 +446,11 @@ static func _clear_y(x: float, y: float, platforms: Array, half: float) -> float
 				continue
 			if y + half > r.position.y and y - half < r.end.y:
 				y = r.position.y - SPAWN_LIFT
-	return y
+				if r.size.x > SPAWN_RADIUS * 2.0:
+					x = clampf(x, r.position.x + SPAWN_RADIUS, r.end.x - SPAWN_RADIUS)
+				else:
+					x = r.get_center().x
+	return Vector2(x, y)
 
 
 static func _plan_enemies(cfg: Dictionary, room_count: int, boss: String) -> Array:
@@ -506,4 +565,23 @@ static func _verify(rooms: Array, start: Vector2, floor_index := 0, seed_value :
 	if not ok:
 		push_warning("LevelGen: floor %d seed %d: %d of %d room slab(s) unreachable: %s"
 			% [floor_index, seed_value, missed, rooms.size(), ", ".join(names)])
-	return {"ok": ok, "reached": reached.size(), "total": surfaces.size()}
+
+	# Decks are the whole point of the vertical layer, so they get the same
+	# budget check the slabs do. A rung the player cannot climb is a room that
+	# cannot be read, and an unreachable perch is an enemy nobody can kill.
+	var lost_decks := 0
+	for ri in rooms.size():
+		for pr in (rooms[ri]["platforms"] as Array):
+			var deck: Rect2 = pr
+			var seen := false
+			for i in surfaces.size():
+				if reached.has(i) and (surfaces[i] as Rect2) == deck:
+					seen = true
+					break
+			if not seen:
+				lost_decks += 1
+	if lost_decks > 0:
+		push_warning("LevelGen: floor %d seed %d: %d deck(s) outside the jump budget"
+			% [floor_index, seed_value, lost_decks])
+	return {"ok": ok, "reached": reached.size(), "total": surfaces.size(),
+		"decks": lost_decks}
