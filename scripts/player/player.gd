@@ -51,6 +51,11 @@ enum State { IDLE, RUN, AIR, ROLL, ATTACK, HURT, DEAD }
 @export var aegis_time := 0.45
 @export var aegis_cooldown := 3.0
 
+# Echo passive: the swing repeats a beat later for 60% (data/characters.json).
+const ECHO_DELAY := 0.12
+const ECHO_ACTIVE := 0.08
+const ECHO_SCALE := 0.6
+
 var state: State = State.IDLE
 var facing := 1
 var hp := 0.0
@@ -97,19 +102,24 @@ var weapon: Dictionary = {}
 var weapon_combo: Array = []
 var attack_cfg: Dictionary = {}
 var hitbox: Hitbox
+var echo_box: Hitbox
 var visual: PlayerVisual
 var camera: PlayerCamera
 
 var _trail_t := 0.0
 var _dust_t := 0.0
 var _was_on_floor := true
+var _echo_t := -1.0
+var _echo_cfg: Dictionary = {}
 
 
 func _ready() -> void:
 	collision_layer = Layers.PLAYER
 	collision_mask = Layers.WORLD | Layers.ENEMY
-	hp = max_hp
 	_apply_loadout()
+	# After the loadout: hp starts at the BODY's max, not at the base 120, or a
+	# 96 hp body spawns over-healed and a 150 hp body spawns wounded.
+	hp = max_hp
 	weapon_combo = weapon.get("combo", [])
 	knife_charges = knife_max
 	_build_nodes()
@@ -155,6 +165,13 @@ func _apply_loadout() -> void:
 		weapon = Data.weapons.get("rusty_sword", {})
 
 
+## Called by Hitbox when this player's hit crits. HUNTER turns crits into
+## knife economy; every other passive ignores it.
+func on_crit() -> void:
+	if passive_id == "hunter":
+		refund_knife()
+
+
 func _apply_passive() -> void:
 	match passive_id:
 		"glass":
@@ -192,6 +209,17 @@ func _build_nodes() -> void:
 	hit_shape.shape = rect
 	hitbox.add_child(hit_shape)
 	add_child(hitbox)
+
+	# Echo needs a second box: a Hitbox clears its hit list only in enable(), so
+	# re-opening the same box inside one swing would be swallowed as a duplicate.
+	echo_box = Hitbox.new()
+	echo_box.name = "EchoBox"
+	echo_box.collision_mask = Layers.ENEMY
+	var echo_shape := CollisionShape2D.new()
+	echo_shape.name = "Shape"
+	echo_shape.shape = RectangleShape2D.new()
+	echo_box.add_child(echo_shape)
+	add_child(echo_box)
 
 	visual = PlayerVisual.new()
 	visual.name = "Visual"
@@ -249,6 +277,7 @@ func _tick_timers(delta: float) -> void:
 	squash = move_toward(squash, 1.0, delta * 5.0)
 	aegis_t = maxf(0.0, aegis_t - delta)
 	aegis_cd = maxf(0.0, aegis_cd - delta)
+	_tick_echo(delta)
 	if not is_on_floor():
 		airborne_t += delta
 		if tumbling:
@@ -415,7 +444,7 @@ func _post_move(fall_speed: float, delta: float) -> void:
 func _start_roll(dir: float) -> void:
 	if absf(dir) > 0.01:
 		facing = 1 if dir > 0.0 else -1
-	hitbox.disable()
+	_cancel_swing()
 	roll_t = 0.0
 	_trail_t = 0.0
 	velocity.x = facing * roll_speed
@@ -476,12 +505,27 @@ func _open_hitbox() -> void:
 		if is_instance_valid(root):
 			root.add_child(wave)
 
+	_swing_count += 1
+	if echo_every > 0 and _swing_count % echo_every == 0:
+		_echo_t = 0.0
+		_echo_cfg = {
+			"size": size,
+			"offset": offset,
+			"damage": float(attack_cfg.get("damage", 10.0)) * ECHO_SCALE,
+			"knockback": float(attack_cfg.get("knockback", 180.0)) * 0.5,
+			"hitstop": float(attack_cfg.get("hitstop", 0.05)) * 0.5,
+			"tier": int(attack_cfg.get("tier", 0)),
+		}
+
 
 func take_hit(info: Dictionary) -> void:
 	if state == State.DEAD:
 		return
 	if state == State.ROLL and roll_t >= roll_iframe_start and roll_t <= roll_iframe_end:
 		Game.perfect_dodge()
+		# Dancer: the dodge window is the reward, so the buff it grants is scaled
+		# here. Game.perfect_dodge() only knows the baseline duration.
+		Game.edge_timer *= perfect_dodge_scale
 		return
 	if invuln > 0.0:
 		return
@@ -494,7 +538,7 @@ func take_hit(info: Dictionary) -> void:
 	flash = 0.14
 	squash = 1.24
 	hurt_t = hurt_time
-	hitbox.disable()
+	_cancel_swing()
 
 	var source_pos: Vector2 = info.get("source_pos", global_position)
 	var dir := signf(global_position.x - source_pos.x)
@@ -627,6 +671,37 @@ func _aegis_block() -> void:
 			})
 
 
+## Arms, then fires, then closes the echo box. Driven by a timer rather than an
+## await so a freed player can never resume into a dead tree.
+func _tick_echo(delta: float) -> void:
+	if _echo_t < 0.0:
+		return
+	_echo_t += delta
+	if _echo_t >= ECHO_DELAY and not echo_box.active:
+		echo_box.shape_node.position = Vector2(facing * float(_echo_cfg["offset"][0]), float(_echo_cfg["offset"][1]))
+		var rect := echo_box.shape_node.shape as RectangleShape2D
+		rect.size = Vector2(float(_echo_cfg["size"][0]), float(_echo_cfg["size"][1]))
+		echo_box.enable(
+			float(_echo_cfg["damage"]) * Game.total_damage_mult() * permanent_damage_mult,
+			float(_echo_cfg["knockback"]),
+			float(_echo_cfg["hitstop"]),
+			self,
+			crit_multiplier(),
+			int(_echo_cfg["tier"])
+		)
+	elif echo_box.active and _echo_t >= ECHO_DELAY + ECHO_ACTIVE:
+		echo_box.disable()
+		_echo_t = -1.0
+
+
+## Interrupting the swing (roll, hurt, death) must also drop a queued echo.
+func _cancel_swing() -> void:
+	hitbox.disable()
+	_echo_t = -1.0
+	if echo_box != null:
+		echo_box.disable()
+
+
 func set_state(next: State) -> void:
 	if state == next:
 		return
@@ -635,7 +710,7 @@ func set_state(next: State) -> void:
 
 func _die() -> void:
 	set_state(State.DEAD)
-	hitbox.disable()
+	_cancel_swing()
 	velocity = Vector2(-facing * 140.0, -300.0)
 	Combat.burst(global_position + Vector2(0, -16), MathArt.WHITE, 20, 280.0)
 	Juice.shatter(get_parent(), global_position + Vector2(0, -14), MathArt.WHITE, 18)

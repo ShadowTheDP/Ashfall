@@ -83,6 +83,12 @@ Invoke-Step -Name "Soak (all enemies, 3 waves, victory)" -Arguments @(
 )
 
 Invoke-Probe -Name "Hub panels (open/close/buy)" -Scene "tests/esc_probe.tscn"
+Invoke-Probe -Name "Hub -> floor handoff" -Scene "tests/floor_probe.tscn"
+Invoke-Probe -Name "Full run (5 floors -> victory)" -Scene "tests/run_probe.tscn"
+Invoke-Probe -Name "Audit: combat / weapons" -Scene "tests/audit_a1.tscn"
+Invoke-Probe -Name "Audit: save / economy" -Scene "tests/audit_a2.tscn"
+Invoke-Probe -Name "Audit: floors / spawns" -Scene "tests/audit_a3.tscn"
+Invoke-Probe -Name "Audit: UI / input" -Scene "tests/audit_a4.tscn"
 
 Write-Host ""
 Write-Host "ALL CHECKS PASSED" -ForegroundColor Green

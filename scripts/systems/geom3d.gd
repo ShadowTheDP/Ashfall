@@ -248,8 +248,15 @@ static func _sort_faces(faces: Array, depths_in: PackedFloat32Array) -> Array:
 
 
 static func _face_shade(poly: PackedVector2Array, all_points: PackedVector2Array) -> float:
-	# Screen-space area normalised by the bounding box: big faces read bright,
-	# edge-on faces read dark. Cheap, stable, and hue-free.
+	# Fill ratio (area / bounding box) says how "square-on" a face is, but it
+	# cannot say WHICH way it faces: a pentagon cap scores ~0.7 while a side
+	# quad scores ~0.95, so the sides came out brighter than the top and the
+	# solid read as a dark lump.
+	#
+	# Instead, orient by winding. The polygon's signed area is positive for a
+	# front-facing face and negative for a back-facing one in this projection.
+	# Front faces get a fixed bright band, back faces a dark one, and the fill
+	# ratio only modulates inside that band.
 	if poly.size() < 3:
 		return 0.5
 	var area := 0.0
@@ -257,10 +264,14 @@ static func _face_shade(poly: PackedVector2Array, all_points: PackedVector2Array
 		var a := poly[i]
 		var b := poly[(i + 1) % poly.size()]
 		area += a.x * b.y - b.x * a.y
-	area = absf(area) * 0.5
-	var ref := 1.0
+	var signed_area := area * 0.5
 	var bounds := Rect2(poly[0], Vector2.ZERO)
 	for p in poly:
 		bounds = bounds.expand(p)
-	ref = maxf(1.0, bounds.size.x * bounds.size.y)
-	return clampf(area / ref, 0.0, 1.0)
+	var ref := maxf(1.0, bounds.size.x * bounds.size.y)
+	var fill := clampf(absf(signed_area) / ref, 0.0, 1.0)
+	if signed_area >= 0.0:
+		# Front: 0.62 .. 0.92, brighter the more square-on it is.
+		return lerpf(0.62, 0.92, fill)
+	# Back: 0.05 .. 0.30. Never competes with a front face.
+	return lerpf(0.05, 0.30, fill)

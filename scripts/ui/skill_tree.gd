@@ -94,7 +94,13 @@ func _process(delta: float) -> void:
 func _input(event: InputEvent) -> void:
 	if not _open:
 		return
-	if not (event is InputEventKey) or not event.pressed or event.echo:
+	if not (event is InputEventKey) or not event.pressed:
+		return
+	# A modal owns every key while it is up. A key it does not use would
+	# otherwise reach the hub's proximity handler and raise a second panel
+	# (J) or start a floor (Enter) underneath this one.
+	get_viewport().set_input_as_handled()
+	if event.echo:
 		return
 	match event.physical_keycode:
 		KEY_ESCAPE:
@@ -109,9 +115,6 @@ func _input(event: InputEvent) -> void:
 			_move(Vector2.DOWN)
 		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
 			_buy()
-		_:
-			return
-	get_viewport().set_input_as_handled()
 
 
 func _move(direction: Vector2) -> void:

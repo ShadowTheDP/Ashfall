@@ -48,14 +48,17 @@ func load_profile(force: bool = false) -> void:
 	if file == null:
 		_apply_defaults()
 		return
-	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	# JSON.parse_string() pushes an engine ERROR on malformed input; the instance
+	# API reports the same failure as a return code, so a bad save stays quiet.
+	var json := JSON.new()
+	var text := file.get_as_text()
 	file.close()
-	if typeof(parsed) != TYPE_DICTIONARY:
+	if json.parse(text) != OK or typeof(json.data) != TYPE_DICTIONARY:
 		_apply_defaults()
 		return
-	var d: Dictionary = parsed
-	cells = int(d.get("cells", 0))
-	souls = int(d.get("souls", 0))
+	var d: Dictionary = json.data
+	cells = _to_int(d.get("cells", 0))
+	souls = _to_int(d.get("souls", 0))
 	upgrades = _to_dict(d.get("upgrades", {}))
 	skill_nodes = _to_strings(d.get("skill_nodes", []))
 	seen_enemies = _to_strings(d.get("seen_enemies", []))
@@ -67,11 +70,11 @@ func load_profile(force: bool = false) -> void:
 	selected_character = str(d.get("selected_character", "square"))
 	selected_weapon = str(d.get("selected_weapon", "rusty_sword"))
 	selected_armor = str(d.get("selected_armor", "none"))
-	best_floor = int(d.get("best_floor", 0))
-	total_kills = int(d.get("total_kills", 0))
-	deaths = int(d.get("deaths", 0))
-	runs = int(d.get("runs", 0))
-	victories = int(d.get("victories", 0))
+	best_floor = _to_int(d.get("best_floor", 0))
+	total_kills = _to_int(d.get("total_kills", 0))
+	deaths = _to_int(d.get("deaths", 0))
+	runs = _to_int(d.get("runs", 0))
+	victories = _to_int(d.get("victories", 0))
 	_sanitize()
 
 
@@ -97,20 +100,49 @@ func _apply_defaults() -> void:
 
 
 func _sanitize() -> void:
-	# A save from an older build must never leave the player with a loadout
-	# that no longer exists.
-	if unlocked_characters.is_empty():
-		unlocked_characters = ["square"]
-	if unlocked_weapons.is_empty():
-		unlocked_weapons = ["rusty_sword"]
-	if unlocked_armor.is_empty():
-		unlocked_armor = ["none"]
-	if not unlocked_characters.has(selected_character):
-		selected_character = unlocked_characters[0]
-	if not unlocked_weapons.has(selected_weapon):
-		selected_weapon = unlocked_weapons[0]
-	if not unlocked_armor.has(selected_armor):
-		selected_armor = unlocked_armor[0]
+	# A save from an older build must never leave the player with a loadout that
+	# no longer exists: ids missing from the data tables are dropped first, then
+	# every selection is re-checked against what survived.
+	upgrades = _pruned_upgrades(upgrades)
+	if not Data.skill_nodes.is_empty():
+		skill_nodes = skill_nodes.filter(func(id: String) -> bool:
+			return Data.skill_nodes.has(id))
+	unlocked_characters = _prune_ids("character", unlocked_characters, "square")
+	unlocked_weapons = _prune_ids("weapon", unlocked_weapons, "rusty_sword")
+	unlocked_armor = _prune_ids("armor", unlocked_armor, "none")
+	selected_character = _pick("character", selected_character, unlocked_characters)
+	selected_weapon = _pick("weapon", selected_weapon, unlocked_weapons)
+	selected_armor = _pick("armor", selected_armor, unlocked_armor)
+
+
+func _prune_ids(kind: String, list: Array[String], fallback: String) -> Array[String]:
+	var table := _unlock_table(kind)
+	var out: Array[String] = []
+	for id in list:
+		if (table.is_empty() or table.has(id)) and not out.has(id):
+			out.append(id)
+	if out.is_empty():
+		out.append(fallback if table.is_empty() or table.has(fallback) else str(table.keys()[0]))
+	return out
+
+
+func _pick(kind: String, id: String, unlocked: Array[String]) -> String:
+	var table := _unlock_table(kind)
+	if unlocked.has(id) and (table.is_empty() or table.has(id)):
+		return id
+	return unlocked[0]
+
+
+## Levels are clamped to the data max and ids the tables no longer know are
+## dropped, so a hand-edited save cannot buy 99 levels of VITALITY.
+func _pruned_upgrades(source: Dictionary) -> Dictionary:
+	var out := {}
+	for id in source:
+		var cfg: Dictionary = Data.upgrades.get(id, {})
+		if cfg.is_empty():
+			continue
+		out[id] = clampi(int(source[id]), 0, int(cfg.get("max", 1)))
+	return out
 
 
 func save() -> void:
@@ -135,12 +167,20 @@ func save() -> void:
 		"runs": runs,
 		"victories": victories,
 	}
-	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	# Temp-then-rename: an interrupted write must never truncate the real save,
+	# otherwise a crash mid-save silently resets the whole profile.
+	var tmp := SAVE_PATH + ".tmp"
+	var file := FileAccess.open(tmp, FileAccess.WRITE)
 	if file == null:
-		push_error("Profile: cannot write %s" % SAVE_PATH)
+		push_error("Profile: cannot write %s" % tmp)
 		return
 	file.store_string(JSON.stringify(payload, "\t"))
 	file.close()
+	if FileAccess.file_exists(SAVE_PATH) and DirAccess.remove_absolute(SAVE_PATH) != OK:
+		push_error("Profile: cannot replace %s" % SAVE_PATH)
+		return
+	if DirAccess.rename_absolute(tmp, SAVE_PATH) != OK:
+		push_error("Profile: cannot commit %s" % SAVE_PATH)
 
 
 func reset_profile() -> void:
@@ -289,7 +329,8 @@ func _archive(kind: String) -> Array:
 			return seen_weapons
 		"armor":
 			return seen_armor
-	return seen_enemies
+	# Unknown kinds get a throwaway list instead of silently writing to enemies.
+	return []
 
 
 # ------------------------------------------------------------------- unlocks
@@ -324,7 +365,7 @@ func unlock(kind: String, id: String) -> bool:
 
 
 func unlock_free(kind: String, id: String) -> void:
-	if is_unlocked(kind, id):
+	if is_unlocked(kind, id) or not _unlock_table(kind).has(id):
 		return
 	_unlock_list(kind).append(id)
 	save()
@@ -392,6 +433,12 @@ func stats() -> Dictionary:
 		"seen_enemies": seen_enemies.duplicate(),
 		"seen_weapons": seen_weapons.duplicate(),
 		"seen_armor": seen_armor.duplicate(),
+		"unlocked_characters": unlocked_characters.duplicate(),
+		"unlocked_weapons": unlocked_weapons.duplicate(),
+		"unlocked_armor": unlocked_armor.duplicate(),
+		"selected_character": selected_character,
+		"selected_weapon": selected_weapon,
+		"selected_armor": selected_armor,
 		"best_floor": best_floor,
 		"total_kills": total_kills,
 		"deaths": deaths,
@@ -402,11 +449,21 @@ func stats() -> Dictionary:
 
 # ------------------------------------------------------------------- helpers
 
+## JSON turns every number into a float and can hand back null; int(null) is a
+## runtime error, so every persisted number goes through here.
+func _to_int(value: Variant) -> int:
+	match typeof(value):
+		TYPE_INT, TYPE_FLOAT, TYPE_BOOL, TYPE_STRING:
+			return int(value)
+	return 0
+
 func _to_strings(value: Variant) -> Array[String]:
 	var out: Array[String] = []
 	if typeof(value) != TYPE_ARRAY:
 		return out
 	for item in value:
+		if item == null:
+			continue
 		out.append(str(item))
 	return out
 
@@ -416,5 +473,5 @@ func _to_dict(value: Variant) -> Dictionary:
 		return {}
 	var out := {}
 	for key in value:
-		out[str(key)] = int(value[key])
+		out[str(key)] = _to_int(value[key])
 	return out

@@ -193,14 +193,27 @@ func _enter_room(index: int) -> void:
 	var from := player.global_position if player != null else Vector2.ZERO
 	var points: Array = (_rooms[index]["spawns"] as Array).duplicate()
 	points.sort_custom(func(a, b): return a.distance_squared_to(from) > b.distance_squared_to(from))
+	var rect: Rect2 = _rooms[index]["rect"]
+	# The boss ignores the generic spawn points: they are placed for a 42 px
+	# husk, which leaves a 64 px boss embedded in the slab and facing a
+	# platform. boss_at is a clear lane chosen by the generator.
+	var boss_at: Variant = data.get("boss_at")
+	var boss_kind := str(data.get("boss", ""))
 	for group in groups:
+		var kind := str(group[0])
 		for i in int(group[1]):
-			_spawn(str(group[0]), _take_point(points, from), index)
+			var at := _take_point(points, from, rect)
+			if not boss_kind.is_empty() and kind == boss_kind and boss_at != null:
+				at = boss_at
+			_spawn(kind, at, index)
 
 
-func _take_point(points: Array, from: Vector2) -> Vector2:
+func _take_point(points: Array, from: Vector2, room: Rect2) -> Vector2:
 	# Never materialise inside the player; the list is sorted farthest first.
-	var farthest := from + Vector2(SAFE_DISTANCE * 2.0, -60.0)
+	# The fallback is the room slab: the floor table never asks for more
+	# enemies than a room has points, but a spot in mid air would be a spawn
+	# no player could ever reach.
+	var farthest := Vector2(room.get_center().x, room.position.y - LevelGen.SPAWN_LIFT)
 	for point in points:
 		if point.distance_to(from) >= SAFE_DISTANCE:
 			points.erase(point)

@@ -183,6 +183,11 @@ func _build_meta_screens() -> void:
 
 
 func _on_station_opened(id: String) -> void:
+	# A panel opened while another is up would leave two Esc owners and one of
+	# them unreachable. The hub already guards the key path; this guards the
+	# API path.
+	if _any_panel_open():
+		return
 	match id:
 		"skill":
 			if skill_tree != null:
@@ -197,6 +202,15 @@ func _on_station_opened(id: String) -> void:
 	var ui_field: Variant = hub.get("ui") if hub != null else null
 	if ui_field != null and ui_field.has_method("open_station"):
 		ui_field.open_station(id)
+
+
+func _any_panel_open() -> bool:
+	for screen in [archive, skill_tree]:
+		if screen != null and screen.has_method("is_open") and screen.is_open():
+			return true
+	if hub != null and hub.has_method("is_open") and hub.is_open():
+		return true
+	return false
 
 
 func _on_meta_screen_closed() -> void:

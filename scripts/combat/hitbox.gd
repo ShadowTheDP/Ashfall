@@ -68,6 +68,10 @@ func _try_hit(body: Node) -> void:
 	if source != null and source.has_method("is_crit_against"):
 		crit = source.is_crit_against(body)
 	var final_damage := Damage.compute(damage, 0, crit, crit_mult)
+	# HUNTER promises a knife back on every crit; the hit is the only place
+	# that knows a crit happened, so the refund lives here.
+	if crit and source != null and source.has_method("on_crit"):
+		source.on_crit()
 	body.take_hit({
 		"damage": final_damage,
 		"crit": crit,

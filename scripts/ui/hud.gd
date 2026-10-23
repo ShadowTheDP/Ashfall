@@ -48,9 +48,16 @@ func _modal_open() -> bool:
 		main = main.get_parent()
 	if main == null:
 		return false
-	for name in ["archive", "skill_tree"]:
+	# The title owns Esc as well: it pauses the tree itself, so a HUD pause
+	# latched under it would paint PAUSED over the whole first run. Every meta
+	# screen hides itself when closed, so `visible` is the whole open state
+	# (the archive and the tree are CanvasLayers, the title is a Control).
+	for name in ["title_screen", "archive", "skill_tree"]:
 		var screen: Variant = main.get(name)
-		if screen != null and screen.has_method("is_open") and screen.is_open():
+		if not is_instance_valid(screen):
+			continue
+		var shown: Variant = screen.get("visible")
+		if shown is bool and shown:
 			return true
 	var hub: Variant = main.get("hub")
 	if hub != null and hub.has_method("is_open") and hub.is_open():

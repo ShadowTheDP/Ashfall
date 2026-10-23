@@ -22,6 +22,9 @@ const SLAB_H := 120.0
 const GAP_MIN := 40.0
 const GAP_MAX := 120.0
 const SPAWN_LIFT := 42.0
+# Widest body in data/enemies.json (the Warden). A spawn point must clear this
+# much on both sides, or the enemy is born inside the platform above it.
+const SPAWN_RADIUS := 20.0
 
 const KIND_WEIGHT := {"gate": 1.25, "hall": 1.4, "shaft": 0.7, "vault": 0.85}
 const KIND_MIN := {"gate": 360.0, "hall": 400.0, "shaft": 240.0, "vault": 280.0}
@@ -69,7 +72,7 @@ static func generate(floor_index: int, seed_value: int) -> Dictionary:
 			"kind": kinds[i],
 			"platforms": platforms,
 			"ground": ground,
-			"spawns": _spawns_for(rect, platforms),
+			"spawns": _spawns_for(rect, platforms, _spawn_half(plan[i])),
 			"enemies": plan[i],
 		}
 		rooms.append(room)
@@ -78,7 +81,14 @@ static func generate(floor_index: int, seed_value: int) -> Dictionary:
 
 	var first: Rect2 = rooms[0]["rect"]
 	var last: Rect2 = rooms[room_count - 1]["rect"]
+	# A boss floor spawns its single enemy in the only room, and the room's
+	# generic spawn points are chosen for a 42 px husk. Pin the boss to a lane
+	# with no platform in front of it so the fight is readable.
+	var boss_at: Variant = null
+	if not boss.is_empty():
+		boss_at = boss_spawn(last, rooms[room_count - 1]["platforms"])
 	return {
+		"boss_at": boss_at,
 		"seed": seed_value,
 		"name": str(cfg.get("name", "FLOOR %d" % floor_index)),
 		"palette": int(cfg.get("palette", 0)),
@@ -113,6 +123,14 @@ static func _floors() -> Dictionary:
 		var node := (loop as SceneTree).root.get_node_or_null("Data")
 		if node != null and "floors" in node:
 			return node.floors
+	return {}
+
+static func _enemy_table() -> Dictionary:
+	var loop := Engine.get_main_loop()
+	if loop is SceneTree:
+		var node := (loop as SceneTree).root.get_node_or_null("Data")
+		if node != null and "enemies" in node:
+			return node.enemies
 	return {}
 
 
@@ -181,16 +199,64 @@ static func _platforms_for(kind: String, rect: Rect2) -> Array:
 	return out
 
 
-static func _spawns_for(rect: Rect2, platforms: Array) -> Array:
+static func _spawns_for(rect: Rect2, platforms: Array, half: float) -> Array:
 	var out: Array = []
 	var span := maxf(60.0, rect.size.x - 80.0)
 	for i in 5:
 		var t := fposmod(float(i) * MathArt.INV_PHI, 1.0)
-		out.append(Vector2(rect.position.x + 40.0 + span * t, rect.position.y - SPAWN_LIFT))
+		var x := rect.position.x + 40.0 + span * t
+		out.append(Vector2(x, _clear_y(x, rect.position.y - SPAWN_LIFT, platforms, half)))
 	for p in platforms:
 		var pr: Rect2 = p
-		out.append(Vector2(pr.get_center().x, pr.position.y - SPAWN_LIFT))
+		var cx := pr.get_center().x
+		out.append(Vector2(cx, _clear_y(cx, pr.position.y - SPAWN_LIFT, platforms, half)))
 	return out
+
+static func _spawn_half(groups: Array) -> float:
+	# Lift from the tallest body that will actually use this room's points; a
+	# room with no enemies needs no clearance at all.
+	var half := 0.0
+	var table := _enemy_table()
+	for group in groups:
+		var cfg: Dictionary = table.get(str(group[0]), {})
+		half = maxf(half, float(cfg.get("body_height", 42.0)) * 0.5)
+	return half
+
+## A boss is 64 px tall and 40 px wide; the generic clearance pass uses the
+## platform's SPAWN_LIFT, which is tuned for a 42 px husk and leaves the boss
+## embedded in the slab. Bosses also need the widest clear lane in the room,
+## because their attack reach is ~110 px and a platform in front of them makes
+## the fight unreadable.
+static func boss_spawn(rect: Rect2, platforms: Array) -> Vector2:
+	var centre := rect.get_center().x
+	var best := centre
+	var best_gap := -1.0
+	for candidate in [centre, rect.position.x + rect.size.x * 0.25, rect.position.x + rect.size.x * 0.75]:
+		var gap := 1.0e9
+		for p in platforms:
+			var pr: Rect2 = p
+			gap = minf(gap, absf(candidate - pr.get_center().x))
+		if gap > best_gap:
+			best_gap = gap
+			best = candidate
+	return Vector2(best, rect.position.y - 44.0)
+
+
+static func _clear_y(x: float, y: float, platforms: Array, half: float) -> float:
+	# WHY: gate/shaft/vault hang platforms 64-96 px over the slab, and a body
+	# lifted only SPAWN_LIFT (42) from the slab pokes through them. The enemy
+	# then starts embedded in stone and never lands. Spawn on top instead.
+	# Three passes settle stacked platforms (shaft, vault); none stack deeper.
+	if half <= 0.0:
+		return y
+	for _pass in 3:
+		for p in platforms:
+			var pr: Rect2 = p
+			if x < pr.position.x - SPAWN_RADIUS or x > pr.end.x + SPAWN_RADIUS:
+				continue
+			if y + half > pr.position.y and y - half < pr.end.y:
+				y = pr.position.y - SPAWN_LIFT
+	return y
 
 
 static func _plan_enemies(cfg: Dictionary, room_count: int, boss: String) -> Array:

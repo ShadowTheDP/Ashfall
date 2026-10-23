@@ -206,7 +206,14 @@ func total_damage_mult() -> float:
 
 
 func perfect_dodge() -> void:
-	edge_timer = PERFECT_DODGE_TIME
+	# The DANCER passive doubles the window and lets it stack twice, so a good
+	# dodge chain keeps the buff alive instead of merely refreshing it.
+	var scale := 1.0
+	if is_instance_valid(player):
+		scale = player.perfect_dodge_scale
+	var gained := PERFECT_DODGE_TIME * scale
+	var cap := PERFECT_DODGE_TIME * scale * (2.0 if scale > 1.5 else 1.0)
+	edge_timer = minf(cap, edge_timer + gained)
 	perfect_dodges += 1
 	if player != null:
 		player.refund_knife()
@@ -246,8 +253,11 @@ func apply_reward(id: String) -> void:
 			if player != null:
 				player.max_speed *= 1.08
 		"ghost":
+			# The cap used to be 0.28, which made this boon a no-op for the
+			# GLASS character (already 0.32). The cap now sits above every
+			# reachable value so the boon always does something.
 			if player != null:
-				player.roll_iframe_end = minf(0.28, player.roll_iframe_end + 0.03)
+				player.roll_iframe_end = minf(0.40, player.roll_iframe_end + 0.03)
 		"armory":
 			if player != null:
 				player.add_knife_max()

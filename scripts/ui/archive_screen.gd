@@ -103,7 +103,13 @@ func _process(delta: float) -> void:
 func _input(event: InputEvent) -> void:
 	if not _open:
 		return
-	if not (event is InputEventKey) or not event.pressed or event.echo:
+	if not (event is InputEventKey) or not event.pressed:
+		return
+	# A modal owns every key while it is up. A key it does not use would
+	# otherwise reach the hub's proximity handler: J re-opened this screen and
+	# reset the cursor, and J by the door started a floor under the panel.
+	get_viewport().set_input_as_handled()
+	if event.echo:
 		return
 	match event.physical_keycode:
 		KEY_ESCAPE:
@@ -118,9 +124,6 @@ func _input(event: InputEvent) -> void:
 			_move(1)
 		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
 			_activate()
-		_:
-			return
-	get_viewport().set_input_as_handled()
 
 
 func _switch_tab(delta_index: int) -> void:
@@ -203,12 +206,16 @@ func _name_of(id: String) -> String:
 	return str(_cfg(id).get("name", id))
 
 
+## Weapons price the unlock as `unlock_cost`, armour and characters as `cost`.
+## Reading only `cost` advertised every weapon as free.
 func _cost_of(id: String) -> int:
-	return int(_cfg(id).get("cost", 0))
+	var cfg := _cfg(id)
+	return int(cfg.get("cost", cfg.get("unlock_cost", 0)))
 
 
-## data/weapons.json has no price column yet, so an entry can be free to
-## unlock. Say so instead of printing "FOR 0 CELLS".
+## A weapon prices its unlock as `unlock_cost`, armour and characters as
+## `cost`; _cost_of() reads both, so this line always quotes the real price.
+## A free entry says so instead of printing "FOR 0 CELLS".
 func _unlock_line(id: String) -> String:
 	var cost := _cost_of(id)
 	return "ENTER TO UNLOCK FOR %d CELLS" % cost if cost > 0 else "ENTER TO UNLOCK"

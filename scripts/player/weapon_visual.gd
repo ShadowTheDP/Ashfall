@@ -44,6 +44,12 @@ func setup(weapon_id: String) -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
+	# Only the player visual's _draw() poses the blade, and it stops posing while
+	# rolling or dead. Without this the cached pose keeps rendering and the blade
+	# hangs in mid-air next to the spinning square.
+	if _posed:
+		_posed = false
+		queue_redraw()
 
 
 func draw_blade(hand: Vector2, angle: float, length: float, alpha: float) -> void:

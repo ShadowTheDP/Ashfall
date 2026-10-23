@@ -20,6 +20,8 @@ func _ready() -> void:
 	print("")
 	print("AUDIT A2 %s (%d checks, %d failures)" % [
 		"OK" if _fails == 0 else "FAILED", _checks, _fails])
+	# One frame lets the tree finish starting before exit, so the run is leak-free.
+	await get_tree().process_frame
 	get_tree().quit()
 
 
@@ -284,6 +286,8 @@ func _t4_progression() -> void:
 
 	# Bookkeeping survives a save/load cycle (int types included).
 	Profile.save()
+	_check(FileAccess.file_exists(Profile.SAVE_PATH), "save wrote the profile")
+	_check(not FileAccess.file_exists(Profile.SAVE_PATH + ".tmp"), "save left no temp file")
 	Profile.load_profile(true)
 	_eq(Profile.runs, runs + 2, "runs persisted")
 	_is_int(Profile.runs, "runs type after reload")

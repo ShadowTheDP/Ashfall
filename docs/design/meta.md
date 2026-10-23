@@ -313,3 +313,26 @@ tabs, which read as a bug. There are now four stations:
 `HubUi._rows()` no longer carries duplicate bestiary/weapon/armour lists; the
 archive owns them. `Main._on_station_opened("archive")` opens the BESTIARY tab
 and the player tabs across from there.
+
+### Boss placement and face shading
+
+Two bugs that only showed on floor 5:
+
+- **The boss was invisible.** `Geom3D._face_shade()` scored a face by its fill
+  ratio (area / bounding box). A pentagon cap scores ~0.7 while a side quad
+  scores ~0.95, so the sides came out *brighter than the top* and, at contrast
+  1.15, the caps were pushed to near-black. Shading is now **winding-based**:
+  front faces land in 0.62..0.92, back faces in 0.05..0.30, and the fill ratio
+  only modulates inside its own band.
+- **The boss was embedded in a platform.** Room spawn points are chosen for a
+  42 px husk. `LevelGen.boss_spawn()` now picks the lane in the room with the
+  widest gap between platform centres and lifts 44 px off the slab, exposed as
+  `data["boss_at"]`; `Level._enter_room()` uses it instead of the generic point.
+
+### Probe notes
+
+`tests/audit_a3.gd` samples the enemy count **before** any physics frame. A
+one-room floor (the boss arena) starts the player inside the only room, so the
+first `_physics_process` enters it and spawns — correct, not a leak. The probe
+therefore asserts `build()` spawned nothing and that
+`pending + already_spawned == planned`.

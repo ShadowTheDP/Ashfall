@@ -290,7 +290,10 @@ func _draw_row(font: Font, row: Dictionary, slot: int, selected: bool) -> void:
 	var rect := Rect2(CARD.position.x + 12.0, CARD.position.y + 46.0 + float(slot) * ROW_H,
 		CARD.size.x - 24.0, ROW_H - 4.0)
 	var dim := int(row.get("state", 1)) == 0
-	var flashing := _flash > 0.0 and _flash_row == _index
+	# Blink the row that FAILED, not the row under the cursor: the cursor may
+	# have moved before the sound landed, and blinking the wrong row misreports
+	# which purchase was refused.
+	var flashing := _flash > 0.0 and _flash_row == slot + _page * ROWS_PER_PAGE
 	# A failed purchase blinks the row itself, so the eye catches it even if the
 	# cursor moved on before the sound landed.
 	var lit := selected
