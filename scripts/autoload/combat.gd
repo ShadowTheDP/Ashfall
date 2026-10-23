@@ -43,6 +43,45 @@ func shake(amount: float) -> void:
 		Game.player.camera.add_trauma(amount)
 
 
+const TIER_HITSTOP := [0.033, 0.067, 0.100, 0.133]
+const TIER_SHAKE := [0.16, 0.30, 0.52, 0.72]
+const TIER_PUNCH := [0.0, 0.0, 0.45, 0.75]
+
+
+## Tiered impact: line sparks + ring + 1-frame flash at the real contact point.
+## tier: 0 light, 1 medium, 2 heavy, 3 finisher.
+func impact(at: Vector2, direction: Vector2, tier: int, tint: Color = MathArt.WHITE) -> void:
+	var fx := ImpactFx.new()
+	fx.position = at
+	fx.setup(direction, tier, tint)
+	_add(fx)
+	var t := clampi(tier, 0, 3)
+	shake(float(TIER_SHAKE[t]))
+	punch(float(TIER_PUNCH[t]))
+	hitstop(float(TIER_HITSTOP[t]))
+
+
+## Camera zoom punch: a 2-frame zoom-in that eases back over 5 frames.
+func punch(amount: float) -> void:
+	if amount <= 0.0:
+		return
+	if is_instance_valid(Game.player) and is_instance_valid(Game.player.camera):
+		Game.player.camera.add_punch(amount)
+
+
+## Full-screen monochrome feedback (vignette pulse + scanline offset).
+func screen_punch(amount: float) -> void:
+	if amount <= 0.0:
+		return
+	var fx := ScreenPunch.new()
+	fx.setup(amount)
+	var layer: Node = Game.screen_fx_root
+	if is_instance_valid(layer):
+		layer.add_child(fx)
+	else:
+		_add(fx)
+
+
 func spark(at: Vector2, direction: Vector2, crit: bool, tint: Color = Color.WHITE) -> void:
 	var fx := HitSpark.new()
 	fx.position = at
@@ -64,10 +103,10 @@ func block_number(at: Vector2) -> void:
 	_add(fx)
 
 
-func slash(at: Vector2, facing: int, attack_index: int, tint: Color) -> void:
+func slash(at: Vector2, facing: int, attack_index: int, tint: Color, blade_length: float = 38.0) -> void:
 	var fx := SlashFx.new()
-	fx.position = at + Vector2(0, -10)
-	fx.setup(attack_index, facing, tint)
+	fx.position = at
+	fx.setup(attack_index, facing, tint, blade_length)
 	_add(fx)
 
 

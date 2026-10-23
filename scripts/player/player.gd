@@ -392,13 +392,17 @@ func _open_hitbox() -> void:
 		float(attack_cfg.get("knockback", 180.0)),
 		float(attack_cfg.get("hitstop", 0.05)),
 		self,
-		crit_multiplier()
+		crit_multiplier(),
+		int(attack_cfg.get("tier", 0))
 	)
+	# The arc is drawn around the grip, not the body centre.
+	var blade := float(attack_cfg.get("blade", 38.0))
 	Combat.slash(
-		global_position + Vector2(facing * float(offset[0]) * 0.55, 0),
+		global_position + Vector2(float(facing) * 13.0, -7.0),
 		facing,
 		attack_index,
-		MathArt.WHITE
+		MathArt.WHITE,
+		blade
 	)
 	if attack_index == weapon_combo.size() - 1 and not weapon_combo.is_empty():
 		var wave := FunctionWave.new()
@@ -537,11 +541,12 @@ func _cast_aegis() -> void:
 func _aegis_block() -> void:
 	aegis_t = 0.0
 	Combat.block_number(global_position + Vector2(0, -50))
-	Combat.spark(global_position + Vector2(0, -12), Vector2.UP, false, MathArt.WHITE)
-	Combat.block_burst(global_position + Vector2(0, -8), facing)
+	var block_point := global_position + Vector2(float(facing) * 14.0, -8.0)
+	Combat.spark(block_point, Vector2(float(facing), 0.0), false, MathArt.WHITE)
+	Combat.block_burst(block_point, facing)
+	Combat.impact(block_point, Vector2(float(facing), 0.0), 1, MathArt.WHITE)
 	Combat.ring(global_position + Vector2(0, -8), MathArt.WHITE, 46.0)
-	Combat.burst(global_position + Vector2(float(facing) * 10.0, -8.0), MathArt.WHITE, 8, 200.0)
-	Juice.block(get_parent(), global_position + Vector2(float(facing) * 12.0, -8.0), facing)
+	Juice.block(get_parent(), block_point, facing)
 	Combat.shake(0.22)
 	Sfx.play("block", -6, 1.1)
 	for enemy in get_tree().get_nodes_in_group("enemies"):

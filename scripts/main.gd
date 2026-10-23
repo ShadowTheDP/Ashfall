@@ -81,6 +81,12 @@ func _ready() -> void:
 		title_screen.started.connect(_on_title_started)
 		hud.visible = false
 
+	var screen_fx_layer := CanvasLayer.new()
+	screen_fx_layer.name = "ScreenFxLayer"
+	screen_fx_layer.layer = 25
+	add_child(screen_fx_layer)
+	Game.screen_fx_root = screen_fx_layer
+
 	_add_fullscreen_shader_layer(-10, BACKGROUND_SHADER)
 	_add_fullscreen_shader_layer(15, BLOOM_SHADER)
 	_add_fullscreen_shader_layer(20, VIGNETTE_SHADER)

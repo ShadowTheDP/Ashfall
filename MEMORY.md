@@ -32,16 +32,30 @@
   blade); the finisher releases a travelling sine wave drawn as 1px columns;
   Kunai solves a ballistic `v0` and previews the parabola; Aegis is three
   concentric pixel rings plus six orbiting dots.
-- **Player silhouette is a SQUARE**: white body, black inset face, white core
-  dot, 2px black keyline. It carries a corner notch and an edge pip because a
-  square looks identical after a 90-degree turn - those marks are the only
-  thing that makes "landed on a new face" readable.
+- **Player silhouette is a PLAIN SQUARE**: white body, black inset face, white
+  core dot, 2px black keyline. No notch, no edge pip, no eyes - the user
+  confirmed the tumble itself is readable enough, so all the extra marks were
+  removed. Enemies have no eyes either.
 - **Tumble:** every jump turns the square exactly 90 degrees
   (`face = (face + 1) % 4`), completed over 0.42 s; short hops finish the
   remaining quarter turn in 70 ms instead of snapping. Direction follows
   `facing`.
 - **No limbs anywhere.** Enemies are plain polygons; a "hand" is a single dot.
   Legs and arms were removed from every draw function.
+- **Grip sits on the square's front edge** (`facing * 13, -7`), not inside the
+  body, and the blade angle mirrors with facing. Blade length lives in
+  `data/weapons.json` (`blade`) and the hitbox is derived from it, so the drawn
+  blade, the slash arc and the damage box are always the same numbers.
+- **Impact is tiered** (`Combat.impact(point, direction, tier)`): tier 0/1/2/3
+  drives hitstop 2/4/6/8 frames, shake, zoom punch and the spark/ring tables in
+  `scripts/fx/impact_fx.gd`. Crits bump one tier. Multiple hits in one frame do
+  not stack. Full spec: `docs/design/impact.md`.
+- **Smear is a crescent trail, not a pie wedge**: three nested crescents at
+  42/66/86% of the blade length, and only the last ~38% of the arc travelled is
+  drawn, so it never wraps into a ring.
+- **Screen-level feedback** (`scripts/fx/screen_punch.gd`, layer 25, below HUD):
+  vignette pulse + two 2-frame scanline offsets + camera zoom punch 1.025.
+  Never a full-screen invert or a persistent glitch filter.
 - **Particles are Godot's own `CPUParticles2D`** (`scripts/systems/juice.gd`),
   not a hand-written simulator. The only hand-written part is a 6x6 white
   square texture generated at runtime, so the project still ships zero image

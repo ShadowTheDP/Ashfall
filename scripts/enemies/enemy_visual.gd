@@ -1,6 +1,7 @@
 class_name EnemyVisual
 extends Node2D
-## Enemies are plain polygons: no legs, no arms, no faces. A "hand" is one dot.
+## Enemies are plain polygons: no legs, no arms, no faces, no eyes.
+## A "hand" is one dot; the only interior detail is a hollow inner shape.
 ## Readability comes from silhouette + motion + value, never from colour.
 ##
 ##   Husk    3  triangle   fast, twitchy, points at you
@@ -131,9 +132,6 @@ func _draw_husk(flash: bool) -> void:
 	# Inner hollow triangle: the "face" of the shape.
 	MathArt.px_poly(self, MathArt.ngon(3, r * MathArt.INV_PHI, -PI * 0.5, Vector2(0, 0)),
 		_c(MathArt.STONE, flash, 0.9))
-	# Two dot eyes.
-	MathArt.disc(self, Vector2(-4, -2), 1.8, _c(MathArt.WHITE, flash))
-	MathArt.disc(self, Vector2(4, -2), 1.8, _c(MathArt.WHITE, flash))
 	# Claw: one dot, extended during the attack.
 	var hand := Vector2(11, 4)
 	if e.state == Enemy.EState.ATTACK:
@@ -149,7 +147,6 @@ func _draw_watcher(flash: bool) -> void:
 	MathArt.disc(self, Vector2(0, -2), r, _c(_body_fill(), flash))
 	MathArt.ring(self, Vector2(0, -2), r, Color(OUTLINE, 0.9), 2.0)
 	MathArt.disc(self, Vector2(0, -2), r * 0.55, _c(MathArt.STONE, flash, 0.92))
-	MathArt.disc(self, Vector2(2, -3), 2.0, _c(MathArt.WHITE, flash))
 	# Orbit: a dashed ellipse plus one travelling bead.
 	var orbit_rotation := 0.24 + sin(_t * 1.1) * 0.06
 	for i in 16:
@@ -159,11 +156,19 @@ func _draw_watcher(flash: bool) -> void:
 	var bead_angle := _t * 2.4
 	var bead := Vector2(cos(bead_angle) * (r + 9.0), sin(bead_angle) * 4.5).rotated(orbit_rotation)
 	MathArt.disc(self, bead + Vector2(0, -2), 2.2, _c(MathArt.WHITE, flash))
-	# Bow hand: a dot on the front edge.
-	var hand := Vector2(r + 2.0, -2)
-	if e.state == Enemy.EState.WINDUP:
-		hand = Vector2(r - 2.0, -2)
+	# Bow hand: a dot exactly on the circle's edge, drawn with a real bow.
+	var hand := Vector2(r, -2)
 	MathArt.disc(self, hand, 2.6, _c(MathArt.WHITE, flash))
+	# Bow: an arc centred on the hand, plus a string pulled during windup.
+	var pull := 0.0
+	if e.state == Enemy.EState.WINDUP:
+		pull = clampf(e.state_t / maxf(0.001, float(e.cfg.get("windup", 0.5))), 0.0, 1.0)
+	MathArt.arc(self, hand, 11.0, -1.15, 1.15, _c(MathArt.PALE, flash, 0.9), 2.0)
+	var top := hand + Vector2(4.4, -10.0)
+	var bottom := hand + Vector2(4.4, 10.0)
+	var notch := hand + Vector2(-6.0 * pull, 0.0)
+	MathArt.line(self, top, notch, _c(MathArt.WHITE, flash, 0.55), 1.0)
+	MathArt.line(self, notch, bottom, _c(MathArt.WHITE, flash, 0.55), 1.0)
 
 
 func _draw_ram(flash: bool) -> void:
@@ -171,9 +176,6 @@ func _draw_ram(flash: bool) -> void:
 	var body := MathArt.ngon(4, r * 1.15, PI * 0.25, Vector2(0, -2))
 	MathArt.px_poly(self, body, _c(_body_fill(), flash), Color(OUTLINE, 0.9), 2.0)
 	MathArt.px_poly(self, MathArt.ngon(4, r * 0.65, PI * 0.25, Vector2(0, -2)), _c(MathArt.STONE, flash, 0.92))
-	# Eye slit: a single wide dot pair, no face.
-	MathArt.px_rect(self, Rect2(-5, -6, 4, 2), _c(MathArt.WHITE, flash))
-	MathArt.px_rect(self, Rect2(2, -6, 4, 2), _c(MathArt.WHITE, flash))
 	# Horns: two short ticks that lead the charge.
 	var horn := 8.0 if e.state == Enemy.EState.ATTACK else 5.0
 	MathArt.line(self, Vector2(-r * 0.6, -r * 0.9), Vector2(-r * 0.6 - horn * 0.4, -r * 0.9 - horn),
@@ -187,8 +189,6 @@ func _draw_bulwark(flash: bool) -> void:
 	var body := MathArt.ngon(6, r * 1.05, PI / 6.0, Vector2(0, -2))
 	MathArt.px_poly(self, body, _c(_body_fill(), flash), Color(OUTLINE, 0.9), 2.0)
 	MathArt.px_poly(self, MathArt.ngon(6, r * 0.62, PI / 6.0, Vector2(0, -2)), _c(MathArt.STONE, flash, 0.92))
-	# Eye.
-	MathArt.disc(self, Vector2(0, -2), 2.2, _c(MathArt.WHITE, flash))
 	# Front shield: a flat face presented to the player.
 	var shield_center := Vector2(r * 1.05, -2)
 	for i in 3:
@@ -215,9 +215,8 @@ func _draw_warden(flash: bool) -> void:
 		var base := Vector2.from_angle(angle) * r * 0.7 + Vector2(0, -2)
 		var tip := Vector2.from_angle(angle) * r * 1.35 + Vector2(0, -2)
 		MathArt.line(self, base, tip, _c(MathArt.WHITE, flash, 0.85), 2.0)
-	MathArt.disc(self, Vector2(0, -2), 3.0, _c(MathArt.WHITE, flash))
-	# Cleaver hand: a dot with a long blade.
-	var hand := Vector2(r * 0.9, 2)
+	# Cleaver hand: a dot exactly on the pentagon edge.
+	var hand := Vector2(r * 0.965, 2)
 	var angle := 0.85
 	if e.state == Enemy.EState.WINDUP:
 		angle = -1.05
@@ -263,8 +262,8 @@ func _draw_arrow_prediction() -> void:
 	var player := Game.player
 	if player == null:
 		return
-	var origin := e.global_position + Vector2(float(e.facing) * 12.0, -15.0)
-	var target := player.global_position + Vector2(0, -15)
+	var origin := e.global_position + Vector2(float(e.facing) * _radius(), -2.0)
+	var target := player.global_position + Vector2(0, -14)
 	var velocity := MathArt.ballistic_velocity(origin, target, float(e.cfg.get("projectile_speed", 320.0)), 700.0)
 	for i in 24:
 		var time := 0.9 * float(i) / 23.0

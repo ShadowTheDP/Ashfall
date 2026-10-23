@@ -42,9 +42,15 @@ playtest tuning, then breadth.
   120 Hz physics + interpolation, float camera in `_physics_process`, no
   rounding anywhere in gameplay transforms.
 - **Monochrome**: one greyscale ramp in `MathArt`; no hue anywhere.
-- **Player is a square**: white body, black inset face, white core, corner
-  notch and edge pip so a 90-degree turn is visible. Tumble completes in
-  0.42 s; short hops settle in 70 ms.
+- **Player is a plain square**: white body, black inset face, white core dot,
+  2px keyline. No notch, no pip, no eyes (removed after playtest feedback).
+  Tumble completes in 0.42 s; short hops settle in 70 ms.
+- **Weapon geometry is unified**: grip on the front edge, blade length from
+  `data/weapons.json`, hitbox derived from the same number, slash arc centred
+  on the grip.
+- **Impact is tiered**: `Combat.impact()` with hitstop 2/4/6/8 frames, tiered
+  spark/ring tables, zoom punch, vignette pulse and 2-frame scanline offset.
+  Spec: `docs/design/impact.md`.
 - **No limbs**: enemies are plain polygons; hands are dots.
 - **Particles**: `scripts/systems/juice.gd` wraps `CPUParticles2D` with nine
   presets (dust, land_dust, jump_burst, hit_sparks, shatter, pickup, block,
@@ -87,9 +93,9 @@ playtest tuning, then breadth.
 
 ## Next Likely Improvements
 
-1. Real playtest tuning pass: does the square's 90-degree tumble read as a
-   face change; are the smear frames clear at 1536x960; is the monochrome
-   contrast comfortable; is Aegis readable without colour.
+1. Real playtest tuning pass on impact: is a light hit distinct enough from a
+   finisher; does the crescent smear read as a blade trail; is the zoom punch
+   too strong; do the scanlines feel like a glitch rather than damage.
 2. A second weapon function with a different curve (e.g. a Lissajous flail or
    a rose-petal area attack) to prove the weapon schema generalizes.
 3. A second handcrafted arena and a doorway transition before any generator

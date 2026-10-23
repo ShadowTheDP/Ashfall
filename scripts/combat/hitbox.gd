@@ -7,6 +7,7 @@ var damage := 0.0
 var knockback := 0.0
 var hitstop_time := 0.0
 var crit_mult := 1.0
+var tier := 0
 var source: Node2D = null
 var active := false
 var shape_node: CollisionShape2D = null
@@ -25,11 +26,12 @@ func _ready() -> void:
 	body_entered.connect(_on_body_entered)
 
 
-func enable(p_damage: float, p_knockback: float, p_hitstop: float, p_source: Node2D, p_crit_mult: float = 1.0) -> void:
+func enable(p_damage: float, p_knockback: float, p_hitstop: float, p_source: Node2D, p_crit_mult: float = 1.0, p_tier: int = 0) -> void:
 	damage = p_damage
 	knockback = p_knockback
 	hitstop_time = p_hitstop
 	crit_mult = p_crit_mult
+	tier = p_tier
 	source = p_source
 	active = true
 	_hit_bodies.clear()
@@ -72,5 +74,6 @@ func _try_hit(body: Node) -> void:
 		"knockback": knockback,
 		"hitstop": hitstop_time,
 		"source_pos": source.global_position if source != null else global_position,
-		"point": body.global_position + Vector2(0, -20),
+		"point": global_position,
+		"tier": tier,
 	})

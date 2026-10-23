@@ -12,6 +12,8 @@ var max_roll := 0.018
 
 var _rng := RandomNumberGenerator.new()
 var _look := Vector2.ZERO
+var _punch := 0.0
+var _punch_hold := 0.0
 
 
 func _ready() -> void:
@@ -28,6 +30,12 @@ func add_trauma(amount: float) -> void:
 	trauma = minf(1.0, trauma + amount)
 
 
+## Zoom punch: snap in over 2 frames, ease back over 5.
+func add_punch(amount: float) -> void:
+	_punch = maxf(_punch, amount)
+	_punch_hold = 0.033
+
+
 func _physics_process(delta: float) -> void:
 	var parent := get_parent() as Player
 	var real_delta := clampf(delta / maxf(Engine.time_scale, 0.05), 0.0, 0.05)
@@ -36,6 +44,14 @@ func _physics_process(delta: float) -> void:
 		var target_look := Vector2(float(parent.facing) * 26.0, clampf(parent.velocity.y * 0.05, -18.0, 24.0) - 6.0)
 		_look = _look.lerp(target_look, 1.0 - exp(-6.0 * real_delta))
 		global_position = parent.global_position + _look
+
+	# Zoom punch.
+	if _punch_hold > 0.0:
+		_punch_hold -= real_delta
+	elif _punch > 0.0:
+		_punch = maxf(0.0, _punch - real_delta * 7.0)
+	var punch_zoom := 1.0 + 0.025 * _punch
+	zoom = Vector2.ONE * punch_zoom
 
 	trauma = maxf(0.0, trauma - real_delta * trauma_decay)
 	var amount := trauma * trauma

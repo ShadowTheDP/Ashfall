@@ -32,6 +32,7 @@
 | 動畫 | 蓄力 → 實心 smear → 2 幀白色 impact → 10–14° overshoot → 二次運動延遲 |
 | 角色 | **玩家是正方形**，每次跳躍翻轉 90° 落在新的一面；敵人全是純多邊形，**沒有手腳**，手是一個點 |
 | 粒子 | Godot 內建 `CPUParticles2D`（`scripts/systems/juice.gd`），9 種預設 |
+| 打擊感 | 四級強度（2/4/6/8 幀 hitstop）、方向性火花、擴張環、1 幀白閃、新月斬痕、zoom punch、暗角脈衝 |
 | 音效 | 18 個程式合成 SFX + 32 秒無縫數學音樂循環 |
 
 **刻意還沒有：**
@@ -263,7 +264,9 @@ powershell -ExecutionPolicy Bypass -File tools\check.ps1
   不受 Ponytail 的 YAGNI 裁決。
 - **視覺只能透過 `MathArt`**；不要引入貼圖或 `Sprite2D`。
 - **不要新增色相**；所有顏色必須來自 `MathArt` 的灰階梯度。
-- **不要為角色加手腳**；手是一個點。
+- **不要為角色加手腳或眼睛**；手是一個點，臉不存在。玩家是純正方形。
+- **打擊感規格見 `docs/design/impact.md`**；改動前先讀，改動後跑
+  `tests/impact_capture.tscn` 逐幀檢查。
 - 粒子用 `Juice.*`（包裝 `CPUParticles2D`），不要自己寫粒子模擬。
 - **鍵盤優先**：任何新操作都必須有鍵盤綁定。
 - 手感原型允許拋棄式程式碼，但放在 `tests/` 或明確標記。

@@ -143,3 +143,45 @@ After each meaningful completed task, append:
   - `jump_capture.tscn` (new): frame-by-frame jump strip confirms the square
     turns and lands with face 0 -> 1.
 - Ready to push: yes.
+
+2026-10-23 15:10
+- Summary: Milestone 4 - attack feedback overhaul + geometry fixes, driven by
+  three max-thinking subagent audits.
+  1) Removed the corner notch, edge pip and all enemy eyes. The player is now
+     a plain square; the tumble alone communicates the face change (confirmed
+     readable by the user).
+  2) Fixed the weapon grip: the hand dot moved from inside the body to the
+     square's front edge and now mirrors with facing. Blade length moved into
+     data/weapons.json (`blade`: 38/40/50) and the hitbox is derived from it,
+     so the drawn blade, the slash arc and the damage box share one number.
+     SlashFx is now centred on the grip with radius = blade length.
+  3) Tiered impact feedback (scripts/fx/impact_fx.gd): tier 0/1/2/3 drives
+     hitstop 2/4/6/8 frames, camera shake, zoom punch, directional line sparks
+     (8/10/12/16, fanned around the hit normal), an expanding ring and a 1-2
+     frame white contact flash. Crits bump one tier; multiple hits in one frame
+     do not stack.
+  4) New full-screen feedback (scripts/fx/screen_punch.gd on ScreenFxLayer):
+     vignette pulse + two 2-frame scanline offsets + camera zoom punch 1.025.
+     Never a full-screen invert.
+  5) Smear rewritten from a pie wedge to a crescent trail: three nested
+     crescents at 42/66/86% of the blade length, only the last ~38% of the
+     travelled arc drawn, plus motion lines and a one-frame tip lag.
+  6) Enemy weapons: Warden grip moved onto the pentagon edge; Watcher now
+     actually draws a bow with a pull animation, and its arrow spawn point and
+     trajectory preview share one origin.
+- Subagent reports: output/agent-reports/{v1,v2,v3}.md (impact spec, open-
+  source survey, geometry audit). v2 verdict: no Godot 4 GL-Compatibility,
+  texture-free attack-VFX package exists, so the FX stay in-project.
+- Key files changed: data/weapons.json, scripts/fx/impact_fx.gd (new),
+  scripts/fx/screen_punch.gd (new), scripts/fx/slash_fx.gd,
+  scripts/combat/hitbox.gd, scripts/autoload/combat.gd,
+  scripts/autoload/game.gd, scripts/main.gd, scripts/player/player.gd,
+  scripts/player/player_visual.gd, scripts/player/player_camera.gd,
+  scripts/enemies/enemy.gd, scripts/enemies/enemy_visual.gd,
+  tests/impact_capture.gd/.tscn (new), docs/design/impact.md (new), docs.
+- Verification notes:
+  - run_tests: 111 checks. combat_probe / reward_probe / soak: all OK.
+  - capture_scene: 13 screenshots at 768x480, inspected.
+  - impact_capture (new): 20 frame-by-frame screenshots of a light hit and a
+    finisher; used to iterate the smear three times.
+- Ready to push: yes.

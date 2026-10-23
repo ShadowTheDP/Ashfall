@@ -265,6 +265,10 @@ func _tick_attack(delta: float) -> void:
 		velocity.x *= 0.25
 
 
+func _bow_offset() -> float:
+	return float(cfg.get("body_radius", 10.0)) + 4.0
+
+
 func _spawn_shockwaves() -> void:
 	Combat.shake(0.5)
 	Sfx.play("slam", -7, 0.85)
@@ -304,8 +308,8 @@ func _shoot() -> void:
 	var player := Game.player
 	if player == null:
 		return
-	var spawn := global_position + Vector2(facing * 12.0, -18.0)
-	var target := player.global_position + Vector2(0, -18)
+	var spawn := global_position + Vector2(facing * _bow_offset(), -2.0)
+	var target := player.global_position + Vector2(0, -14)
 	var velocity := MathArt.ballistic_velocity(spawn, target, float(cfg.get("projectile_speed", 320.0)), 700.0)
 	var projectile := Projectile.new()
 	projectile.position = spawn
@@ -337,9 +341,10 @@ func take_hit(info: Dictionary) -> void:
 		var shield_point := global_position + Vector2(float(facing) * 18.0, -10.0)
 		Combat.spark(shield_point, Vector2(float(facing), 0.0), false, MathArt.WHITE)
 		Combat.block_burst(shield_point, facing)
-		Combat.burst(shield_point, MathArt.WHITE, 5, 130.0)
+		Combat.impact(shield_point, Vector2(float(facing), 0.0), 0, MathArt.WHITE)
+		Juice.block(get_parent(), shield_point, facing)
 		Sfx.play("block", -8)
-		Combat.shake(0.06)
+		Combat.shake(0.10)
 		if hp <= 0.0:
 			_die()
 		return
@@ -357,11 +362,10 @@ func take_hit(info: Dictionary) -> void:
 	velocity = Vector2(dir * float(info.get("knockback", 180.0)) * scale, -20.0 if bool(cfg.get("boss", false)) else -90.0 * scale)
 
 	var contact: Vector2 = info.get("point", global_position + Vector2(0, -18))
-	var tint := Color(cfg.get("color", "#b8bec8"))
-	Combat.hitstop(float(info.get("hitstop", 0.05)))
-	Combat.shake(0.34 if crit else 0.18)
-	Combat.spark(contact, Vector2(dir, 0), crit, tint)
-	Combat.burst(contact, tint, 6 if crit else 4, 150.0)
+	var tier: int = clampi(int(info.get("tier", 0)) + (1 if crit else 0), 0, 3)
+	Combat.impact(contact, Vector2(float(dir), 0.0), tier, MathArt.WHITE)
+	if tier >= 2:
+		Combat.screen_punch(float(tier) / 3.0)
 	Combat.damage_number(global_position + Vector2(0, -50), int(damage), crit)
 	Game.combo_hit()
 	Sfx.play("crit" if crit else "hit", -7)
@@ -401,9 +405,17 @@ func _die() -> void:
 			sides = 6
 		"warden":
 			sides = 5
-	Combat.shatter(global_position + Vector2(0, -14), tint, sides, 24 if bool(cfg.get("boss", false)) else 14, 380.0 if bool(cfg.get("boss", false)) else 280.0)
-	Combat.burst(global_position + Vector2(0, -18), tint, 12, 260.0)
-	Juice.shatter(get_parent(), global_position + Vector2(0, -14), MathArt.LIGHT, 24 if bool(cfg.get("boss", false)) else 14)
+	var is_boss := bool(cfg.get("boss", false))
+	# Kill feedback: the silhouette itself breaks into 12-24 shards, plus a
+	# directional spark burst and a heavy screen punch.
+	Combat.shatter(global_position + Vector2(0, -14), tint, sides,
+		24 if is_boss else 12, 420.0 if is_boss else 320.0)
+	Combat.impact(global_position + Vector2(0, -16), Vector2(0, -1), 2 if is_boss else 1, MathArt.WHITE)
+	Juice.shatter(get_parent(), global_position + Vector2(0, -14), MathArt.WHITE, 24 if is_boss else 12)
+	if is_boss:
+		Combat.screen_punch(0.9)
+	else:
+		Combat.punch(0.35)
 	if bool(cfg.get("boss", false)):
 		Combat.ring(global_position + Vector2(0, -10), tint.lightened(0.3), 180.0, 5)
 		Combat.shake(0.75)

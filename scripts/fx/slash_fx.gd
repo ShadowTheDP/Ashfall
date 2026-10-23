@@ -11,20 +11,18 @@ var _t := 0.0
 var _life := 0.15
 
 
-func setup(attack_index: int, is_facing: int, tint: Color) -> void:
+func setup(attack_index: int, is_facing: int, tint: Color, blade_length: float = 38.0) -> void:
 	facing = is_facing
 	color = tint
 	scale.x = float(facing)
+	radius = blade_length
 	match attack_index:
 		0:
 			arc = 2.1
-			radius = 20.0
 		1:
 			arc = 2.2
-			radius = 21.0
 		_:
 			arc = 2.9
-			radius = 26.0
 	z_index = 7
 
 

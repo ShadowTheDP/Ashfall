@@ -27,8 +27,12 @@
   `PICKUP`). Readability comes from value contrast, outline weight and motion.
 - **Motion beats snapping.** Characters and camera use float positions and are
   never rounded. Do not add `roundf()` to gameplay transforms.
-- **No limbs.** The player is a square; enemies are plain polygons. A "hand" is
-  a single dot. Do not add legs, arms, feet or faces.
+- **No limbs, no faces.** The player is a plain square; enemies are plain
+  polygons. A "hand" is a single dot. Do not add legs, arms, feet, eyes or
+  decorative marks on the player square.
+- **Hit feedback is tiered.** Use `Combat.impact(point, direction, tier)` rather
+  than ad-hoc sparks. Read `docs/design/impact.md` first; verify with
+  `tests/impact_capture.tscn`.
 - **Particles use `Juice.*`** (a thin wrapper over Godot's `CPUParticles2D`).
   Do not hand-write particle simulation.
 - **Pipeline invariants:** 768x480 logical, integer x2 window 1536x960,

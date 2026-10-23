@@ -14,6 +14,7 @@ const PERFECT_DODGE_MULT := 1.25
 
 var player: Player = null
 var fx_root: Node = null
+var screen_fx_root: Node = null
 
 var cells := 0
 var kills := 0
@@ -152,7 +153,7 @@ func perfect_dodge() -> void:
 		player.refund_knife()
 		var at := player.global_position + Vector2(0, -8)
 		Combat.dodge_burst(at)
-		Combat.burst(at, MathArt.WHITE, 10, 190.0)
+		Juice.dodge(Game.fx_root, at)
 	Combat.shake(0.14)
 	# A 2-frame freeze sells the read without a screen flash.
 	Combat.hitstop(0.033)
