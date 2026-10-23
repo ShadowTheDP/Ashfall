@@ -79,17 +79,19 @@ func afterimage(at: Vector2, facing: int) -> void:
 
 
 func dust(at: Vector2, count: int, direction: Vector2) -> void:
-	var fx := ParticleFx.new()
-	fx.position = at
-	fx.setup_dust(count, direction)
-	_add(fx)
+	# Particles now come from Godot's own emitter; the old signature is kept
+	# so existing call sites do not have to change.
+	var root: Node = Game.fx_root
+	if not is_instance_valid(root):
+		return
+	Juice.dust(root, at, direction.x, clampf(float(count) / 6.0, 0.4, 1.6))
 
 
 func burst(at: Vector2, tint: Color, count: int = 14, speed: float = 260.0) -> void:
-	var fx := ParticleFx.new()
-	fx.position = at
-	fx.burst(count, tint, speed, PI, Vector2.UP, Vector2(2.0, 5.0))
-	_add(fx)
+	var root: Node = Game.fx_root
+	if not is_instance_valid(root):
+		return
+	Juice.hit_sparks(root, at, Vector2.UP, clampf(float(count) / 8.0, 0.4, 1.8))
 
 
 func parabola_preview(at: Vector2, velocity: Vector2, gravity: float) -> void:
