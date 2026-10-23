@@ -57,6 +57,13 @@ func damage_number(at: Vector2, amount: int, crit: bool) -> void:
 	_add(fx)
 
 
+func block_number(at: Vector2) -> void:
+	var fx := DamageNumber.new()
+	fx.position = at
+	fx.setup(0, false, "BLOCK")
+	_add(fx)
+
+
 func slash(at: Vector2, facing: int, attack_index: int, tint: Color) -> void:
 	var fx := SlashFx.new()
 	fx.position = at + Vector2(0, -10)
@@ -82,6 +89,27 @@ func burst(at: Vector2, tint: Color, count: int = 14, speed: float = 260.0) -> v
 	var fx := ParticleFx.new()
 	fx.position = at
 	fx.burst(count, tint, speed, PI, Vector2.UP, Vector2(2.0, 5.0))
+	_add(fx)
+
+
+func parabola_preview(at: Vector2, velocity: Vector2, gravity: float) -> void:
+	var fx := ParabolaFx.new()
+	fx.position = at
+	fx.setup(velocity, gravity)
+	_add(fx)
+
+
+func ring(at: Vector2, tint: Color, radius: float, sides: int = 0) -> void:
+	var fx := RingFx.new()
+	fx.position = at
+	fx.setup(tint, radius, sides)
+	_add(fx)
+
+
+func shatter(at: Vector2, tint: Color, sides: int = 3, count: int = 14, speed: float = 260.0) -> void:
+	var fx := ShatterFx.new()
+	fx.position = at
+	fx.setup(tint, sides, count, speed)
 	_add(fx)
 
 

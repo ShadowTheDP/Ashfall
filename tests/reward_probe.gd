@@ -1,0 +1,94 @@
+extends Node
+## Keyboard-only reward flow probe. Verifies pause, selection and effects
+## without relying on mouse or on the encounter timer.
+##
+## Run: godot --headless --path . tests/reward_probe.tscn
+
+var _failures := 0
+var _main: Node
+
+
+func _ready() -> void:
+	_main = $Main
+	await get_tree().process_frame
+	await get_tree().create_timer(0.2).timeout
+
+	var player := Game.player
+	if player == null:
+		_fail("player missing")
+		_finish()
+		return
+
+	_main.encounter.started = false
+	for enemy in _main.encounter.alive:
+		enemy.queue_free()
+	_main.encounter.alive.clear()
+	Game.enemies_left = 0
+
+	# The probe drives the screen itself; detach the encounter continuation.
+	_main.reward_screen.chosen.disconnect(Callable(_main, "_on_reward_chosen"))
+
+	# 1 = vitality
+	var max_hp_before := player.max_hp
+	_main.reward_screen.open(["vitality", "edge", "armory"])
+	await get_tree().process_frame
+	if not get_tree().paused or not Game.reward_open or not _main.reward_screen.visible:
+		_fail("reward screen did not pause the tree")
+		return
+	await _press(KEY_1)
+	if get_tree().paused or Game.reward_open:
+		_fail("reward screen did not unpause after picking 1")
+	if not is_equal_approx(player.max_hp, max_hp_before + 20.0):
+		_fail("vitality did not add 20 max hp")
+
+	# Arrow + Enter path, then number 3.
+	_main.reward_screen.open(["edge", "armory", "swift"])
+	await get_tree().process_frame
+	await _press(KEY_RIGHT)
+	await _press(KEY_ENTER)
+	if not Game.reward_counts.has("armory"):
+		_fail("arrow + enter did not take armory")
+	var knives_before := player.knife_max
+
+	_main.reward_screen.open(["armory", "ghost", "hunter"])
+	await get_tree().process_frame
+	await _press(KEY_3)
+	if not Game.reward_counts.has("hunter"):
+		_fail("number 3 did not take hunter")
+	if player.crit_bonus <= 0.0:
+		_fail("hunter did not add crit bonus")
+	if player.knife_max != knives_before:
+		_fail("third choice unexpectedly changed knife max")
+
+	if get_tree().paused:
+		get_tree().paused = false
+	_finish()
+
+
+func _press(key: Key) -> void:
+	var down := InputEventKey.new()
+	down.physical_keycode = key
+	down.pressed = true
+	Input.parse_input_event(down)
+	await get_tree().process_frame
+	var up := InputEventKey.new()
+	up.physical_keycode = key
+	up.pressed = false
+	Input.parse_input_event(up)
+	await get_tree().process_frame
+	await get_tree().create_timer(0.05).timeout
+
+
+func _fail(message: String) -> void:
+	_failures += 1
+	push_error("REWARD FAIL: " + message)
+	print("REWARD FAIL: ", message)
+
+
+func _finish() -> void:
+	if _failures == 0:
+		print("REWARD OK")
+	else:
+		print("REWARD FAILED (%d)" % _failures)
+	await get_tree().create_timer(0.3).timeout
+	get_tree().quit(0 if _failures == 0 else 1)

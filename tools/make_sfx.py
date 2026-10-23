@@ -115,6 +115,12 @@ def main() -> None:
     write("pickup", mix(sweep(880, 900, 0.06, "sine", 0.35), [0.0] * int(0.035 * SR) + sweep(1320, 1340, 0.09, "sine", 0.3)))
     write("shoot", mix(sweep(620, 240, 0.14, "sine", 0.5), noise_burst(0.05, 800, 3000, 0.3, 2.5)))
     write("ui", mix(sweep(520, 540, 0.05, "sine", 0.3), [0.0] * int(0.03 * SR) + sweep(780, 800, 0.06, "sine", 0.25)))
+    write("throw", mix(noise_burst(0.08, 1200, 6200, 0.4, 2.0), sweep(900, 460, 0.08, "sine", 0.28)))
+    write("block", mix(noise_burst(0.06, 900, 7200, 0.45, 3.0), sweep(1750, 1250, 0.18, "sine", 0.32), sweep(320, 300, 0.12, "sine", 0.38)))
+    write("dodge", mix(sweep(720, 1480, 0.18, "sine", 0.30), [0.0] * int(0.05 * SR) + sweep(1080, 2160, 0.16, "sine", 0.22), noise_burst(0.14, 2000, 8000, 0.16, 1.5)))
+    write("slam", mix(sweep(88, 36, 0.42, "sine", 0.85), noise_burst(0.30, 70, 900, 0.45, 1.5)))
+    write("boss", mix(sweep(55, 52, 0.72, "sine", 0.62), sweep(82.5, 80, 0.72, "sine", 0.30), noise_burst(0.40, 60, 320, 0.18, 1.0)))
+    write("reward", mix(sweep(660, 680, 0.10, "sine", 0.30), [0.0] * int(0.06 * SR) + sweep(990, 1010, 0.12, "sine", 0.26), [0.0] * int(0.14 * SR) + sweep(1320, 1330, 0.16, "sine", 0.22)))
     write("wave", mix(sweep(110, 108, 0.36, "sine", 0.5), sweep(165, 160, 0.36, "sine", 0.28), noise_burst(0.22, 80, 500, 0.2, 2.0)))
 
 

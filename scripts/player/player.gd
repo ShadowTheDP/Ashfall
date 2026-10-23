@@ -34,6 +34,16 @@ enum State { IDLE, RUN, AIR, ROLL, ATTACK, HURT, DEAD }
 @export var hurt_time := 0.28
 @export var hurt_knockback := 260.0
 
+@export_group("Kunai")
+@export var knife_max := 2
+@export var knife_regen_time := 1.5
+@export var knife_damage := 12.0
+@export var knife_speed := 780.0
+
+@export_group("Aegis")
+@export var aegis_time := 0.45
+@export var aegis_cooldown := 3.0
+
 var state: State = State.IDLE
 var facing := 1
 var hp := 0.0
@@ -50,6 +60,12 @@ var attack_total := 0.0
 var attack_index := 0
 var attack_queued := false
 var hurt_t := 0.0
+
+var crit_bonus := 0.0
+var knife_charges := 2
+var _knife_regen := 0.0
+var aegis_t := 0.0
+var aegis_cd := 0.0
 
 var weapon: Dictionary = {}
 var weapon_combo: Array = []
@@ -69,6 +85,7 @@ func _ready() -> void:
 	hp = max_hp
 	weapon = Data.weapons.get("rusty_sword", {})
 	weapon_combo = weapon.get("combo", [])
+	knife_charges = knife_max
 	_build_nodes()
 	Game.player = self
 	add_to_group("player")
@@ -114,6 +131,11 @@ func _physics_process(delta: float) -> void:
 
 	_tick_timers(delta)
 
+	if Input.is_action_just_pressed("throw") and state != State.HURT:
+		_throw_knife()
+	if Input.is_action_just_pressed("aegis") and state != State.HURT:
+		_cast_aegis()
+
 	var dir := Input.get_axis("move_left", "move_right")
 	if Input.is_action_just_pressed("jump"):
 		jump_buffer = jump_buffer_time
@@ -144,6 +166,16 @@ func _tick_timers(delta: float) -> void:
 	jump_buffer = maxf(0.0, jump_buffer - delta)
 	flash = maxf(0.0, flash - delta)
 	squash = move_toward(squash, 1.0, delta * 4.0)
+	aegis_t = maxf(0.0, aegis_t - delta)
+	aegis_cd = maxf(0.0, aegis_cd - delta)
+	if knife_charges < knife_max:
+		_knife_regen += delta
+		if _knife_regen >= knife_regen_time:
+			_knife_regen = 0.0
+			knife_charges += 1
+			Sfx.play("ui", -20, 1.5)
+	else:
+		_knife_regen = 0.0
 
 
 func _tick_free(dir: float, delta: float) -> void:
@@ -301,11 +333,11 @@ func _open_hitbox() -> void:
 	var rect := hitbox.shape_node.shape as RectangleShape2D
 	rect.size = Vector2(float(size[0]), float(size[1]))
 	hitbox.enable(
-		float(attack_cfg.get("damage", 10.0)),
+		float(attack_cfg.get("damage", 10.0)) * Game.total_damage_mult(),
 		float(attack_cfg.get("knockback", 180.0)),
 		float(attack_cfg.get("hitstop", 0.05)),
 		self,
-		float(weapon.get("crit_multiplier", 1.5))
+		crit_multiplier()
 	)
 	Combat.slash(
 		global_position + Vector2(facing * float(offset[0]) * 0.55, 0),
@@ -313,10 +345,26 @@ func _open_hitbox() -> void:
 		attack_index,
 		Color("#cfe8ff")
 	)
+	if attack_index == weapon_combo.size() - 1 and not weapon_combo.is_empty():
+		# The finisher releases the blade's sine function as a travelling wave.
+		var wave := FunctionWave.new()
+		wave.position = global_position + Vector2(facing * 26.0, -10.0)
+		wave.setup(facing, 8.0 * Game.total_damage_mult(), Color("#8fe3ff"), self, crit_multiplier())
+		var root := Game.fx_root
+		if is_instance_valid(root):
+			root.add_child(wave)
 
 
 func take_hit(info: Dictionary) -> void:
-	if state == State.DEAD or is_invulnerable():
+	if state == State.DEAD:
+		return
+	if state == State.ROLL and roll_t >= roll_iframe_start and roll_t <= roll_iframe_end:
+		Game.perfect_dodge()
+		return
+	if invuln > 0.0:
+		return
+	if aegis_t > 0.0:
+		_aegis_block()
 		return
 	var damage := float(info.get("damage", 1))
 	hp = maxf(0.0, hp - damage)
@@ -338,6 +386,7 @@ func take_hit(info: Dictionary) -> void:
 	Combat.damage_number(global_position + Vector2(0, -46), int(damage), false)
 	Combat.spark(global_position + Vector2(0, -16), Vector2(dir, 0), false, Color("#ff6b6b"))
 	Sfx.play("hurt", -6)
+	Game.hurt_flash = 0.32
 	Game.combo_break()
 
 	if hp <= 0.0:
@@ -356,7 +405,99 @@ func is_invulnerable() -> bool:
 
 
 func is_crit_against(target: Node) -> bool:
-	return target.has_method("is_exposed") and target.is_exposed()
+	if target.has_method("is_exposed") and target.is_exposed():
+		return true
+	if target.has_method("is_backstabbed_by"):
+		return target.is_backstabbed_by(self)
+	return false
+
+
+func crit_multiplier() -> float:
+	return float(weapon.get("crit_multiplier", 1.5)) + crit_bonus
+
+
+func add_knife_max() -> void:
+	knife_max += 1
+	knife_charges = knife_max
+	_knife_regen = 0.0
+
+
+func refund_knife() -> void:
+	if knife_charges < knife_max:
+		knife_charges += 1
+
+
+func _nearest_enemy(radius: float) -> Node2D:
+	var best: Node2D = null
+	var best_distance := radius
+	for enemy in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(enemy) or enemy._dead:
+			continue
+		var distance: float = global_position.distance_to(enemy.global_position)
+		if distance < best_distance:
+			best_distance = distance
+			best = enemy
+	return best
+
+
+func _throw_knife() -> void:
+	if knife_charges <= 0:
+		Sfx.play("ui", -20, 1.4)
+		return
+	knife_charges -= 1
+	var spawn := global_position + Vector2(float(facing) * 8.0, -18.0)
+	var target := _nearest_enemy(520.0)
+	var aim_point := spawn + Vector2(float(facing) * 340.0, -70.0)
+	if target != null:
+		aim_point = target.global_position + Vector2(0, -18)
+	# v0 is solved from the parabola through the target, not aimed directly.
+	var velocity := MathArt.ballistic_velocity(spawn, aim_point, knife_speed, Projectile.KUNAI_GRAVITY)
+	var projectile := Projectile.new()
+	projectile.position = spawn
+	projectile.setup_player(
+		velocity,
+		knife_damage * Game.total_damage_mult(),
+		Color("#bfe9ff"),
+		self,
+		crit_multiplier()
+	)
+	var root: Node = Game.fx_root
+	if is_instance_valid(root):
+		root.add_child(projectile)
+	Combat.parabola_preview(spawn, velocity, Projectile.KUNAI_GRAVITY)
+	Combat.burst(spawn, Color("#8fe3ff"), 4, 90.0)
+	Sfx.play("throw", -9, randf_range(0.95, 1.05))
+
+
+func _cast_aegis() -> void:
+	if aegis_cd > 0.0 or state == State.DEAD:
+		return
+	aegis_t = aegis_time
+	aegis_cd = aegis_time + aegis_cooldown
+	Combat.ring(global_position + Vector2(0, -8), Color("#8fe3ff"), 48.0)
+	Combat.burst(global_position + Vector2(0, -10), Color("#8fe3ff"), 10, 150.0)
+	Sfx.play("dodge", -10, 0.8)
+
+
+func _aegis_block() -> void:
+	aegis_t = 0.0
+	Combat.block_number(global_position + Vector2(0, -50))
+	Combat.spark(global_position + Vector2(0, -12), Vector2.UP, false, Color("#8fe3ff"))
+	Combat.ring(global_position + Vector2(0, -8), Color("#8fe3ff"), 58.0)
+	Combat.shake(0.22)
+	Sfx.play("block", -6, 1.1)
+	for enemy in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(enemy) or enemy._dead:
+			continue
+		if global_position.distance_to(enemy.global_position) <= 112.0:
+			enemy.take_hit({
+				"damage": Damage.compute(10.0 * Game.total_damage_mult(), 0, false, 1.0),
+				"crit": false,
+				"knockback": 260.0,
+				"hitstop": 0.03,
+				"source_pos": global_position,
+				"point": enemy.global_position,
+			})
 
 
 func set_state(next: State) -> void:

@@ -5,8 +5,9 @@
 1. `README.md` — purpose, setup, structure, validation.
 2. `MEMORY.md` — durable decisions, commands, risks.
 3. `docs/agent/current-state.md` — what is being worked on now.
-4. `docs/design/combat-feel.md` before changing any gameplay number.
-5. The target script/scene; actors are assembled in code, so read the root
+4. `docs/design/math-art.md` before adding or changing any visual.
+5. `docs/design/combat-feel.md` before changing any gameplay number.
+6. The target script/scene; actors are assembled in code, so read the root
    script before the `.tscn`.
 
 ## Scope
@@ -17,6 +18,12 @@
   data tables, or decompiled output. Mechanics and genre are fair game;
   expression is not.
 - Keep the prototype runnable with the headless checks in `tools/check.ps1`.
+- **All art goes through `scripts/systems/math_art.gd`.** No textures, no
+  `Sprite2D`, no imported images. If a shape cannot be expressed as a
+  primitive (polygon, star, superellipse, Lissajous, rose, phyllotaxis,
+  spiral, harmonic, ballistic), add the primitive to `MathArt` first.
+- Use `PHI`, `INV_PHI` and `GOLDEN_ANGLE` for scale and spacing. Random values
+  are only allowed for deliberate noise (cracks, debris).
 - **Keyboard-only:** every action must have a keyboard binding; do not add
   mouse-only interactions. Pause, restart and quit included. Gamepad is additive.
 - Prefer Godot built-ins over new libraries. There are no third-party runtime
@@ -32,19 +39,22 @@
 powershell -ExecutionPolicy Bypass -File tools\check.ps1
 
 # Visual capture (requires a display)
+.\.tools\Godot_v4.7.2-stable_win64_console.exe --path . tests\title_capture.tscn
 .\.tools\Godot_v4.7.2-stable_win64_console.exe --path . tests\capture_scene.tscn
 
-# Regenerate placeholder SFX
+# Regenerate audio
 python tools\make_sfx.py
+python tools\make_music.py
 ```
 
 ## Structure Direction
 
 - `scripts/autoload/` holds only cross-scene services
   (`Data`, `Sfx`, `Combat`, `Game`).
-- `scripts/systems/` holds pure logic (`Damage`) and constants (`Layers`).
+- `scripts/systems/` holds pure logic (`Damage`), constants (`Layers`) and the
+  visual language (`MathArt`).
 - `scripts/player/`, `scripts/enemies/`, `scripts/world/`, `scripts/fx/`,
-  `scripts/ui/` own their feature.
+  `scripts/ui/`, `scripts/combat/` own their feature.
 - Content lives in `data/*.json`. Do not hardcode weapon combo tables or enemy
   stats in scripts.
 - `scenes/*.tscn` stay root-only on purpose; actors build their children in
@@ -107,3 +117,6 @@ Never cut: validation at trust boundaries, error handling that prevents data los
 3. **設計決策必須附上「為什麼選這個、放棄了什麼」兩行說明。**
    即使違反「回覆結尾只講一行」的規則。寫進 `docs/design/`、`MEMORY.md`
    或該段程式碼的註解。
+4. **視覺一致性不適用「最小改動」。**
+   新增視覺元素必須用既有的數學 primitive 與 φ / 黃金角比例；
+   「多寫一個自訂繪圖函式」在美術層是負債，不是節省。

@@ -2,57 +2,73 @@
 
 ## Current Objective
 
-Milestone 0 is complete: a runnable, original Dead-Cells-like combat prototype
-with a full 3-wave loop. The next phase is feel iteration and breadth, not more
-systems at once.
+Milestone 1 is complete: a full keyboard-only run from title screen to boss
+defeat, built entirely from parametric geometry. The next phase is feel tuning
+and breadth (more weapon functions, more arena space), not more systems at once.
 
 ## What Exists
 
-- One handmade arena (`Arena`) with ground, platforms, walls, ambient motes,
-  parallax-ish pillars and fog.
-- Player: run/air/roll/attack/hurt/dead state machine, 3-hit sword combo,
+- **Title screen** (`TitleScreen`): rose window + Lissajous + phyllotaxis +
+  log spiral; pauses the tree, ENTER starts the run.
+- **Player**: run/air/roll/attack/hurt/dead state machine, 3-hit sine sword,
   input buffering, cancel windows, coyote time, jump buffer, variable jump
-  height, roll i-frames, post-hit invulnerability, knockback, landing squash.
-- Combat feedback: hitstop, camera trauma, slash arcs, hit sparks, damage
-  numbers, crits, combo counter, low-health pulse, synthesized SFX.
-- Enemies: Husk (melee), Watcher (projectile), Ram (charge), each with a
-  visible telegraph and exposed/crit window.
-- Loop: 3 authored waves, between-wave heal, cell drops with magnet, death and
-  victory overlays, R to restart.
-- HUD: health, cells, wave, hostiles, combo timer, run timer, control hints,
-  pause menu.
-- Data tables: `data/weapons.json`, `data/enemies.json`.
+  height, roll i-frames, post-hit invulnerability, landing squash.
+- **Weapons as functions**:
+  - `J` Sine Edge — 3-hit combo, blade drawn as `y = A·sin(kx+ωt)`; the
+    finisher releases `FunctionWave` (a travelling sine ribbon, piercing).
+  - `K` Kunai — `MathArt.ballistic_velocity()` solves `v0` for the nearest
+    enemy, `ParabolaFx` previews the arc, `Projectile` integrates gravity.
+  - `L` Aegis — radial `r = R + A·sin(3θ+ωt)` field; blocks a hit and fires a
+    close-range counter pulse.
+- **Perfect Dodge**: rolling through an attack grants 2.5 s of +25% damage and
+  refunds one kunai; tracked and shown in the run summary.
+- **Enemies** (shape language): Husk (triangle), Watcher (circle + orbit,
+  ballistic arrows with real path preview), Ram (square charge), Bulwark
+  (hexagon, front hits chip 1 hp unless crit/backstab), **The Warden**
+  (pentagon + pentagram boss with cleave / charge / shockwave).
+- **Boons**: 7 keyboard-picked upgrades between waves (`data/rewards.json`),
+  applied in `Game.apply_reward()`.
+- **Loop**: 4 waves (3 normal + boss), between-wave heal, cell drops with
+  magnet, death/victory overlays, R to restart.
+- **HUD**: health, cells, kunai charges, Aegis cooldown, wave, boss bar,
+  combo ring, Perfect Dodge / EDGE timer, build summary.
+- **Visual system**: `MathArt` primitives everywhere; bloom + vignette +
+  logarithmic spiral background shader; braziers, runes, phyllotaxis motes.
+- **Audio**: 18 synthesized SFX + a 32 s mathematically seamless music loop.
 
 ## Current Decisions
 
+- Art must go through `MathArt`; no textures or `Sprite2D`. Style comes from
+  constraint, not from more elements.
+- Weapons and enemy telegraphs express their actual math (ballistic preview,
+  sine wave, radial field).
+- Keyboard-only is a hard requirement; gamepad is additive.
 - Feel-first order; rooms/builds/meta are deliberately deferred.
 - Actor scenes are root-only; children are built in code.
-- Damage formula lives only in `Damage`; crits require an exposed enemy.
-- Enemy spawn pools are split by type (melee=ground, archer=platform).
-- HUD is above the vignette so UI colors are not dimmed.
-- Input actions are runtime-registered; document the shortcut until a settings
-  screen exists.
-- Placeholder SFX are generated, not sourced.
+- Damage formula lives only in `Damage`; crits require an exposed enemy or a
+  backstab.
+- HUD renders above bloom so text stays crisp.
+- Boss is immune to stun-lock (`boss` flag).
+- Tests run as scenes when they need autoloads; `--script` has no autoloads.
 
 ## Structure Assumptions
 
 - `scripts/autoload/` = cross-scene services.
-- `scripts/systems/` = pure logic and constants.
-- `scripts/player|enemies|world|fx|ui/` = feature code.
+- `scripts/systems/` = pure logic, constants, and the `MathArt` visual language.
+- `scripts/player|enemies|world|ui|fx|combat/` = feature code.
 - `data/` = content numbers.
 - `tests/` = headless checks and capture harnesses.
 - `output/` = screenshots/builds (ignored).
 
 ## Next Likely Improvements
 
-1. Tune the feel with a real playtest pass: attack commit length, hitstop
-   duration, camera zoom, enemy windup vs. player roll timing.
-2. Add one more melee enemy archetype that forces a different dodge (e.g.
-   lunging stab or area slam) to stress the roll/cancel loop.
-3. Add a second handcrafted arena and a doorway transition to test camera
-   limits and room handoff before any generator work.
-4. Add a minimal room-template data format and a hand-authored 3-room chain
-   (pillar 2 first slice), without procedural generation yet.
-5. Add a weapon-data-driven second weapon (ranged or heavy) to prove the schema
-   before building the full Build system.
-6. Add export presets and produce a Windows build once templates are installed.
+1. Real playtest tuning pass: attack commit length, hitstop duration, camera
+   zoom, Warden telegraph readability, Aegis cooldown.
+2. A second weapon function with a different curve (e.g. a Lissajous flail or
+   a rose-petal area attack) to prove the weapon schema generalizes.
+3. A second handcrafted arena and a doorway transition before any generator
+   work (pillar 2 first slice).
+4. Room-template data format + a hand-authored 3-room chain, no randomness yet.
+5. Replace the 7 generic boons with the three-attribute (red/purple/green)
+   scroll system once there are enough weapons to scale.
+6. Export presets and a Windows build once templates are installed.

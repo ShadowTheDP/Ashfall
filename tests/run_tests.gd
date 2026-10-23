@@ -12,6 +12,8 @@ func _initialize() -> void:
 	_test_damage_formula()
 	_test_weapon_data()
 	_test_enemy_data()
+	_test_reward_data()
+	_test_math_art()
 	_test_timing_sanity()
 
 	print("")
@@ -72,7 +74,7 @@ func _test_weapon_data() -> void:
 
 func _test_enemy_data() -> void:
 	var data := _read_json("res://data/enemies.json")
-	for kind in ["grunt", "archer", "charger"]:
+	for kind in ["grunt", "archer", "charger", "bulwark", "warden"]:
 		var cfg: Dictionary = data.get(kind, {})
 		_check(not cfg.is_empty(), "enemies.json needs " + kind)
 		_check(float(cfg.get("hp", 0.0)) > 0.0, kind + " needs hp")
@@ -82,6 +84,49 @@ func _test_enemy_data() -> void:
 		_check(float(cfg.get("recovery", 0.0)) > 0.0, kind + " needs recovery")
 		_check(float(cfg.get("body_radius", 0.0)) > 0.0, kind + " needs a collision radius")
 		_check(float(cfg.get("body_height", 0.0)) >= float(cfg.get("body_radius", 0.0)) * 2.0, kind + " capsule is too short")
+	_check(bool(data.get("bulwark", {}).get("shield", false)), "bulwark needs the shield flag")
+	var warden: Dictionary = data.get("warden", {})
+	_check(bool(warden.get("boss", false)), "warden needs the boss flag")
+	_check(float(warden.get("shockwave_damage", 0.0)) > 0.0, "warden needs shockwave damage")
+	_check(float(warden.get("shockwave_speed", 0.0)) > 0.0, "warden needs shockwave speed")
+
+
+func _test_reward_data() -> void:
+	var data := _read_json("res://data/rewards.json")
+	_check(data.size() >= 7, "rewards.json should offer at least 7 boons")
+	for id in data:
+		var cfg: Dictionary = data[id]
+		_check(not str(cfg.get("name", "")).is_empty(), id + " reward needs a name")
+		_check(not str(cfg.get("desc", "")).is_empty(), id + " reward needs a description")
+		var tint := str(cfg.get("color", ""))
+		_check(tint.begins_with("#") and tint.length() == 7, id + " reward needs a hex color")
+
+
+func _test_math_art() -> void:
+	# The art language is numeric; guard the constants that the visuals rely on.
+	_check(absf(MathArt.PHI - 1.618033988749895) < 1e-9, "PHI must be the golden ratio")
+	_check(absf(MathArt.INV_PHI - (MathArt.PHI - 1.0)) < 1e-9, "INV_PHI must be 1/PHI")
+	_check(absf(MathArt.GOLDEN_ANGLE - 2.399963229728653) < 1e-9, "golden angle must be 2.399963...")
+	_check(MathArt.fibonacci(0) == 0 and MathArt.fibonacci(1) == 1, "fibonacci base case")
+	_check(MathArt.fibonacci(10) == 55, "fibonacci(10) must be 55")
+	var hexagon := MathArt.ngon(6, 10.0)
+	_check(hexagon.size() == 6, "ngon must return the requested sides")
+	for point in hexagon:
+		_check(absf(point.length() - 10.0) < 0.001, "ngon points must sit on the radius")
+	var star := MathArt.star(5, 20.0, 8.0)
+	_check(star.size() == 10, "star must alternate outer and inner")
+	# Ballistic solver: a shot at a target 200 px right and 100 px up must reach it.
+	var origin := Vector2.ZERO
+	var target := Vector2(200.0, -100.0)
+	var gravity := 700.0
+	var velocity := MathArt.ballistic_velocity(origin, target, 900.0, gravity)
+	var flight := 0.42
+	var landed := velocity * flight + Vector2(0.0, 0.5 * gravity * flight * flight)
+	# Solve for the actual flight time to x = 200 and check the height there.
+	var t_hit := 200.0 / velocity.x
+	var y_at := velocity.y * t_hit + 0.5 * gravity * t_hit * t_hit
+	_check(absf(y_at - (-100.0)) < 0.5, "ballistic solver should hit the target height")
+	_check(absf(velocity.length() - 900.0) < 0.5, "ballistic solver should preserve speed")
 
 
 func _test_timing_sanity() -> void:

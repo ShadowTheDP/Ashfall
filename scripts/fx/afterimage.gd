@@ -1,6 +1,6 @@
 class_name Afterimage
 extends Node2D
-## Fading silhouette used during rolls.
+## Fading geometric echo used during rolls.
 
 var _t := 0.0
 var _life := 0.22
@@ -24,8 +24,8 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
-	var a := (1.0 - _t / _life) * 0.30
-	draw_circle(Vector2(1, -18), 13.0, Color(_color, a))
-	draw_rect(Rect2(-9, -8, 20, 28), Color(_color, a))
-	draw_line(Vector2(-7, 18), Vector2(-7, 24), Color(_color, a), 4.0)
-	draw_line(Vector2(8, 18), Vector2(8, 24), Color(_color, a), 4.0)
+	var a := (1.0 - _t / _life) * 0.28
+	var body := MathArt.ngon(6, 14.0, _t * 2.0, Vector2(0, -10))
+	MathArt.draw_poly(self, body, Color(_color, a), Color(_color, a * 1.4), 1.0)
+	draw_circle(Vector2(2, -23), 6.0, Color(_color, a * 1.2))
+	MathArt.draw_poly(self, MathArt.ngon(3, 4.0, _t * 3.0, Vector2(0, 6)), Color(_color, a * 0.6))

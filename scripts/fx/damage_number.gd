@@ -8,14 +8,21 @@ var _vy := -92.0
 var _label: Label
 
 
-func setup(amount: int, crit: bool) -> void:
+func setup(amount: int, crit: bool, override_text: String = "") -> void:
 	_label = Label.new()
-	_label.text = ("%d!" % amount) if crit else ("%d" % amount)
+	if override_text.is_empty():
+		_label.text = ("%d!" % amount) if crit else ("%d" % amount)
+	else:
+		_label.text = override_text
 	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_label.size = Vector2(80, 28)
 	_label.position = Vector2(-40, -16)
-	_label.add_theme_font_size_override("font_size", 26 if crit else 17)
-	_label.add_theme_color_override("font_color", Color("#ffd166") if crit else Color("#f4efe4"))
+	if override_text.is_empty():
+		_label.add_theme_font_size_override("font_size", 26 if crit else 17)
+		_label.add_theme_color_override("font_color", Color("#ffd166") if crit else Color("#f4efe4"))
+	else:
+		_label.add_theme_font_size_override("font_size", 14)
+		_label.add_theme_color_override("font_color", Color("#8fe3ff"))
 	_label.add_theme_color_override("font_outline_color", Color(0.02, 0.02, 0.03, 0.95))
 	_label.add_theme_constant_override("outline_size", 5)
 	add_child(_label)

@@ -4,12 +4,17 @@ extends Node2D
 const PLAYER_SCENE: PackedScene = preload("res://scenes/player.tscn")
 const BACKGROUND_SHADER: Shader = preload("res://shaders/background.gdshader")
 const VIGNETTE_SHADER: Shader = preload("res://shaders/vignette.gdshader")
+const BLOOM_SHADER: Shader = preload("res://shaders/bloom.gdshader")
+
+@export var skip_title := false
 
 var world: Node2D
 var arena: Arena
 var player: Player
 var encounter: Encounter
 var hud: Hud
+var reward_screen: RewardScreen
+var title_screen: TitleScreen
 
 
 func _ready() -> void:
@@ -23,6 +28,14 @@ func _ready() -> void:
 	arena = Arena.new()
 	arena.name = "Arena"
 	world.add_child(arena)
+
+	var runes := Runes.new()
+	runes.name = "Runes"
+	world.add_child(runes)
+
+	var braziers := Braziers.new()
+	braziers.name = "Braziers"
+	world.add_child(braziers)
 
 	var motes := Motes.new()
 	motes.name = "Motes"
@@ -46,10 +59,45 @@ func _ready() -> void:
 	hud.name = "Hud"
 	hud_layer.add_child(hud)
 
+	var reward_layer := CanvasLayer.new()
+	reward_layer.name = "RewardLayer"
+	reward_layer.layer = 40
+	add_child(reward_layer)
+	reward_screen = RewardScreen.new()
+	reward_screen.name = "RewardScreen"
+	reward_layer.add_child(reward_screen)
+
+	Game.rewards_requested.connect(_on_rewards_requested)
+	reward_screen.chosen.connect(_on_reward_chosen)
+
+	if not skip_title:
+		var title_layer := CanvasLayer.new()
+		title_layer.name = "TitleLayer"
+		title_layer.layer = 50
+		add_child(title_layer)
+		title_screen = TitleScreen.new()
+		title_screen.name = "TitleScreen"
+		title_layer.add_child(title_screen)
+		title_screen.started.connect(_on_title_started)
+		hud.visible = false
+
 	_add_fullscreen_shader_layer(-10, BACKGROUND_SHADER)
+	_add_fullscreen_shader_layer(15, BLOOM_SHADER)
 	_add_fullscreen_shader_layer(20, VIGNETTE_SHADER)
 
 	encounter.start()
+
+
+func _on_title_started() -> void:
+	hud.visible = true
+
+
+func _on_rewards_requested(choices: Array) -> void:
+	reward_screen.open(choices)
+
+
+func _on_reward_chosen(_id: String) -> void:
+	encounter.resume_after_reward()
 
 
 func _add_fullscreen_shader_layer(layer_index: int, shader: Shader) -> void:

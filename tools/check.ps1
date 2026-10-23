@@ -51,6 +51,10 @@ Invoke-Step -Name "Combat probe (hit, damage, death, i-frames)" -Arguments @(
     "--headless", "--path", $root, "tests/combat_probe.tscn"
 )
 
+Invoke-Step -Name "Reward probe (keyboard boon picker)" -Arguments @(
+    "--headless", "--path", $root, "tests/reward_probe.tscn"
+)
+
 Invoke-Step -Name "Soak (all enemies, 3 waves, victory)" -Arguments @(
     "--headless", "--path", $root, "tests/soak.tscn"
 )

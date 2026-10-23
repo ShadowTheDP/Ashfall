@@ -39,3 +39,30 @@ After each meaningful completed task, append:
 - Verification notes: `tools/check.ps1` passes (53 data checks, combat probe,
   3-wave soak). Game launched and rendered for manual playtest.
 - Ready to push: yes.
+
+2026-10-23 10:40
+- Summary: Milestone 1. Rebuilt the visual layer as a single mathematical art
+  system (`MathArt`): polygons, stars, superellipses, Lissajous, rose curves,
+  phyllotaxis, log spirals, harmonic waves and a ballistic solver. Added a
+  keyboard title screen, a boss (The Warden), a shielded enemy (Bulwark), a
+  keyboard boon picker with 7 upgrades, three function-weapons (Sine Edge,
+  ballistic Kunai, Aegis radial field), Perfect Dodge, bloom/vignette/spiral
+  background shaders, a 32-second mathematically seamless music loop, and
+  18 synthesized SFX.
+- Key files changed: `scripts/systems/math_art.gd` (new), `scripts/ui/title_screen.gd`
+  (new), `scripts/ui/reward_screen.gd` (new), `scripts/combat/function_wave.gd`
+  (new), `scripts/fx/{ring,shatter,parabola}_fx.gd` (new),
+  `scripts/world/{braziers,runes}.gd` (new), `shaders/bloom.gdshader` (new),
+  `data/rewards.json` (new), `tools/make_music.py` (new),
+  plus rewrites of player, enemies, arena, motes, HUD, projectile and the
+  project docs.
+- Verification notes:
+  - `run_tests.gd`: 111 checks (data, damage, golden-ratio constants, Fibonacci,
+    ngon radius, ballistic solver accuracy).
+  - `combat_probe.tscn`: combo kills a 42 hp husk; i-frames verified.
+  - `reward_probe.tscn`: pause + 1/2/3 + arrows+Enter + effects verified.
+  - `soak.tscn`: 4 waves incl. Warden cleared; Bulwark front/back rules
+    verified; boons granted; victory.
+  - `title_capture.tscn`: title pauses, ENTER resumes and spawns the player.
+  - `capture_scene.tscn`: 13 screenshots verified visually.
+- Ready to push: yes.

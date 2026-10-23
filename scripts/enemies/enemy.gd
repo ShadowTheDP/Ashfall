@@ -24,6 +24,9 @@ var fade := 1.0
 
 var _dead := false
 var _spawn_t := 0.0
+var _pending_attack := "cleave"
+var _pattern := 0
+var _slam_done := false
 
 
 func configure(kind_id: String, config: Dictionary, hp_scale: float = 1.0) -> void:
@@ -41,6 +44,10 @@ func _ready() -> void:
 	_build_nodes()
 	state_t = 0.0
 	_spawn_t = randf_range(0.1, 0.4)
+	if bool(cfg.get("boss", false)):
+		z_index = 2
+		Game.boss = self
+		Game.boss_defeated = false
 
 
 func _build_nodes() -> void:
@@ -120,6 +127,16 @@ func _tick_chase(player: Player, delta: float) -> void:
 	var attack_range := float(cfg.get("attack_range", 60.0))
 
 	match kind:
+		"warden":
+			if attack_cd <= 0.0 and _spawn_t <= 0.0:
+				if distance < 150.0:
+					_pending_attack = "cleave"
+				else:
+					_pattern += 1
+					_pending_attack = "charge" if _pattern % 2 == 1 else "slam"
+				_enter_windup()
+				return
+			velocity.x = move_toward(velocity.x, facing * speed, 520.0 * delta)
 		"archer":
 			if attack_cd <= 0.0 and distance < attack_range and absf(delta_pos.y) < 180.0:
 				_enter_windup()
@@ -146,8 +163,11 @@ func _enter_windup() -> void:
 	state = EState.WINDUP
 	state_t = 0.0
 	velocity.x = 0.0
+	_slam_done = false
 	if kind == "charger":
 		Sfx.play("swing", -18, 0.55)
+	elif kind == "warden":
+		Sfx.play("boss", -14, 0.9 if _pending_attack == "slam" else 1.0)
 	else:
 		Sfx.play("swing", -20, 1.35)
 
@@ -166,16 +186,36 @@ func _begin_attack() -> void:
 		_shoot()
 		Sfx.play("shoot", -8)
 		return
+	if kind == "warden":
+		match _pending_attack:
+			"cleave":
+				_enable_hitbox(Vector2(96.0, 68.0), 50.0, -10.0, damage)
+				velocity.x = facing * 180.0
+				Sfx.play("swing", -10, 0.65)
+			"charge":
+				_enable_hitbox(Vector2(62.0, 52.0), 34.0, -8.0, damage + 2.0)
+				velocity.x = facing * float(cfg.get("charge_speed", 520.0))
+				Sfx.play("swing", -12, 0.55)
+			"slam":
+				velocity.x = 0.0
+				Sfx.play("slam", -8)
+		return
 
 	var size := Vector2(48.0, 38.0)
 	if kind == "charger":
 		size = Vector2(58.0, 44.0)
-	hitbox.shape_node.position = Vector2(facing * 30.0, -8.0)
+	elif kind == "bulwark":
+		size = Vector2(58.0, 42.0)
+	_enable_hitbox(size, 30.0, -8.0, damage)
+	velocity.x = facing * float(cfg.get("lunge", 140.0))
+	Sfx.play("swing", -14, 0.8 if kind in ["charger", "bulwark"] else 1.1)
+
+
+func _enable_hitbox(size: Vector2, offset_x: float, offset_y: float, damage: float) -> void:
+	hitbox.shape_node.position = Vector2(facing * offset_x, offset_y)
 	var rect := hitbox.shape_node.shape as RectangleShape2D
 	rect.size = size
 	hitbox.enable(damage, float(cfg.get("knockback", 220.0)), 0.0, self)
-	velocity.x = facing * float(cfg.get("lunge", 140.0))
-	Sfx.play("swing", -14, 0.8 if kind == "charger" else 1.1)
 
 
 func _tick_attack(delta: float) -> void:
@@ -188,11 +228,50 @@ func _tick_attack(delta: float) -> void:
 			Combat.shake(0.32)
 			Sfx.play("land", -10, 0.7)
 			return
+	if kind == "warden":
+		if _pending_attack == "charge":
+			velocity.x = facing * float(cfg.get("charge_speed", 520.0))
+			if is_on_wall():
+				hitbox.disable()
+				state = EState.RECOVER
+				state_t = 0.0
+				Combat.shake(0.45)
+				Sfx.play("slam", -6)
+				return
+		elif _pending_attack == "slam":
+			if not _slam_done and state_t >= 0.14:
+				_slam_done = true
+				_spawn_shockwaves()
+			if state_t >= 0.55:
+				hitbox.disable()
+				state = EState.RECOVER
+				state_t = 0.0
+				velocity.x = 0.0
+			return
 	if state_t >= float(cfg.get("active", 0.12)):
 		hitbox.disable()
 		state = EState.RECOVER
 		state_t = 0.0
 		velocity.x *= 0.25
+
+
+func _spawn_shockwaves() -> void:
+	Combat.shake(0.5)
+	Sfx.play("slam", -7, 0.85)
+	Combat.dust(global_position + Vector2(0, 28), 16, Vector2(0, 1))
+	for direction in [-1.0, 1.0]:
+		var wave := Projectile.new()
+		wave.position = global_position + Vector2(direction * 34.0, 0)
+		wave.setup_wave(
+			Vector2(direction, 0),
+			float(cfg.get("shockwave_speed", 430.0)),
+			float(cfg.get("shockwave_damage", 13.0)),
+			Color(cfg.get("color", "#9b6bff")),
+			self
+		)
+		var root := Game.fx_root
+		if is_instance_valid(root):
+			root.add_child(wave)
 
 
 func _tick_recover() -> void:
@@ -216,10 +295,11 @@ func _shoot() -> void:
 	if player == null:
 		return
 	var spawn := global_position + Vector2(facing * 12.0, -18.0)
-	var aim := (player.global_position + Vector2(0, -18) - spawn).normalized()
+	var target := player.global_position + Vector2(0, -18)
+	var velocity := MathArt.ballistic_velocity(spawn, target, float(cfg.get("projectile_speed", 320.0)), 700.0)
 	var projectile := Projectile.new()
 	projectile.position = spawn
-	projectile.setup(aim, float(cfg.get("projectile_speed", 320.0)), float(cfg.get("damage", 7.0)), Color(cfg.get("color", "#b76bd6")))
+	projectile.setup_ballistic(velocity, float(cfg.get("damage", 7.0)), Color(cfg.get("color", "#b76bd6")), self)
 	var root := Game.fx_root
 	if is_instance_valid(root):
 		root.add_child(projectile)
@@ -230,27 +310,52 @@ func take_hit(info: Dictionary) -> void:
 	if _dead:
 		return
 	var damage := float(info.get("damage", 1))
-	hp -= damage
-	flash = 0.10
-	state = EState.HURT
-	state_t = 0.0
-	hitbox.disable()
-
+	var crit := bool(info.get("crit", false))
 	var source_pos: Vector2 = info.get("source_pos", global_position)
 	var dir := signf(global_position.x - source_pos.x)
 	if dir == 0.0:
 		dir = 1.0
-	velocity = Vector2(dir * float(info.get("knockback", 180.0)), -90.0)
+
+	# Bulwark shield: front hits are chipped unless they are crits
+	# (exposed or backstab). This is the positioning lesson.
+	var to_source := signf(source_pos.x - global_position.x)
+	if bool(cfg.get("shield", false)) and not crit and to_source == float(facing):
+		hp -= 1.0
+		flash = 0.06
+		Combat.block_number(global_position + Vector2(0, -54))
+		Combat.spark(global_position + Vector2(facing * 18.0, -10.0), Vector2(facing, 0.0), false, Color("#8fe3ff"))
+		Sfx.play("block", -8)
+		Combat.shake(0.06)
+		if hp <= 0.0:
+			_die()
+		return
+
+	hp -= damage
+	flash = 0.10
+	if not bool(cfg.get("boss", false)):
+		state = EState.HURT
+		state_t = 0.0
+		hitbox.disable()
+
+	var scale := float(cfg.get("knockback_scale", 1.0))
+	velocity = Vector2(dir * float(info.get("knockback", 180.0)) * scale, -20.0 if bool(cfg.get("boss", false)) else -90.0 * scale)
 
 	Combat.hitstop(float(info.get("hitstop", 0.05)))
-	Combat.shake(0.34 if info.get("crit", false) else 0.18)
-	Combat.spark(global_position + Vector2(0, -18), Vector2(dir, 0), bool(info.get("crit", false)), Color(cfg.get("color", "#b23a48")))
-	Combat.damage_number(global_position + Vector2(0, -50), int(damage), bool(info.get("crit", false)))
+	Combat.shake(0.34 if crit else 0.18)
+	Combat.spark(global_position + Vector2(0, -18), Vector2(dir, 0), crit, Color(cfg.get("color", "#b23a48")))
+	Combat.damage_number(global_position + Vector2(0, -50), int(damage), crit)
 	Game.combo_hit()
-	Sfx.play("crit" if info.get("crit", false) else "hit", -7)
+	Sfx.play("crit" if crit else "hit", -7)
 
 	if hp <= 0.0:
 		_die()
+
+
+func is_backstabbed_by(attacker: Node2D) -> bool:
+	var dx := attacker.global_position.x - global_position.x
+	if absf(dx) < 1.0:
+		return false
+	return signf(dx) != float(facing)
 
 
 func is_exposed() -> bool:
@@ -266,8 +371,25 @@ func _die() -> void:
 	collision_layer = 0
 	collision_mask = 0
 	velocity = Vector2(randf_range(-60.0, 60.0), -160.0)
-	Combat.burst(global_position + Vector2(0, -18), Color(cfg.get("color", "#b23a48")), 18, 280.0)
-	Combat.shake(0.22)
+	var tint := Color(cfg.get("color", "#b23a48"))
+	var sides := 3
+	match kind:
+		"archer":
+			sides = 8
+		"charger":
+			sides = 4
+		"bulwark":
+			sides = 6
+		"warden":
+			sides = 5
+	Combat.shatter(global_position + Vector2(0, -14), tint, sides, 24 if bool(cfg.get("boss", false)) else 14, 380.0 if bool(cfg.get("boss", false)) else 280.0)
+	Combat.burst(global_position + Vector2(0, -18), tint, 12, 260.0)
+	if bool(cfg.get("boss", false)):
+		Combat.ring(global_position + Vector2(0, -10), tint.lightened(0.3), 180.0, 5)
+		Combat.shake(0.75)
+		Sfx.play("slam", -4, 0.7)
+	else:
+		Combat.shake(0.22)
 	Sfx.play("death", -14, 1.15)
 
 	var pickup := CellPickup.new()
@@ -279,6 +401,9 @@ func _die() -> void:
 		# pickup's Area2D setup is legal.
 		root.call_deferred("add_child", pickup)
 
+	if Game.boss == self:
+		Game.boss = null
+		Game.boss_defeated = true
 	Game.add_kill()
 	died.emit(self)
 	var tween := create_tween()

@@ -1,0 +1,37 @@
+{
+  "vitality": {
+    "name": "VITALITY",
+    "desc": "+20 MAX HP\nHEAL 20",
+    "color": "#d94a4a"
+  },
+  "edge": {
+    "name": "EDGE",
+    "desc": "+12% DAMAGE",
+    "color": "#e8a33d"
+  },
+  "swift": {
+    "name": "SWIFT",
+    "desc": "+8% MOVE SPEED",
+    "color": "#8fe3ff"
+  },
+  "ghost": {
+    "name": "GHOST",
+    "desc": "+30 ms ROLL\nI-FRAMES",
+    "color": "#9b6bff"
+  },
+  "armory": {
+    "name": "ARMORY",
+    "desc": "+1 KUNAI\nCHARGE",
+    "color": "#c9d6e2"
+  },
+  "leech": {
+    "name": "LEECH",
+    "desc": "+1 HP PER KILL",
+    "color": "#7fd6a0"
+  },
+  "hunter": {
+    "name": "HUNTER",
+    "desc": "+15% CRIT\nDAMAGE",
+    "color": "#ffd166"
+  }
+}

@@ -13,6 +13,18 @@
 
 - **Engine:** Godot 4.7.2, GL Compatibility renderer, 1280×720 base,
   `canvas_items` stretch. No .NET, no third-party runtime dependencies.
+- **Zero art assets:** every visual is drawn in `_draw()` through
+  `scripts/systems/math_art.gd`. No textures, no `Sprite2D`. See
+  `docs/design/math-art.md`. This is a hard rule, not a temporary state.
+- **Weapons are functions:** Sine Edge is a sine ribbon (finisher releases it as
+  a travelling wave); Kunai solves a ballistic `v0` and previews the parabola;
+  Aegis is a radial `r = R + A·sin(3θ+ωt)` field.
+- **Enemy shape language:** sides encode threat tier — triangle (Husk),
+  square (Ram), hexagon (Bulwark), pentagon+pentagram (Warden), circle/orbit
+  (Watcher). Player alone uses curves (superellipse) because it is the only
+  agent with intent.
+- **Telegraphs show the real hit shape.** Archer arrows preview the exact
+  ballistic path; the Warden's slam ring matches the shockwave radius.
 - **Feel first:** movement and combat feedback are tuned before rooms, builds,
   or meta progression. This follows the five-pillar breakdown in
   `docs/design/pillars.md`.
@@ -32,6 +44,20 @@
   is below the HUD (HUD layer 30) so UI colors stay accurate.
 - **HUD text is English** because Godot's fallback font has no CJK glyphs.
   Documentation stays Chinese.
+- **HUD sits above bloom** (HUD layer 30, bloom layer 15, vignette 20) so text
+  stays crisp while the world glows.
+- **Title screen pauses the tree** at `_ready()` and resumes on Enter/Space/J.
+  Tests instantiate `main.tscn` with `skip_title = true`.
+- **Boon picker is a real pause**: `get_tree().paused = true`, keyboard 1/2/3
+  or arrows+Enter. The encounter resumes only after a choice.
+- **Perfect Dodge:** rolling through an attack grants 2.5 s of +25% damage and
+  refunds one kunai. It is the skill expression the combat loop is built around.
+- **Bulwark front hits chip 1 hp** unless the hit is a crit (exposed or
+  backstab). This teaches positioning instead of raw DPS.
+- **Boss is not stunned by hits** (`boss` flag skips the HURT state and scales
+  knockback to 0.12) so it cannot be stun-locked.
+- **Music loop is mathematically seamless:** every oscillator frequency is an
+  integer multiple of 1/32 Hz in `tools/make_music.py`.
 - **Input actions are registered at runtime** in `game.gd._setup_input()`.
   This avoids serialized `InputEvent` blobs in `project.godot`.
   `shortcut: no in-game rebinding; move actions to project.godot when a settings
@@ -71,13 +97,18 @@ python tools\make_sfx.py
 
 ## Verification Status (2026-10-23)
 
-- `run_tests.gd`: 53 data/formula checks pass.
+- `run_tests.gd`: 111 checks pass (data, damage, math constants, ballistic
+  solver, boon table).
 - `combat_probe.tscn`: combo damage 11/13/24 → 42 hp husk dies on the 4th
   swing; cells + kill counted; hurt i-frames and roll i-frames verified.
-- `soak.tscn`: archer and charger damage an invincible player; all 3 waves
-  clear; victory, 10 kills, no script errors.
-- `capture_scene.tscn`: 9 screenshots render correctly on an RTX 4060 with
-  OpenGL Compatibility.
+- `reward_probe.tscn`: reward screen pauses the tree, number keys and
+  arrow+Enter both pick, effects apply (vitality/armory/hunter).
+- `soak.tscn`: all 4 waves clear including the Warden; bulwark shield rules
+  verified (front chips 1, back connects); boons auto-granted; victory.
+- `title_capture.tscn`: title pauses the tree, ENTER resumes and creates the
+  player.
+- `capture_scene.tscn`: 13 screenshots render on an RTX 4060 with OpenGL
+  Compatibility, including the function wave, kunai parabola and reward screen.
 
 ## Known Risks / Limits
 
@@ -88,6 +119,12 @@ python tools\make_sfx.py
 - Enemy AI does not jump between platforms; archers can walk off a ledge.
 - `Enemy._die` defers `CellPickup` creation because death happens inside a
   physics signal flush. Keep that defer if the death flow is refactored.
+- The reward screen is a `CanvasLayer` child of `Main`, not an autoload, so
+  `reload_current_scene()` resets it correctly.
+- `Projectile.gravity` was renamed to `gravity_accel` to avoid shadowing
+  `Node2D` members; keep the name.
+- Tests that need autoloads must run as scenes. `--script` runs have no
+  autoloads.
 - Screenshot and soak harnesses are dev-only; they are not part of the game
   boot path.
 
