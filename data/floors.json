@@ -1,16 +1,16 @@
 {
 	"1": {
 		"name": "THE ASH GATE",
-		"rooms": 4,
-		"width": 4200,
+		"rooms": 5,
+		"width": 5600.0,
 		"enemies": [
 			[
 				"grunt",
-				4
+				6
 			],
 			[
 				"archer",
-				2
+				3
 			]
 		],
 		"boss": "",
@@ -19,12 +19,12 @@
 	},
 	"2": {
 		"name": "THE HOLLOW STAIR",
-		"rooms": 5,
-		"width": 5200,
+		"rooms": 6,
+		"width": 6800.0,
 		"enemies": [
 			[
 				"grunt",
-				4
+				5
 			],
 			[
 				"archer",
@@ -45,12 +45,12 @@
 	},
 	"3": {
 		"name": "THE GEAR VAULT",
-		"rooms": 5,
-		"width": 5600,
+		"rooms": 6,
+		"width": 7000.0,
 		"enemies": [
 			[
 				"grunt",
-				4
+				5
 			],
 			[
 				"bulwark",
@@ -58,7 +58,7 @@
 			],
 			[
 				"charger",
-				2
+				3
 			],
 			[
 				"archer",
@@ -75,12 +75,12 @@
 	},
 	"4": {
 		"name": "THE QUIET FOUNDRY",
-		"rooms": 6,
-		"width": 6400,
+		"rooms": 7,
+		"width": 8200.0,
 		"enemies": [
 			[
 				"grunt",
-				5
+				6
 			],
 			[
 				"archer",
@@ -88,7 +88,7 @@
 			],
 			[
 				"bulwark",
-				2
+				3
 			],
 			[
 				"charger",

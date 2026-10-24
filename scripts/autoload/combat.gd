@@ -6,6 +6,13 @@ extends Node
 var _stop_until := 0.0
 var _stopping := false
 
+# A hit's own payload never carries the crit flag: `Enemy.take_hit` resolves the
+# crit itself and only hands it to `damage_number()`, one call after the impact.
+# That call is therefore where the crit read is attached, and it goes on the
+# impact node that fired immediately before it.
+var _last_impact: ImpactFx = null
+var _last_impact_msec := -1000
+
 
 func _ready() -> void:
 	# Keep running while the tree is paused so a hitstop can always resolve.
@@ -55,26 +62,33 @@ func impact(at: Vector2, direction: Vector2, tier: int, tint: Color = MathArt.WH
 	fx.position = at
 	fx.setup(direction, tier, tint)
 	_add(fx)
+	_last_impact = fx
+	_last_impact_msec = Time.get_ticks_msec()
 	var t := clampi(tier, 0, 3)
 	shake(float(TIER_SHAKE[t]))
 	punch(float(TIER_PUNCH[t]))
 	hitstop(float(TIER_HITSTOP[t]))
-	# Each tier adds one layer of spectacle rather than scaling everything: the
-	# player has to feel the difference between a jab and a finisher instantly.
+	# Each tier adds one kind of thing rather than scaling everything: the player
+	# has to feel the difference between a jab and a finisher instantly.
 	if t >= 1:
 		Juice.prism_burst(_fx_parent(), at, tint, 10 + t * 6, 240.0 + t * 60.0)
+		# Floor debris along the knockback. Sparks only fade; shards fall, which
+		# is the cheapest way to give a medium hit weight the light one lacks.
+		Juice.debris_poly(_fx_parent(), at, direction.x, tint, 5 + t * 2, 200.0 + t * 50.0)
 	if t >= 2:
 		var wave := ShockwaveFx.new()
 		wave.position = at
 		wave.setup(at, 1 if direction.x >= 0.0 else -1, 44.0 + t * 16.0, tint, 5 if t == 2 else 6)
 		_add(wave)
-		Juice.critical_halo(_fx_parent(), at, tint)
 	if t >= 3:
 		var stars := ConstellationFx.new()
 		stars.position = at
 		stars.setup(at, 30.0, tint, 9, 0.55)
 		_add(stars)
 		Juice.rose_bloom(_fx_parent(), at, tint, 6)
+		# Streaks along the swing: the finisher has motion the lighter tiers
+		# cannot fake, and it leaves on the hit normal so it reads as the strike.
+		Juice.speed_lines(_fx_parent(), at, direction, tint, 12, 620.0)
 
 
 ## Death, telegraphs and heavy windups pull inward instead of exploding.
@@ -122,6 +136,25 @@ func damage_number(at: Vector2, amount: int, crit: bool) -> void:
 	fx.position = at
 	fx.setup(amount, crit)
 	_add(fx)
+	if crit:
+		_mark_crit()
+
+
+## A crit must be recognisable at a glance next to any tier, so it gets a read
+## made of things a tier cannot produce: an exact 12-gon halo with no random
+## spacing, the rotating ngon inside the ring, and a 3-frame full stop.
+## shortcut: the freeze is capped at 0.05 s (the impact doc's ceiling) -- a
+## longer one hides the next input, so a crit on a finisher is not felt longer
+## than the finisher already is.
+func _mark_crit() -> void:
+	if not is_instance_valid(_last_impact):
+		return
+	if Time.get_ticks_msec() - _last_impact_msec > 16:
+		return
+	# 5 sides for a crit on light..heavy, 6 on a finisher.
+	_last_impact.mark_crit(6 if _last_impact.tier > ImpactFx.Tier.HEAVY else 5)
+	Juice.critical_halo(_fx_parent(), _last_impact.position, MathArt.WHITE)
+	hitstop(0.05)
 
 
 func block_number(at: Vector2) -> void:
@@ -180,6 +213,19 @@ func shatter(at: Vector2, tint: Color, sides: int = 3, count: int = 14, speed: f
 	fx.position = at
 	fx.setup(tint, sides, count, speed)
 	_add(fx)
+	_late_implosion(at, tint, count)
+
+
+## The body comes apart one frame after the shape breaks, so a kill reads as
+## "hit, then collapse" instead of one simultaneous flash. Lives in `shatter`
+## because that is the only call the death path makes and the only sign a kill
+## has happened. Ignores time_scale: the frame it waits for is the next one the
+## player sees, which during a kill's hitstop is the frozen one.
+func _late_implosion(at: Vector2, tint: Color, count: int) -> void:
+	await get_tree().create_timer(1.0 / 60.0, true, false, true).timeout
+	var host := _fx_parent()
+	if is_instance_valid(host):
+		Juice.kill_implosion(host, at, tint, maxi(10, count))
 
 
 func dodge_burst(at: Vector2) -> void:
@@ -187,6 +233,19 @@ func dodge_burst(at: Vector2) -> void:
 	fx.position = at
 	fx.setup("dodge", MathArt.WHITE)
 	_add(fx)
+	var host := _fx_parent()
+	if not is_instance_valid(host):
+		return
+	# The slip: streaks trailing the dodge, fanned across a backwards arc, so the
+	# burst reads as a ring behind a body that moved rather than a puff on it.
+	var away := Vector2(-1.0, 0.0)
+	if is_instance_valid(Game.player):
+		away = -Game.player.velocity
+		if away.length() < 1.0:
+			away = Vector2(float(-Game.player.facing), 0.0)
+	away = away.normalized()
+	for step in [-0.6, -0.2, 0.2, 0.6]:
+		Juice.speed_lines(host, at, away.rotated(float(step)), MathArt.PALE, 3, 420.0)
 
 
 func block_burst(at: Vector2, facing: int) -> void:
@@ -194,6 +253,12 @@ func block_burst(at: Vector2, facing: int) -> void:
 	fx.position = at
 	fx.setup("block", MathArt.PALE_DIM, facing)
 	_add(fx)
+	# Emitted on the shield arc the player can actually see: the Aegis shell sits
+	# 30-40 px from the body centre and the block point is 14 px in front of it,
+	# so 26 px of arc lands on the rings. Directional information, not decoration.
+	var host := _fx_parent()
+	if is_instance_valid(host):
+		Juice.block_shell(host, at, facing, MathArt.PALE)
 
 
 func hurt_burst(at: Vector2, facing: int) -> void:

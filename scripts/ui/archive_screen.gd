@@ -248,8 +248,24 @@ func _paint(canvas: Control) -> void:
 	_draw_footer(canvas, font, size)
 
 
+## Drop shadow, fill, lit top edge, dark bottom edge. Used by both plates so the
+## list and the detail card sit at the same level above the page.
+func _panel(canvas: CanvasItem, rect: Rect2) -> void:
+	MathArt.px_rect(canvas, Rect2(rect.position + Vector2(3.0, 4.0), rect.size), Color(MathArt.BLACK, 0.55))
+	MathArt.px_rect(canvas, rect, PANEL)
+	MathArt.px_rect(canvas, Rect2(rect.position, Vector2(rect.size.x, 1.0)), Color(MathArt.PALE, 0.8))
+	MathArt.px_rect(canvas, Rect2(rect.position + Vector2(0.0, rect.size.y - 2.0), Vector2(rect.size.x, 2.0)),
+		Color(MathArt.BLACK, 0.9))
+	MathArt.px_rect(canvas, Rect2(rect.position + Vector2(0.0, 1.0), Vector2(1.0, rect.size.y - 3.0)),
+		Color(MathArt.STONE, 0.8))
+	MathArt.px_rect(canvas, Rect2(rect.position + Vector2(rect.size.x - 1.0, 1.0), Vector2(1.0, rect.size.y - 3.0)),
+		Color(MathArt.STONE, 0.8))
+
+
 func _draw_header(canvas: CanvasItem, font: Font, size: Vector2) -> void:
-	_text(canvas, font, Vector2(40.0, 38.0), "ARCHIVES", 11, MathArt.MID_DIM)
+	MathArt.px_rect(canvas, Rect2(40.0, 18.0, size.x - 80.0, 36.0), Color(MathArt.BG_1, 0.95))
+	_text(canvas, font, Vector2(40.0, 38.0), "ARCHIVES", 11, MathArt.PALE)
+	MathArt.px_rect(canvas, Rect2(40.0, 40.0, 56.0, 1.0), MathArt.PALE_DIM)
 	_text(canvas, font, Vector2(size.x - 168.0, 38.0), "CELLS %d" % Profile.cells,
 		11, MathArt.PALE, 128.0, HORIZONTAL_ALIGNMENT_RIGHT)
 
@@ -263,13 +279,12 @@ func _draw_header(canvas: CanvasItem, font: Font, size: Vector2) -> void:
 		if active:
 			MathArt.px_rect(canvas, Rect2(x + slot * 0.5 - 26.0, 44.0, 52.0, 2.0), MathArt.WHITE)
 
-	MathArt.px_rect(canvas, Rect2(40.0, 54.0, size.x - 80.0, 1.0), Color(MathArt.STONE, 0.8))
+	MathArt.px_rect(canvas, Rect2(40.0, 54.0, size.x - 80.0, 1.0), Color(MathArt.STONE, 0.9))
 
 
 func _draw_list(canvas: CanvasItem, font: Font) -> void:
 	var rect := LIST_RECT
-	MathArt.px_rect(canvas, rect, PANEL)
-	canvas.draw_rect(rect, Color(MathArt.STONE_DIM, 0.9), false, 1.0)
+	_panel(canvas, rect)
 
 	if _ids.is_empty():
 		_text(canvas, font, Vector2(rect.position.x, rect.position.y + 34.0),
@@ -291,6 +306,11 @@ func _draw_list(canvas: CanvasItem, font: Font) -> void:
 		var selected := index == _index
 		if selected:
 			MathArt.px_rect(canvas, row_rect, ROW_SEL)
+			# Raised: lit top edge, dark under edge, bright left rail.
+			MathArt.px_rect(canvas, Rect2(row_rect.position, Vector2(row_rect.size.x, 1.0)),
+				Color(MathArt.PALE, 0.22))
+			MathArt.px_rect(canvas, Rect2(row_rect.position.x, y + ROW_H - 4.0, row_rect.size.x, 1.0),
+				Color(MathArt.BLACK, 0.6))
 			MathArt.px_rect(canvas, Rect2(row_rect.position.x, y + 2.0, 2.0, ROW_H - 6.0), MathArt.WHITE)
 		if index == _flash_row and _flash_t > 0.0:
 			MathArt.px_rect(canvas, row_rect, Color(MathArt.WHITE, 0.16 * (_flash_t / 0.45)))
@@ -315,8 +335,7 @@ func _draw_list(canvas: CanvasItem, font: Font) -> void:
 
 func _draw_card(canvas: CanvasItem, font: Font) -> void:
 	var rect := CARD_RECT
-	MathArt.px_rect(canvas, rect, PANEL)
-	canvas.draw_rect(rect, Color(MathArt.STONE_DIM, 0.9), false, 1.0)
+	_panel(canvas, rect)
 
 	if _ids.is_empty():
 		_text(canvas, font, Vector2(rect.position.x, rect.position.y + 168.0), "NOTHING RECORDED",
@@ -337,19 +356,31 @@ func _draw_card(canvas: CanvasItem, font: Font) -> void:
 
 
 func _draw_footer(canvas: CanvasItem, font: Font, size: Vector2) -> void:
+	MathArt.px_rect(canvas, Rect2(40.0, 442.0, size.x - 80.0, 30.0), Color(MathArt.BG_1, 0.9))
+	MathArt.px_rect(canvas, Rect2(40.0, 442.0, size.x - 80.0, 1.0), Color(MathArt.STONE, 0.9))
 	if _note_t > 0.0:
 		_text(canvas, font, Vector2(0.0, 432.0), _note, 10,
 			Color(MathArt.WHITE, clampf(_note_t * 2.0, 0.0, 1.0)), size.x, HORIZONTAL_ALIGNMENT_CENTER)
 	var equip := "ENTER NOTHING" if _tab == "enemy" else "ENTER EQUIP / UNLOCK"
 	_text(canvas, font, Vector2(0.0, 454.0),
 		"LEFT/RIGHT TAB      UP/DOWN SCROLL      %s      ESC CLOSE" % equip,
-		8, MathArt.MID, size.x, HORIZONTAL_ALIGNMENT_CENTER)
+		8, MathArt.LIGHT, size.x, HORIZONTAL_ALIGNMENT_CENTER)
+
+
+## A seal behind every preview: a superellipse plate plus one phyllotaxis ring.
+## Drawn from primitives, so the card reads as an emblem, not a picture.
+func _draw_emblem(canvas: CanvasItem, center: Vector2, radius: float, tone: Color) -> void:
+	MathArt.px_poly(canvas, MathArt.superellipse(radius, radius * MathArt.INV_PHI, 4.0, 32, 0.0, center),
+		Color(tone, 0.05), Color(tone, 0.28), 1.0)
+	for i in 13:
+		MathArt.disc(canvas, center + MathArt.phyllotaxis(i, radius / 3.4), 1.2, Color(tone, 0.32))
 
 
 # ---------------------------------------------------------------- detail cards
 
 func _draw_unknown(canvas: CanvasItem, font: Font, rect: Rect2, id: String) -> void:
 	var center := Vector2(rect.position.x + rect.size.x * 0.5, rect.position.y + 130.0)
+	_draw_emblem(canvas, center, 62.0, MathArt.STONE)
 	_draw_lock(canvas, center, 34.0, MathArt.STONE_HI)
 	_text(canvas, font, Vector2(rect.position.x, rect.position.y + 214.0), "???", 24,
 		MathArt.MID, rect.size.x, HORIZONTAL_ALIGNMENT_CENTER)
@@ -363,10 +394,12 @@ func _draw_unknown(canvas: CanvasItem, font: Font, rect: Rect2, id: String) -> v
 
 func _draw_enemy(canvas: CanvasItem, font: Font, rect: Rect2, id: String, cfg: Dictionary) -> void:
 	var center := Vector2(rect.position.x + rect.size.x * 0.5, rect.position.y + 80.0)
+	_draw_emblem(canvas, center, 66.0, MathArt.STONE)
 	_draw_enemy_body(canvas, id, cfg, center)
 
 	_text(canvas, font, Vector2(rect.position.x + 16.0, rect.position.y + 170.0),
 		str(cfg.get("name", id)), 16, MathArt.PALE)
+	_draw_title_rule(canvas, font, rect, str(cfg.get("name", id)))
 	var tag := "BOSS" if bool(cfg.get("boss", false)) else "HOSTILE"
 	_text(canvas, font, Vector2(rect.position.x + 16.0, rect.position.y + 184.0), tag, 8, MathArt.MID_DIM)
 	MathArt.px_rect(canvas, Rect2(rect.position.x + 16.0, rect.position.y + 190.0,
@@ -416,12 +449,14 @@ func _draw_timing(canvas: CanvasItem, font: Font, rect: Rect2, cfg: Dictionary) 
 
 func _draw_weapon(canvas: CanvasItem, font: Font, rect: Rect2, id: String, cfg: Dictionary) -> void:
 	var center := Vector2(rect.position.x + rect.size.x * 0.5, rect.position.y + 92.0)
+	_draw_emblem(canvas, center, 66.0, MathArt.PALE_DIM)
 	_draw_blade(canvas, cfg, center)
 	_text(canvas, font, Vector2(rect.position.x + rect.size.x - 136.0, rect.position.y + 20.0),
 		"BLADE x%.1f" % BLADE_ZOOM, 8, MathArt.STONE_HI, 120.0, HORIZONTAL_ALIGNMENT_RIGHT)
 
 	_text(canvas, font, Vector2(rect.position.x + 16.0, rect.position.y + 170.0),
 		str(cfg.get("name", id)), 16, MathArt.PALE)
+	_draw_title_rule(canvas, font, rect, str(cfg.get("name", id)))
 	_text(canvas, font, Vector2(rect.position.x + 16.0, rect.position.y + 184.0),
 		str(cfg.get("attribute", "melee")).to_upper() + " / " + str(cfg.get("slot", "melee")).to_upper(),
 		8, MathArt.MID_DIM)
@@ -470,10 +505,12 @@ func _draw_weapon(canvas: CanvasItem, font: Font, rect: Rect2, id: String, cfg: 
 
 func _draw_armor(canvas: CanvasItem, font: Font, rect: Rect2, id: String, cfg: Dictionary) -> void:
 	var center := Vector2(rect.position.x + rect.size.x * 0.5, rect.position.y + 96.0)
+	_draw_emblem(canvas, center, 66.0, _tone(str(cfg.get("tone", "pale"))))
 	_draw_shell(canvas, id, cfg, center)
 
 	_text(canvas, font, Vector2(rect.position.x + 16.0, rect.position.y + 170.0),
 		str(cfg.get("name", id)), 16, MathArt.PALE)
+	_draw_title_rule(canvas, font, rect, str(cfg.get("name", id)))
 	_text(canvas, font, Vector2(rect.position.x + 16.0, rect.position.y + 184.0),
 		"ARMOUR", 8, MathArt.MID_DIM)
 	MathArt.px_rect(canvas, Rect2(rect.position.x + 16.0, rect.position.y + 190.0,
@@ -509,6 +546,14 @@ func _stat(canvas: CanvasItem, font: Font, x: float, y: float, label: String, va
 	# edge, so a long label can never run into the next column.
 	_text(canvas, font, Vector2(x, y), label, 8, MathArt.MID_DIM)
 	_text(canvas, font, Vector2(x + 62.0, y), value, 11, MathArt.PALE, 90.0, HORIZONTAL_ALIGNMENT_RIGHT)
+
+
+## A rule only as wide as the title, sitting under the name: the label block
+## reads as a headed table column, not as floating text.
+func _draw_title_rule(canvas: CanvasItem, font: Font, rect: Rect2, title: String) -> void:
+	var w := font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
+	MathArt.px_rect(canvas, Rect2(rect.position.x + 16.0, rect.position.y + 175.0, w, 1.0),
+		Color(MathArt.PALE_DIM, 0.75))
 
 
 func _draw_lock(canvas: CanvasItem, center: Vector2, radius: float, color: Color) -> void:

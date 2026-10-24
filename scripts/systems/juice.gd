@@ -322,3 +322,159 @@ static func telegraph(host: Node, at: Vector2) -> void:
 	p.scale_amount_min = 0.4
 	p.scale_amount_max = 1.0
 	host.add_child(_finish(p, 0.2))
+
+
+# --- Ambience and weight -----------------------------------------------------
+# Added for the map / impact / hub pass. Everything here is additive: the
+# presets above must keep their names and their behaviour, they are referenced
+# from combat code.
+
+## Slow rising embers. The hub's air has to move even when nothing happens.
+static func ember_drift(host: Node, at: Vector2, tint: Color, count: int = 10,
+		life: float = 2.6) -> CPUParticles2D:
+	var p := make(count, life, MathArt.with_alpha(tint, 0.5))
+	p.position = at
+	p.direction = Vector2(0, -1)
+	p.spread = 26.0
+	p.initial_velocity_min = 6.0
+	p.initial_velocity_max = 22.0
+	p.gravity = Vector2(0, -10)
+	p.tangential_accel_min = -22.0
+	p.tangential_accel_max = 22.0
+	p.damping_min = 2.0
+	p.damping_max = 6.0
+	p.angular_velocity_min = -40.0
+	p.angular_velocity_max = 40.0
+	p.scale_amount_min = 0.22
+	p.scale_amount_max = 0.5
+	p.color_ramp = fade_ramp()
+	p.z_index = 5
+	host.add_child(_finish(p, life))
+	return p
+
+
+## A standing column of drifting motes, i.e. a light shaft with volume. The
+## emission box is the shaft's footprint at the floor, so the particles read as
+## dust caught in the beam rather than as a fire.
+static func shaft_motes(host: Node, at: Vector2, half_width: float, height: float,
+		tint: Color, count: int = 16, life: float = 3.2) -> CPUParticles2D:
+	var p := make(count, life, MathArt.with_alpha(tint, 0.30))
+	p.position = at
+	p.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	p.emission_rect_extents = Vector2(half_width, 6.0)
+	p.direction = Vector2(0, -1)
+	p.spread = 8.0
+	p.initial_velocity_min = 8.0
+	p.initial_velocity_max = 26.0
+	p.gravity = Vector2(0, -4)
+	p.tangential_accel_min = -16.0
+	p.tangential_accel_max = 16.0
+	p.damping_min = 1.0
+	p.damping_max = 4.0
+	p.scale_amount_min = 0.18
+	p.scale_amount_max = 0.42
+	p.color_ramp = fade_ramp()
+	p.z_index = 4
+	# Permanent ambience: NOT one_shot, and never wired to _finish(), which is
+	# what frees a node after one burst.
+	p.one_shot = false
+	p.explosiveness = 0.0
+	p.emitting = true
+	p.set_meta("shaft_height", height)
+	host.add_child(p)
+	return p
+
+
+## Floor debris thrown up by a body landing hard, drawn as rotating shards.
+static func debris_poly(host: Node, at: Vector2, direction: float, tint: Color,
+		count: int = 10, speed: float = 200.0) -> CPUParticles2D:
+	var p := make(count, 0.55, tint)
+	p.position = at
+	p.direction = Vector2(signf(direction) * 0.35, -1.0)
+	p.spread = 62.0
+	p.initial_velocity_min = speed * 0.45
+	p.initial_velocity_max = speed
+	p.gravity = Vector2(0, 620)
+	p.damping_min = 12.0
+	p.damping_max = 60.0
+	p.angular_velocity_min = -700.0
+	p.angular_velocity_max = 700.0
+	p.scale_amount_min = 0.35
+	p.scale_amount_max = 1.1
+	p.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	p.emission_rect_extents = Vector2(9.0, 2.0)
+	p.z_index = 6
+	host.add_child(_finish(p, 0.55))
+	return p
+
+
+## Inward collapse, then outward rejection: negative initial velocity with a
+## large positive radial accel. That one inversion is what a kill needs to read
+## as "taken apart" instead of "exploded".
+static func kill_implosion(host: Node, at: Vector2, tint: Color, count: int = 14) -> CPUParticles2D:
+	var p := make(count, 0.42, tint)
+	p.position = at
+	p.direction = Vector2.ZERO
+	p.spread = 180.0
+	p.initial_velocity_min = -190.0
+	p.initial_velocity_max = -90.0
+	p.radial_accel_min = 900.0
+	p.radial_accel_max = 900.0
+	p.gravity = Vector2.ZERO
+	p.scale_amount_min = 0.4
+	p.scale_amount_max = 1.2
+	p.angular_velocity_min = -300.0
+	p.angular_velocity_max = 300.0
+	p.color_ramp = fade_ramp()
+	p.z_index = 7
+	host.add_child(_finish(p, 0.42))
+	return p
+
+
+## Directional streaks that leave the blade's line. Used for tier-3 so the
+## finisher has motion the lighter tiers cannot fake.
+static func speed_lines(host: Node, at: Vector2, direction: Vector2, tint: Color,
+		count: int = 12, speed: float = 620.0) -> CPUParticles2D:
+	var dir := direction.normalized() if direction.length() > 0.01 else Vector2.RIGHT
+	var p := make(count, 0.18, tint)
+	p.position = at
+	p.direction = dir
+	p.spread = 11.0
+	p.initial_velocity_min = speed * 0.6
+	p.initial_velocity_max = speed
+	p.gravity = Vector2.ZERO
+	p.damping_min = 260.0
+	p.damping_max = 520.0
+	p.scale_amount_min = 0.2
+	p.scale_amount_max = 0.55
+	p.color_ramp = fade_ramp()
+	p.z_index = 8
+	host.add_child(_finish(p, 0.18))
+	return p
+
+
+## Aegis: the shell takes the blow. Emission points sit on the arc the shield
+## actually covers, so the burst is directional information, not decoration.
+static func block_shell(host: Node, at: Vector2, facing: int, tint: Color) -> CPUParticles2D:
+	var points := PackedVector2Array()
+	for i in 11:
+		var angle := lerpf(-1.15, 1.15, float(i) / 10.0)
+		points.append(Vector2.from_angle(angle) * 26.0)
+	var p := _structured(host, at, points, tint, 0.26, 460.0)
+	p.scale_amount_min = 0.45
+	p.scale_amount_max = 0.45
+	p.scale.x = float(facing)
+	p.z_index = 8
+	return p
+
+
+## Boss wind-up ground crack: wide, slow, low. A heavy attack has to own the
+## floor before it lands, or the player cannot read where it will go.
+static func boss_slam(host: Node, at: Vector2, tint: Color, radius: float = 46.0) -> CPUParticles2D:
+	var p := _structured(host, at, MathArt.ngon(16, radius), tint, 0.5, 260.0)
+	p.scale_amount_min = 0.5
+	p.scale_amount_max = 1.5
+	p.angular_velocity_min = -60.0
+	p.angular_velocity_max = 60.0
+	p.z_index = 6
+	return p

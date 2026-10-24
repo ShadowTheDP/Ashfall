@@ -120,39 +120,56 @@ playtest tuning, then breadth.
 - Shadows (player + enemies) are three stacked 20-gons, cumulative centre
   density ~0.30, no hard rectangle anywhere.
 
-## Session end (build wiring)
+## Session end (maps, impact, hub)
 
 All work committed. **Read `HANDOVER.md` at the repo root before anything
-else**; it lists what each session built, every bug with its cause, the
-validation matrix, the fragile spots and the next steps.
+else.**
 
-State: 14 headless checks green (`tools/check.ps1` -> ALL CHECKS PASSED,
-exit 0). Floors are vertical (2-5 decks, one-way vs solid, 6 room kinds,
-4200-6400 px). Hub has 4 stations + a floor-picker door. The player is flat;
-only the Warden is pseudo-3D.
+State: `tools/check.ps1` green (17 steps). Floors are now large two-tier
+spaces (5600-8200 px, 5-7 rooms, 29-42 surfaces each), the hub is a layered
+room rather than a platform, and combat feedback has a heavier top end.
 
-This session wired the parts that existed but were unreachable:
+This session:
 
-1. **In-run build is live.** `data/floors.json` `"reward"` (2/2/3/3/0) is
-   spent one boon per cleared room. `Level` emits `room_cleared(index)`,
-   `Main` decrements `Game.floor_rewards_left` and defers the picker. The
-   old path only fired in arena mode, so a normal run never saw a boon.
-2. **Two-colour build exists.** Weapons carry `attribute` (brutality /
-   tactics); coloured boons raise `Game.attr`; `Damage.compute()` finally
-   receives a non-zero attribute level (ATTR_SCALE 0.12 per level).
-3. **Souls have a sink.** `data/upgrades.json` added soul-priced brutality
-   and tactics rows; `Profile.upgrade_currency()` / `can_afford_upgrade()`
-   decide which wallet a row spends.
-4. **`spitter` / `leaper` spawn** on floors 2, 3 and 4.
-5. **Deleted** `scripts/player/character_visual.gd` (316 lines, never wired).
-6. **`_apply_loadout()` is idempotent** - every accumulator is rebuilt from a
-   constant, not `+=`.
-7. **Monochrome is strictly neutral** (`r == g == b` everywhere); the ramp
-   used to be slightly blue.
+1. **Fixed R inside a floor.** `Hud._restart()` called
+   `reload_current_scene()`, which rebuilt Main -> title -> hub, and because
+   `Game.start_floor()` advances `Profile.best_floor` on ENTRY, the door then
+   offered the next floor: a retry banked progression and skipped a floor.
+   `Main.restart_attempt()` now replays the chosen floor through
+   `Game.reset_run()` (Game-only state; Profile untouched), frees the previous
+   body, purges stale projectiles and cancels the pending transition.
+   Regression: `tests/restart_probe.tscn` (paused retry and dead retry).
+2. **Map macro layer** (`level_gen.gd`): `_link_gallery` bridges gaps at the
+   height of each room's own upper deck, `_stack_ladders` adds climbable rungs
+   where a pillar is not, `_caches` puts cell caches on high decks. All three
+   are gated by the same `_reach()` predicate the BFS uses, plus a new
+   `_headroom()` guard (a generated surface may not become a ceiling over
+   another at < 72 px) and a `_inside_any()` spawn filter. Witness:
+   `tests/gen_stats.tscn` (100 layouts).
+3. **Pillar placement** now leaves a 46 px slot on the approach side, flush
+   against the next room: it used to leave a 23 px crack a 28 px body could
+   not enter, which was a real softlock (audit_a3's walk cases caught it).
+4. **Spawn clearance** aligned with the audits' FALLBACK_BOX (`SPAWN_HALF_MIN`
+   25). Generation used the room's own tallest body (21 for grunts) while the
+   audits check 25, so a point 24 px under a deck passed generation and failed
+   the audit.
+5. **Impact** (`impact_fx.gd`, `combat.gd`, `enemy_visual.gd`, `juice.gd`):
+   per-tier shape language, crit halo, kill implosion, directional block
+   shell, boss telegraphs. Eight new `Juice` presets (ember_drift,
+   shaft_motes, debris_poly, kill_implosion, speed_lines, block_shell,
+   boss_slam).
+6. **Hub** (`hub.gd`): far vault + arches, light shaft with motes, hanging
+   chains and censers, rose wheel, floor inlay, a real foreground colonnade,
+   and brighter stations.
+7. **Panels** (`hub_ui.gd`, `skill_tree.gd`, `archive_screen.gd`) and the
+   **HUD** (`hud.gd`) rebuilt on a φ grid with plates, segmented health,
+   tally-based floor progress and timer arcs.
+8. **Cell caches** are pickups that rest in place (`CellPickup.resting`).
 
 Immediate follow-ups:
-1. Playtest the vertical floors and the new room-by-room boon cadence (feel,
-   not correctness - correctness is proven by `audit_v3` + `run_probe`).
-2. Balance the boon pool: 7 boons, 4 of them coloured, 3 neutral.
-3. A second boss or an endless mode after floor 5; souls currently buy only
-   two attribute levels of five.
+1. Playtest the new maps: is the upper route legible, are the caches worth the
+   detour, does the room-by-room boon cadence still feel right at 5-7 rooms?
+2. The far plane of a floor is still dark; the level ambience pass ran out of
+   time there.
+3. Combo / EDGE / boss HUD plates are verified statically only - the capture
+   harness never has a combo or a boss in frame.

@@ -234,7 +234,13 @@ func start_floor(floor_index: int) -> void:
 	if level_script == null:
 		push_error("Main: level.gd missing")
 		return
+	# Floor -> floor only happens on a retry, and a plain _clear_terrain() would
+	# leave the previous body standing in the world with nothing pointing at it.
+	var previous := player
 	_clear_terrain()
+	if is_instance_valid(previous) and previous.get_parent() == world:
+		previous.queue_free()
+	_purge_world_fx()
 
 	player = PLAYER_SCENE.instantiate() as Player
 	world.add_child(player)
@@ -313,6 +319,36 @@ func _process(delta: float) -> void:
 	_transition -= delta
 	if _transition <= 0.0 and start_mode == "hub":
 		enter_hub()
+
+
+## Anything still flying belongs to the floor being left. Hub._build_player()
+## does this on the way in; a retry never passes through the hub.
+func _purge_world_fx() -> void:
+	for node in world.get_children():
+		if node is Projectile or node is FunctionWave:
+			node.set_physics_process(false)
+			if node is Area2D:
+				(node as Area2D).monitoring = false
+			node.queue_free()
+
+
+## R mid-run: replay the floor that is already chosen. It must NOT reload the
+## scene (that rebuilds Main, shows the title and lands in the hub) and it must
+## not touch Profile - no run recorded, no death, no best_floor advance, and
+## nothing banked. Game.reset_run() is Game-only state, which is exactly the
+## scope of a retry.
+func restart_attempt() -> void:
+	if start_mode != "hub" or Game.floor_index <= 0:
+		# Arena / harness modes have no floor to replay.
+		get_tree().reload_current_scene()
+		return
+	var floor_index := Game.floor_index
+	_transition = 0.0
+	Game.reset_run()
+	start_floor(floor_index)
+	if hud != null:
+		hud.paused = false
+	Game.announce("RETRY", 0.8)
 
 
 func _clear_terrain() -> void:

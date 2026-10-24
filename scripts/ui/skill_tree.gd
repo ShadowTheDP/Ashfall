@@ -224,16 +224,21 @@ func _paint(canvas: Control) -> void:
 		return
 	var size := canvas.get_viewport_rect().size
 	MathArt.px_rect(canvas, Rect2(Vector2.ZERO, size), BG)
+	# Header band, then the two framed panels. Order matters: the panels cast
+	# the shadow, the band lights the top of the screen.
+	MathArt.px_rect(canvas, Rect2(40.0, 20.0, size.x - 80.0, 34.0), Color(MathArt.BG_1, 0.95))
+	MathArt.px_rect(canvas, Rect2(40.0, 54.0, size.x - 80.0, 1.0), Color(MathArt.STONE, 0.85))
+	_panel(canvas, TREE_RECT)
+	canvas.draw_string(font, Vector2(40.0, 40.0), "SKILL TREE", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, MathArt.PALE)
+	MathArt.px_rect(canvas, Rect2(40.0, 42.0, 76.0, 1.0), MathArt.PALE_DIM)
 
 	var owned := 0
 	for id in _ids:
 		if Profile.has_skill(id):
 			owned += 1
-	_text(canvas, font, Vector2(40.0, 40.0), "SKILL TREE", 11, MathArt.MID_DIM)
 	_text(canvas, font, Vector2(40.0, 52.0), "%d / %d OWNED" % [owned, _ids.size()], 8, MathArt.STONE_HI)
 	_text(canvas, font, Vector2(size.x - 208.0, 40.0), "CELLS %d" % Profile.cells, 11,
 		MathArt.PALE, 168.0, HORIZONTAL_ALIGNMENT_RIGHT)
-	MathArt.px_rect(canvas, Rect2(40.0, 60.0, size.x - 80.0, 1.0), Color(MathArt.STONE, 0.7))
 
 	if _ids.is_empty():
 		_text(canvas, font, Vector2(0.0, 220.0), "NO SKILLS RECORDED", 12, MathArt.MID,
@@ -245,6 +250,22 @@ func _paint(canvas: Control) -> void:
 	_draw_footer(canvas, font, size)
 
 
+## Drop shadow, fill, lit top edge, dark bottom edge. One value step below the
+## tree, so the graph reads as laid on top of a plate.
+func _panel(canvas: CanvasItem, rect: Rect2) -> void:
+	MathArt.px_rect(canvas, Rect2(rect.position + Vector2(3.0, 4.0), rect.size), Color(MathArt.BLACK, 0.55))
+	MathArt.px_rect(canvas, rect, PANEL)
+	MathArt.px_rect(canvas, Rect2(rect.position, Vector2(rect.size.x, 1.0)), Color(MathArt.PALE, 0.8))
+	MathArt.px_rect(canvas, Rect2(rect.position + Vector2(0.0, rect.size.y - 2.0), Vector2(rect.size.x, 2.0)),
+		Color(MathArt.BLACK, 0.9))
+	MathArt.px_rect(canvas, Rect2(rect.position + Vector2(0.0, 1.0), Vector2(1.0, rect.size.y - 3.0)),
+		Color(MathArt.STONE, 0.8))
+	MathArt.px_rect(canvas, Rect2(rect.position + Vector2(rect.size.x - 1.0, 1.0), Vector2(1.0, rect.size.y - 3.0)),
+		Color(MathArt.STONE, 0.8))
+
+
+## Branches are tapered quads: thick at the parent, thin at the child, so a
+## bought path reads as a spine rather than a hairline.
 func _draw_edges(canvas: CanvasItem) -> void:
 	for id in _ids:
 		if not _pos.has(id):
@@ -254,14 +275,19 @@ func _draw_edges(canvas: CanvasItem) -> void:
 		var available := Profile.skill_available(id)
 		var tint := MathArt.WHITE if owned else (MathArt.PALE_DIM if available else MathArt.STONE)
 		var alpha := 0.75 if owned else (0.45 if available else 0.30)
+		var root_half := 2.6 if owned else (2.0 if available else 1.4)
 		for parent in _requires(id):
 			var parent_id := str(parent)
 			if not _pos.has(parent_id):
 				continue
 			var from: Vector2 = _pos[parent_id]
 			var direction := (child - from).normalized()
-			MathArt.line(canvas, from + direction * NODE_R, child - direction * NODE_R,
-				Color(tint, alpha), 2.0 if owned else 1.0)
+			var side := direction.orthogonal()
+			var a := from + direction * NODE_R
+			var b := child - direction * NODE_R
+			MathArt.px_poly(canvas, PackedVector2Array([
+				a + side * root_half, b + side * 0.8, b - side * 0.8, a - side * root_half,
+			]), Color(tint, alpha))
 
 
 func _draw_nodes(canvas: CanvasItem, font: Font) -> void:
@@ -274,27 +300,37 @@ func _draw_nodes(canvas: CanvasItem, font: Font) -> void:
 		var available := Profile.skill_available(id)
 		var selected := i == _index
 
-		var fill := MathArt.BG_1
-		var line := MathArt.STONE
-		var width := 1.5
+		# Three states, three silhouettes: bought is a solid white plate with a
+		# cut core, available is a filled cog with a lit rim, locked is a hollow
+		# shell. Nothing here leans on hue.
+		var fill := MathArt.INK
+		var line := MathArt.STONE_HI
+		var width := 1.0
 		if owned:
 			fill = MathArt.WHITE
 			line = MathArt.BLACK
 			width = 2.0
 		elif available:
+			fill = MathArt.BG_2
 			line = MathArt.PALE
 			width = 2.0
 		if i == _index and _flash_t > 0.0:
 			line = MathArt.WHITE
 			width = 3.0
 
+		if selected:
+			# Halo under the plate, so the cursor node lifts off the tree.
+			MathArt.glow(canvas, center, NODE_R + 10.0, Color(MathArt.WHITE, 0.6), 3)
 		MathArt.px_poly(canvas, MathArt.ngon(6, NODE_R, PI / 6.0, center), fill, line, width)
 		if owned:
 			# A small hollow core keeps the solid white node from reading as a
 			# filled blob and matches the player's "square inside a square".
 			MathArt.px_poly(canvas, MathArt.ngon(6, NODE_R * 0.34, PI / 6.0, center), MathArt.INK)
+		elif available:
+			MathArt.disc(canvas, center, 3.4, MathArt.WHITE)
+			MathArt.ring(canvas, center, 5.6, Color(MathArt.PALE_DIM, 0.7), 1.0, 6)
 		else:
-			MathArt.disc(canvas, center, 2.6, MathArt.WHITE if available else MathArt.STONE_HI)
+			MathArt.disc(canvas, center, 2.2, MathArt.STONE_HI)
 
 		if selected:
 			var pulse := 0.45 + 0.35 * sin(_t * 5.0)
@@ -307,8 +343,7 @@ func _draw_nodes(canvas: CanvasItem, font: Font) -> void:
 
 func _draw_card(canvas: CanvasItem, font: Font) -> void:
 	var rect := CARD_RECT
-	MathArt.px_rect(canvas, rect, PANEL)
-	canvas.draw_rect(rect, Color(MathArt.STONE_DIM, 0.9), false, 1.0)
+	_panel(canvas, rect)
 	if _ids.is_empty():
 		_text(canvas, font, Vector2(rect.position.x, rect.position.y + 34.0), "NO SKILLS RECORDED",
 			9, MathArt.STONE_HI, rect.size.x, HORIZONTAL_ALIGNMENT_CENTER)
@@ -318,13 +353,22 @@ func _draw_card(canvas: CanvasItem, font: Font) -> void:
 	var owned := Profile.has_skill(id)
 	var available := Profile.skill_available(id)
 
+	var name_color := MathArt.WHITE if available or owned else MathArt.MID
 	_text(canvas, font, Vector2(rect.position.x + 16.0, rect.position.y + 22.0), _name_of(id), 14,
-		MathArt.WHITE if available or owned else MathArt.MID)
+		name_color)
+	# Rule under the name, as wide as the name: the title block reads as a ledger.
+	var name_w := font.get_string_size(_name_of(id), HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
+	MathArt.px_rect(canvas, Rect2(rect.position.x + 16.0, rect.position.y + 28.0, name_w, 1.0),
+		Color(name_color, 0.7))
 	_text(canvas, font, Vector2(rect.position.x + 16.0, rect.position.y + 40.0),
 		str(node.get("text", "")), 10, MathArt.PALE if available or owned else MathArt.STONE_HI)
 	_text(canvas, font, Vector2(rect.position.x + 16.0, rect.position.y + 56.0),
 		"COST %d CELLS" % _cost(id), 9, MathArt.MID)
 
+	# The status column is a separate cell, split off by its own hairline.
+	var gate_x := rect.position.x + rect.size.x - 176.0
+	MathArt.px_rect(canvas, Rect2(gate_x - 10.0, rect.position.y + 8.0, 1.0, rect.size.y - 20.0),
+		Color(MathArt.STONE_DIM, 0.5))
 	var status := "ENTER TO BUY"
 	var tint := MathArt.WHITE
 	if owned:
@@ -336,18 +380,23 @@ func _draw_card(canvas: CanvasItem, font: Font) -> void:
 	elif Profile.cells < _cost(id):
 		status = "NEED %d CELLS" % _cost(id)
 		tint = MathArt.MID
-	_text(canvas, font, Vector2(rect.position.x + rect.size.x - 176.0, rect.position.y + 22.0),
-		status, 10, tint, 160.0, HORIZONTAL_ALIGNMENT_RIGHT)
+	_text(canvas, font, Vector2(gate_x, rect.position.y + 22.0), status, 10, tint, 160.0,
+		HORIZONTAL_ALIGNMENT_RIGHT)
+	if available and not owned:
+		MathArt.px_poly(canvas, MathArt.ngon(3, 4.0, 0.0, Vector2(gate_x + 168.0, rect.position.y + 18.0)),
+			MathArt.WHITE)
 
 	if _note_t > 0.0:
-		_text(canvas, font, Vector2(rect.position.x + rect.size.x - 176.0, rect.position.y + 40.0),
+		_text(canvas, font, Vector2(gate_x, rect.position.y + 40.0),
 			_note, 9, Color(MathArt.WHITE, clampf(_note_t * 2.0, 0.0, 1.0)), 160.0,
 			HORIZONTAL_ALIGNMENT_RIGHT)
 
 
 func _draw_footer(canvas: CanvasItem, font: Font, size: Vector2) -> void:
+	MathArt.px_rect(canvas, Rect2(40.0, 450.0, size.x - 80.0, 30.0), Color(MathArt.BG_1, 0.9))
+	MathArt.px_rect(canvas, Rect2(40.0, 450.0, size.x - 80.0, 1.0), Color(MathArt.STONE, 0.85))
 	_text(canvas, font, Vector2(0.0, 462.0),
-		"ARROWS NEAREST NODE      ENTER BUY      ESC CLOSE", 8, MathArt.MID,
+		"ARROWS NEAREST NODE      ENTER BUY      ESC CLOSE", 8, MathArt.LIGHT,
 		size.x, HORIZONTAL_ALIGNMENT_CENTER)
 
 

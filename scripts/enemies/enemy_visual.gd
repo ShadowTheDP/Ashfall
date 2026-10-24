@@ -18,6 +18,7 @@ var e: Enemy
 var _t := 0.0
 var _warden_points: PackedVector3Array = PackedVector3Array()
 var _warden_faces_cache: Array = []
+var _windup_layer := ""
 
 
 func _ready() -> void:
@@ -27,7 +28,36 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
+	_spawn_windup_layer()
 	queue_redraw()
+
+
+## The Warden's three attacks each own the floor differently before they land:
+## a slam is a ground ring plus rising dust, a charge drags the ground behind it,
+## a cleave is a swipe along its own arc. Spawned once on the frame the wind-up
+## starts, never per frame -- `_draw_telegraph` owns the recurring shape and this
+## owns the particle layer under it, so the two cannot drift apart.
+func _spawn_windup_layer() -> void:
+	if e == null or e.cfg.is_empty():
+		return
+	var attack := ""
+	if e.kind == "warden" and e.state == Enemy.EState.WINDUP:
+		attack = String(e._pending_attack)
+	if attack == _windup_layer:
+		return
+	_windup_layer = attack
+	var host := e.get_parent()
+	if attack.is_empty() or host == null:
+		return
+	var floor_point := global_position + Vector2(0.0, float(e.cfg.get("body_height", 42.0)) * 0.5 + 2.0)
+	match attack:
+		"slam":
+			# The shockwaves spawn at +-34 px, so the ring is drawn at 34: it is
+			# the floor about to move, and nothing outside it is promised safe.
+			Juice.boss_slam(host, floor_point, MathArt.PALE, 34.0)
+			Juice.ember_drift(host, floor_point, MathArt.MID, 12, 1.1)
+		"charge":
+			Juice.dust(host, floor_point, -float(e.facing), 1.8)
 
 
 func _draw() -> void:
@@ -72,7 +102,7 @@ func _draw() -> void:
 			_draw_husk(flash)
 
 	if e.state == Enemy.EState.WINDUP:
-		_draw_telegraph()
+		_draw_telegraph(half_h)
 	if outline:
 		_draw_hit_outline(half_h)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
@@ -332,7 +362,7 @@ func _warden_faces() -> Array:
 	return _warden_faces_cache
 
 
-func _draw_telegraph() -> void:
+func _draw_telegraph(half_h: float) -> void:
 	var windup := maxf(0.001, float(e.cfg.get("windup", 0.4)))
 	var progress := clampf(e.state_t / windup, 0.0, 1.0)
 	# No colour: the telegraph is a blinking high-contrast outline.
@@ -344,8 +374,10 @@ func _draw_telegraph() -> void:
 		match String(e._pending_attack):
 			"cleave":
 				MathArt.arc(self, Vector2(10, -2), 30.0 + 12.0 * progress, -1.2, 1.2, tint, 3.0)
+				_draw_cleave_swipe(progress)
 			"charge":
 				MathArt.line(self, Vector2(6, 2), Vector2(6 + 130.0 * progress, 2), tint, 3.0)
+				_draw_charge_smudge(half_h, progress)
 			_:
 				MathArt.ring(self, Vector2(0, 28), 26.0 + 26.0 * progress, tint, 3.0)
 		return
@@ -362,6 +394,27 @@ func _draw_telegraph() -> void:
 		MathArt.arc(self, Vector2(6, -2), 24.0, -1.1, 1.1, tint, 3.0)
 	else:
 		MathArt.arc(self, Vector2(4, -2), 24.0, -1.1, 1.1, tint, 3.0)
+
+
+## The cleave's own read: a short bright swipe travelling along the real arc as
+## the wind-up fills. It shows which way the blade will sweep -- the 3px arc
+## behind it is still the hit shape, and its radius is not widened by this.
+func _draw_cleave_swipe(progress: float) -> void:
+	var radius := 30.0 + 12.0 * progress
+	var head := lerpf(-1.1, 1.1, ease(progress, 1.6))
+	MathArt.arc(self, Vector2(10, -2), radius, head - 0.5, head,
+		Color(MathArt.WHITE, 0.30 + 0.55 * progress), 2.0)
+
+
+## The charge's own read: the floor in front of the body is dragged flat before
+## it slides. Every tick stays inside the 130 px line, so the distance that is
+## actually safe does not move.
+func _draw_charge_smudge(half_h: float, progress: float) -> void:
+	var floor_y := half_h + 2.0
+	for i in 4:
+		var reach := lerpf(26.0, 104.0, progress) * (1.0 - float(i) * 0.17)
+		MathArt.px_line(self, Vector2(8.0, floor_y - 6.0 + float(i) * 2.0), Vector2(8.0 + reach, floor_y - 6.0 + float(i) * 2.0),
+			Color(MathArt.MID, 0.10 + 0.22 * progress), 1.0)
 
 
 func _draw_arrow_prediction() -> void:

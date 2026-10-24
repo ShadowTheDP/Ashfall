@@ -8,6 +8,12 @@ signal closed
 const CARD := Rect2(44.0, 48.0, 680.0, 404.0)
 const ROW_H := 40.0
 const ROWS_PER_PAGE := 7
+# The card is a stack, not a rect: band on top, body, hint strip at the bottom.
+# Every row and every rule is measured off these three, so the version stays
+# aligned with the hub room behind it.
+const HEADER_H := 36.0
+const FOOTER_H := 28.0
+const GUTTER_W := 30.0
 
 const TITLES := {
 	"upgrade": "UPGRADES",
@@ -280,89 +286,153 @@ func _draw_list(font: Font) -> void:
 		_draw_row(font, rows[row_index], slot, row_index == _index)
 	var pages := maxi(1, ceili(float(rows.size()) / float(ROWS_PER_PAGE)))
 	if pages > 1:
-		_canvas.draw_string(font, Vector2(CARD.position.x, CARD.position.y + CARD.size.y - 32.0),
+		_canvas.draw_string(font, Vector2(CARD.position.x, CARD.position.y + CARD.size.y - FOOTER_H - 9.0),
 			"PAGE %d/%d" % [_page + 1, pages], HORIZONTAL_ALIGNMENT_CENTER, CARD.size.x, 8, MathArt.MID)
 	_draw_hints(font, "UP/DOWN MOVE     LEFT/RIGHT PAGE     ENTER CONFIRM     ESC CLOSE")
 
 
+func _body_rect() -> Rect2:
+	return Rect2(CARD.position.x + 1.0, CARD.position.y + HEADER_H + 1.0,
+		CARD.size.x - 2.0, CARD.size.y - HEADER_H - FOOTER_H - 2.0)
+
+
+func _footer_rect() -> Rect2:
+	return Rect2(CARD.position.x + 1.0, CARD.position.y + CARD.size.y - FOOTER_H,
+		CARD.size.x - 2.0, FOOTER_H - 2.0)
+
+
+## Four passes, back to front: dimmed room, two-step drop shadow, framed panel,
+## header band. Anything else drawn on this card lands on top of the body.
 func _draw_card(font: Font, title: String, subtitle: String) -> void:
 	var size := _canvas.get_viewport_rect().size
 	MathArt.px_rect(_canvas, Rect2(0.0, 0.0, size.x, size.y), Color(MathArt.INK, 0.74))
+	MathArt.px_rect(_canvas, CARD.grow(8.0), Color(MathArt.BLACK, 0.28))
+	MathArt.px_rect(_canvas, CARD.grow(3.0), Color(MathArt.BLACK, 0.52))
 	MathArt.px_rect(_canvas, CARD, Color(MathArt.BG_0, 0.99))
-	MathArt.px_rect(_canvas, Rect2(CARD.position, Vector2(CARD.size.x, 1.0)), Color(MathArt.PALE, 0.8))
-	MathArt.px_rect(_canvas, Rect2(CARD.position + Vector2(0.0, CARD.size.y - 1.0), Vector2(CARD.size.x, 1.0)), Color(MathArt.PALE, 0.45))
-	MathArt.px_rect(_canvas, Rect2(CARD.position, Vector2(1.0, CARD.size.y)), Color(MathArt.PALE, 0.45))
-	MathArt.px_rect(_canvas, Rect2(CARD.position + Vector2(CARD.size.x - 1.0, 0.0), Vector2(1.0, CARD.size.y)), Color(MathArt.PALE, 0.45))
-	_canvas.draw_string(font, CARD.position + Vector2(16.0, 26.0), title, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, MathArt.PALE)
-	if not subtitle.is_empty():
-		_canvas.draw_string(font, CARD.position + Vector2(0.0, 25.0), subtitle,
-			HORIZONTAL_ALIGNMENT_RIGHT, CARD.size.x - 16.0, 10, MathArt.LIGHT)
-	MathArt.px_rect(_canvas, Rect2(CARD.position.x + 16.0, CARD.position.y + 34.0, CARD.size.x - 32.0, 1.0),
+	# Light catches the top edge, the bottom edge falls into shadow: that pair is
+	# what tells the eye the card stands above the floor rather than on it.
+	MathArt.px_rect(_canvas, Rect2(CARD.position, Vector2(CARD.size.x, 1.0)), Color(MathArt.PALE, 0.85))
+	MathArt.px_rect(_canvas, Rect2(CARD.position + Vector2(0.0, CARD.size.y - 2.0), Vector2(CARD.size.x, 2.0)),
+		Color(MathArt.BLACK, 0.9))
+	MathArt.px_rect(_canvas, Rect2(CARD.position + Vector2(0.0, 1.0), Vector2(1.0, CARD.size.y - 3.0)),
 		Color(MathArt.STONE, 0.85))
+	MathArt.px_rect(_canvas, Rect2(CARD.position + Vector2(CARD.size.x - 1.0, 1.0), Vector2(1.0, CARD.size.y - 3.0)),
+		Color(MathArt.STONE, 0.85))
+	# Header band: one value above the body, closed by a rule.
+	MathArt.px_rect(_canvas, Rect2(CARD.position.x + 1.0, CARD.position.y + 1.0, CARD.size.x - 2.0, HEADER_H - 1.0),
+		Color(MathArt.BG_1, 0.98))
+	MathArt.px_rect(_canvas, Rect2(CARD.position.x + 1.0, CARD.position.y + HEADER_H, CARD.size.x - 2.0, 1.0),
+		Color(MathArt.STONE, 0.95))
+	_canvas.draw_string(font, CARD.position + Vector2(16.0, 25.0), title, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, MathArt.PALE)
+	# Underline exactly as wide as the title, so the band reads as a ledger rule.
+	var title_w := font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
+	MathArt.px_rect(_canvas, Rect2(CARD.position.x + 16.0, CARD.position.y + HEADER_H - 1.0, title_w, 1.0),
+		MathArt.PALE)
+	if not subtitle.is_empty():
+		_canvas.draw_string(font, CARD.position + Vector2(0.0, 24.0), subtitle,
+			HORIZONTAL_ALIGNMENT_RIGHT, CARD.size.x - 16.0, 10, MathArt.LIGHT)
+	# Body sits one value below the band, so a selected row can rise above it.
+	MathArt.px_rect(_canvas, _body_rect(), Color(MathArt.INK, 0.5))
 
 
+## Proportional grid: rank gutter, name, info line, value cell. The split is
+## INV_PHI cubed of the row width, so the columns keep their ratio at any
+## heading length.
 func _draw_row(font: Font, row: Dictionary, slot: int, selected: bool) -> void:
-	var rect := Rect2(CARD.position.x + 12.0, CARD.position.y + 46.0 + float(slot) * ROW_H,
-		CARD.size.x - 24.0, ROW_H - 4.0)
+	var rect := Rect2(CARD.position.x + 10.0, CARD.position.y + HEADER_H + 6.0 + float(slot) * ROW_H,
+		CARD.size.x - 20.0, ROW_H - 4.0)
 	var dim := int(row.get("state", 1)) == 0
 	# Blink the row that FAILED, not the row under the cursor: the cursor may
 	# have moved before the sound landed, and blinking the wrong row misreports
 	# which purchase was refused.
 	var flashing := _flash > 0.0 and _flash_row == slot + _page * ROWS_PER_PAGE
-	# A failed purchase blinks the row itself, so the eye catches it even if the
-	# cursor moved on before the sound landed.
 	var lit := selected
 	if flashing:
 		lit = int(_flash * 26.0) % 2 == 0
-	MathArt.px_rect(_canvas, rect, Color(MathArt.BG_2, 0.92) if lit else Color(MathArt.BG_1, 0.55))
-	MathArt.px_rect(_canvas, Rect2(rect.position, Vector2(2.0, rect.size.y)),
-		MathArt.WHITE if lit else Color(MathArt.STONE, 0.9))
-	if selected:
-		MathArt.px_poly(_canvas, MathArt.ngon(3, 4.0, PI * 0.5, rect.position + Vector2(-7.0, rect.size.y * 0.5)),
-			MathArt.WHITE)
+	if lit:
+		# Raised: a value above the body, a lit top edge, a dark bottom edge.
+		MathArt.px_rect(_canvas, rect, Color(MathArt.BG_2, 0.98))
+		MathArt.px_rect(_canvas, Rect2(rect.position, Vector2(rect.size.x, 1.0)), Color(MathArt.PALE, 0.25))
+		MathArt.px_rect(_canvas, Rect2(rect.position + Vector2(0.0, rect.size.y - 1.0), Vector2(rect.size.x, 1.0)),
+			Color(MathArt.BLACK, 0.65))
+		MathArt.px_rect(_canvas, Rect2(rect.position, Vector2(2.0, rect.size.y)), MathArt.WHITE)
+	else:
+		MathArt.px_rect(_canvas, rect, Color(MathArt.BG_1, 0.5))
+		MathArt.px_rect(_canvas, Rect2(rect.position.x, rect.position.y + rect.size.y - 1.0, rect.size.x, 1.0),
+			Color(MathArt.STONE_DIM, 0.45))
+
+	# Columns. The value cell is the row width over phi cubed (0.236), which
+	# leaves the info line the widest share of the row without measuring text.
+	var name_x := rect.position.x + GUTTER_W + 10.0
+	var cell_x := rect.position.x + rect.size.x * (1.0 - pow(MathArt.INV_PHI, 3.0))
+	_canvas.draw_string(font, rect.position + Vector2(9.0, 15.0),
+		"%02d" % (slot + _page * ROWS_PER_PAGE + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 8,
+		MathArt.WHITE if selected else MathArt.STONE_HI)
+	MathArt.px_rect(_canvas, Rect2(rect.position.x + GUTTER_W, rect.position.y + 6.0, 1.0, rect.size.y - 12.0),
+		Color(MathArt.STONE_DIM, 0.55))
+	MathArt.px_rect(_canvas, Rect2(cell_x - 8.0, rect.position.y + 6.0, 1.0, rect.size.y - 12.0),
+		Color(MathArt.STONE_DIM, 0.35))
 
 	var name_color := MathArt.WHITE if selected else (MathArt.MID_DIM if dim else MathArt.PALE)
-	_canvas.draw_string(font, rect.position + Vector2(8.0, 15.0), str(row.get("name", "")),
-		HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 150.0, 12, name_color)
-	_canvas.draw_string(font, rect.position + Vector2(8.0, 30.0), str(row.get("info", "")),
-		HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 116.0, 8, MathArt.MID_DIM if dim else MathArt.LIGHT_DIM)
+	_canvas.draw_string(font, Vector2(name_x, rect.position.y + 15.0), str(row.get("name", "")),
+		HORIZONTAL_ALIGNMENT_LEFT, cell_x - name_x - 10.0, 12, name_color)
+	_canvas.draw_string(font, Vector2(name_x, rect.position.y + 30.0), str(row.get("info", "")),
+		HORIZONTAL_ALIGNMENT_LEFT, cell_x - name_x - 10.0, 8, MathArt.MID_DIM if dim else MathArt.LIGHT_DIM)
+
+	var value_w := rect.position.x + rect.size.x - 8.0 - cell_x
 	if row.has("level"):
-		_draw_level(rect, int(row["level"]), int(row["max"]))
+		_draw_level(cell_x + value_w, rect.position.y, int(row["level"]), int(row["max"]))
 	else:
 		# A locked row ends its label before the padlock instead of under it.
-		var pad := 24.0 if bool(row.get("lock", false)) else 8.0
-		_canvas.draw_string(font, rect.position + Vector2(0.0, 15.0), str(row.get("right", "")),
-			HORIZONTAL_ALIGNMENT_RIGHT, rect.size.x - pad, 9, MathArt.STONE_HI if dim else MathArt.PALE)
+		var pad := 22.0 if bool(row.get("lock", false)) else 0.0
+		_canvas.draw_string(font, Vector2(cell_x, rect.position.y + 15.0), str(row.get("right", "")),
+			HORIZONTAL_ALIGNMENT_RIGHT, value_w - pad, 9, MathArt.STONE_HI if dim else MathArt.PALE)
 	if row.has("price"):
-		_canvas.draw_string(font, rect.position + Vector2(0.0, 30.0), str(row.get("price", "")),
-			HORIZONTAL_ALIGNMENT_RIGHT, rect.size.x - 8.0, 9, MathArt.LIGHT)
+		# Price is the reward line, so it carries the brightest value the row has.
+		var state := int(row.get("state", 1))
+		var price_tint := MathArt.MID if state == 2 else (MathArt.PALE if state == 1 else MathArt.STONE_HI)
+		_canvas.draw_string(font, Vector2(cell_x, rect.position.y + 30.0), str(row.get("price", "")),
+			HORIZONTAL_ALIGNMENT_RIGHT, value_w, 9, price_tint)
 	if bool(row.get("lock", false)):
-		_draw_lock(Vector2(rect.position.x + rect.size.x - 16.0, rect.position.y + 11.0))
+		_draw_lock(Vector2(rect.position.x + rect.size.x - 8.0 - 9.0, rect.position.y + 7.0))
+
+	if selected:
+		# Cursor: a chevron that breathes plus one golden-angle dot orbiting its
+		# tail. Shape and motion carry it, so it survives the monochrome ramp.
+		var apex := Vector2(rect.position.x - 6.0 + sin(_t * 4.0) * 1.5, rect.position.y + rect.size.y * 0.5)
+		MathArt.px_poly(_canvas, MathArt.ngon(3, 4.5, PI * 0.5, apex), MathArt.WHITE)
+		var orbit: Vector2 = MathArt.phyllotaxis(int(_t * 6.0) % 6, 1.6)
+		MathArt.disc(_canvas, apex + Vector2(-7.0, 0.0) + orbit, 1.5, Color(MathArt.PALE, 0.85))
 
 
-## One square per level: filled = owned, outline = still to buy.
-func _draw_level(rect: Rect2, level: int, max_level: int) -> void:
+## One square per level: filled = owned, outline = still to buy, right-aligned
+## to the value cell's edge.
+func _draw_level(right: float, top: float, level: int, max_level: int) -> void:
 	var box := 7.0
 	var gap := 3.0
-	var start := rect.position.x + rect.size.x - 8.0 - float(max_level) * (box + gap) + gap
+	var start := right - float(max_level) * (box + gap) + gap
 	for i in max_level:
-		var cell := Rect2(start + float(i) * (box + gap), rect.position.y + 7.0, box, box)
+		var cell := Rect2(start + float(i) * (box + gap), top + 7.0, box, box)
 		if i < level:
 			MathArt.px_rect(_canvas, cell, MathArt.WHITE)
 		else:
 			_canvas.draw_rect(cell, Color(MathArt.STONE_HI, 0.85), false, 1.0)
 
 
+## A sealed body with a hex shackle: shape says "locked", never colour.
 func _draw_lock(at: Vector2) -> void:
-	MathArt.px_rect(_canvas, Rect2(at.x, at.y + 4.0, 9.0, 7.0), MathArt.STONE_HI)
-	MathArt.arc(_canvas, Vector2(at.x + 4.5, at.y + 4.0), 3.0, PI, TAU, MathArt.STONE_HI, 1.0)
+	MathArt.px_poly(_canvas, MathArt.ngon(3, 5.0, -PI * 0.5, Vector2(at.x + 4.5, at.y + 5.0)),
+		Color(0, 0, 0, 0), MathArt.STONE_HI, 1.0)
+	MathArt.px_rect(_canvas, Rect2(at.x, at.y + 5.0, 9.0, 6.0), MathArt.STONE_HI)
+	MathArt.px_rect(_canvas, Rect2(at.x + 4.0, at.y + 7.0, 1.0, 2.0), MathArt.INK)
 
 
 func _draw_hints(font: Font, text: String) -> void:
-	var y := CARD.position.y + CARD.size.y - 12.0
-	MathArt.px_rect(_canvas, Rect2(CARD.position.x + 16.0, y - 18.0, CARD.size.x - 32.0, 1.0),
-		Color(MathArt.STONE, 0.85))
-	_canvas.draw_string(font, Vector2(CARD.position.x, y), text, HORIZONTAL_ALIGNMENT_CENTER, CARD.size.x, 9, MathArt.LIGHT)
+	MathArt.px_rect(_canvas, _footer_rect(), Color(MathArt.BG_1, 0.9))
+	MathArt.px_rect(_canvas, Rect2(CARD.position.x + 1.0, CARD.position.y + CARD.size.y - FOOTER_H,
+		CARD.size.x - 2.0, 1.0), Color(MathArt.STONE, 0.95))
+	_canvas.draw_string(font, Vector2(CARD.position.x, CARD.position.y + CARD.size.y - 10.0), text,
+		HORIZONTAL_ALIGNMENT_CENTER, CARD.size.x, 9, MathArt.LIGHT)
 
 
 # ---------------------------------------------------------------- skill tree

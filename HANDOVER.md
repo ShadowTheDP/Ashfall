@@ -32,10 +32,12 @@ Title → Enter
 
 | | count | notes |
 |---|---:|---|
-| Floors | 5 | 4200 / 5200 / 5600 / 6400 / 2600 px |
-| Rooms per floor | 4 / 5 / 5 / 6 / 2 | 6 room archetypes |
+| Floors | 5 | 5600 / 6800 / 7000 / 8200 / 2600 px |
+| Rooms per floor | 5 / 6 / 6 / 7 / 2 | 6 room archetypes, two-tier |
+| Surfaces per floor | ~29 / 36 / 35 / 42 / 10 | slabs + decks + gallery + ladders |
 | Enemies | 6 + boss | grunt, archer, charger, bulwark, spitter, leaper, warden |
-| Enemies per floor | 6 / 10 / 11 / 15 / 5 | spitter + leaper spawn on 2-4 |
+| Enemies per floor | 9 / 11 / 13 / 17 / 5 | spitter + leaper spawn on 2-4 |
+| Caches per floor | 3 / 3 / 3 / 3 / 2 | cells on the high route |
 | Playable bodies | 6 | square, octa, star, torus, helix, gyro |
 | Weapons | 6 | edge, curve, lens, fractal, chain, orbit |
 | Armour | 5 | none, plate, lattice, mantle, aegis shell |
@@ -105,6 +107,16 @@ These are worth reading before touching the same code.
 | ECHO / DANCER / HUNTER passives did nothing | declared, never read | implemented in `player.gd` + `Game.perfect_dodge()` + `Hitbox` crit hook |
 | Every body spawned at 120 hp | `hp = max_hp` ran before `_apply_loadout()` | reordered |
 | Save with `null` crashed the load | `int(null)` | `_to_int()` guard, `JSON.new().parse()` |
+
+### Session 3 — the retry, the maps, the impact and the hub
+
+| Area | Cause | Fix |
+|---|---|---|
+| R inside a floor skipped the floor and banked progress | `Hud._restart()` -> `reload_current_scene()` rebuilt Main -> title -> hub, and `Game.start_floor()` advances `Profile.best_floor` on ENTRY, so the door offered the next floor | `Main.restart_attempt()` replays the chosen floor; Profile is not touched. `tests/restart_probe.tscn` |
+| A pillar could leave a 23 px crack | pillar was centred in the gap; a 28 px body cannot enter 23 px, so a fall there was final | `SLOT = 46` on the approach side, pillar flush against the next room |
+| Spawns passed generation and failed the audit | generation used the room's own tallest body (21) while the audits use FALLBACK_BOX (25) | `SPAWN_HALF_MIN = 25`, linked to the audits by comment |
+| The gallery could become a ceiling | connectors were placed before pillars existed | pillars first, then `_headroom()` rejects any surface < 72 px above another |
+| Floors read as a row of set pieces | rooms were individually good but not linked | `_link_gallery` + `_stack_ladders` + `_caches` |
 
 ### Session 2 — things that existed but were unreachable
 
@@ -198,6 +210,13 @@ Never shorten a wait loop into a fixed frame count to save time: `audit_a3` and
    ~5 rad and the trail becomes a band.
 8. The dashed underside of a pass-through deck is the only cue that says "jump
    up through this". Do not remove it.
+9. **Generated surfaces must be gated by `_reach()` and `_headroom()`.** The
+   map macro layer may only ADD surfaces; the BFS verification and the spawn
+   filter are what keep a bigger map from shipping a softlock. Constants that
+   describe a body (SPAWN_HALF_MIN 25, SPAWN_RADIUS 20, BODY_HEADROOM 72) must
+   stay equal to the audits' numbers.
+10. **A retry is not a run.** `restart_attempt()` may touch `Game` state only;
+   any `Profile` call there re-introduces the bug it was written to fix.
 9. Keyboard only, hints always visible.
 10. Impact goes through `Combat.impact()`. Particles go through `Juice.*`.
 11. **Monochrome means `r == g == b`.** No hue, no "almost grey". Any new
@@ -236,16 +255,16 @@ Never shorten a wait loop into a fixed frame count to save time: `audit_a3` and
 
 ## 7. Next steps (highest value first)
 
-1. **Playtest the boon cadence.** It now fires per cleared room. If a 6-room
-   floor paying 3 boons feels like a stutter, move the budget to every other
-   room rather than back to the exit (the exit banks the run).
-2. **Balance the two colours.** brutality and tactics are symmetric by
-   construction; the weapons are not (4 brutality, 3 tactics, and the kunai is
-   free tactics).
-3. **Give souls a longer runway.** 10 souls total exists today; a second boss
-   or an endless mode after floor 5 is the natural second sink.
-4. **Add a second boss** for a second victory condition.
-5. **Export preset** if a distributable build is wanted (templates are ~1.28 GB).
+1. **Playtest the two-tier maps.** The generator proves reachability (75 seeds
+   in audit_a3, 200 in audit_v1, 100 in gen_stats) and a physical walk per
+   floor, but nobody has judged whether the upper route is *legible* or whether
+   the caches are worth the detour.
+2. **The far plane of a floor is still too dark** — the ambience pass ran out
+   of budget. `_draw_vault()` is the place.
+3. **Boon cadence at the new size.** A 7-room floor pays 3 boons; with 5-7
+   rooms that is one reward every other room. Judge it before changing it.
+4. **Give souls a longer runway** (10 souls exists today) and a second boss.
+5. **Export preset** if a distributable build is wanted.
 
 ## 8. Map of the code
 

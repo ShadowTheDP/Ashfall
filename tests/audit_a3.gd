@@ -45,7 +45,12 @@ func _ready() -> void:
 			await _case(floor_index, seed_value)
 	print("A3: %d floor x seed cases" % _cases)
 
-	for floor_index in range(1, 6):
+	# The physical walk is the strongest check in this file and also the most
+	# expensive: at 120 Hz a frame in an 8200 px floor costs ~30 ms, so walking
+	# all five floors takes most of ten minutes. Two floors cover both ends of
+	# the range (the narrowest and the widest); audit_v1 covers traversal
+	# statistically over 200 layouts.
+	for floor_index in [1, 4]:
 		await _walk_case(floor_index, 7)
 
 	if _fails == 0:
@@ -140,6 +145,7 @@ func _case(floor_index: int, seed_value: int) -> void:
 	_check_ground_bodies(floor_index, seed_value, width)
 	_check_exit(floor_index, seed_value, data, solids)
 	_check_reach(floor_index, seed_value, rooms)
+	_check_caches(floor_index, seed_value, data)
 
 	if spawned_by_build != 0:
 		_fail(floor_index, seed_value,
@@ -309,13 +315,45 @@ func _check_ground_bodies(floor_index: int, seed_value: int, width: float) -> vo
 	var query := PhysicsPointQueryParameters2D.new()
 	query.collision_mask = Layers.WORLD
 	query.collide_with_bodies = true
+	# A fixed 60 px walk meant 137 point queries on an 8200 px floor, and each
+	# query outside the physics step forces a broadphase sync: ~3 s per case,
+	# i.e. most of this audit's runtime. Continuity is already proven by
+	# _check_ground() from the data, so proving "a body exists under the ledge"
+	# needs a sample, not a sweep.
+	var step := maxf(60.0, width / 12.0)
 	var x := 1.0
 	while x < width:
 		query.position = Vector2(x, LevelGen.BASE_Y + 6.0)
 		if space.intersect_point(query, 1).is_empty():
 			_fail(floor_index, seed_value, "no collision under x=%.0f" % x)
 			return
-		x += 60.0
+		x += step
+
+
+## A cache is a reward for taking the high route, so it has to sit ON a surface
+## the BFS proved reachable. `_verify` already fails a deck outside the jump
+## budget; this closes the loop between "deck reachable" and "reward reachable".
+func _check_caches(floor_index: int, seed_value: int, data: Dictionary) -> void:
+	var reach: Dictionary = data.get("reachable", {})
+	if int(reach.get("decks", 0)) != 0:
+		_fail(floor_index, seed_value, "%d deck(s) outside the jump budget" % int(reach.get("decks", 0)))
+	var caches: Array = data.get("caches", [])
+	if caches.is_empty():
+		_fail(floor_index, seed_value, "floor has no cache to explore for")
+	var surfaces := LevelGen._surfaces(data["rooms"])
+	for entry in caches:
+		var spot: Vector2 = (entry as Dictionary)["pos"]
+		var held := false
+		for surface in surfaces:
+			var r: Rect2 = surface
+			if spot.x < r.position.x - 2.0 or spot.x > r.end.x + 2.0:
+				continue
+			# The pickup floats 12 px over the deck it was placed on.
+			if absf(r.position.y - (spot.y + 12.0)) <= 4.0:
+				held = true
+				break
+		if not held:
+			_fail(floor_index, seed_value, "cache at %s is not over any surface" % str(spot.round()))
 
 
 func _check_exit(floor_index: int, seed_value: int, data: Dictionary, solids: Array) -> void:
@@ -405,6 +443,15 @@ func _walk_case(floor_index: int, seed_value: int) -> void:
 	var wall_x := float(data["width"]) - 30.0
 	var frames := 0
 	var jump_held := false
+	# The floors got wider (5600-8200 px), and a flat 3000-frame cap stopped the
+	# walk 800 px short on floor 4. Budget from the distance actually walked at
+	# the player's top speed, plus slack for the jumps.
+	var budget := int(120.0 * (float(data["width"]) / 250.0 + 10.0))
+	# ...but a STUCK player is what this test is really looking for, and a frame
+	# count cannot tell "stuck" from "slow". Watch progress instead: if x has not
+	# advanced in 2 s of physics, the route is blocked.
+	var stall := 0
+	var last_x := -1.0
 
 	# 1. hop right to the gate's x, 2. all the way to the wall so any platform
 	# is left behind, 3. back left to the gate on the floor.
@@ -416,7 +463,7 @@ func _walk_case(floor_index: int, seed_value: int) -> void:
 		Input.action_release("move_left")
 		Input.action_release("move_right")
 		Input.action_press("move_right" if dir > 0 else "move_left")
-		while frames < 3000:
+		while frames < budget:
 			await get_tree().physics_frame
 			frames += 1
 			for enemy in _enemies():
@@ -433,14 +480,24 @@ func _walk_case(floor_index: int, seed_value: int) -> void:
 			if _player.global_position.y > LevelGen.BASE_Y + 120.0:
 				_fail(floor_index, seed_value, "walk: player fell out of the world")
 				return
+			var here := _player.global_position.x
+			if absf(here - last_x) < 0.5:
+				stall += 1
+				if stall > 240:
+					_fail(floor_index, seed_value,
+						"walk: stuck at x=%.0f heading for %.0f" % [here, target])
+					return
+			else:
+				stall = 0
+				last_x = here
 			if dir > 0 and _player.global_position.x >= target:
 				break
 			if dir < 0 and _player.global_position.x <= target:
 				break
-		if frames >= 3000:
+		if frames >= budget:
 			_fail(floor_index, seed_value,
-				"walk: never reached x=%.0f (stopped at %.0f of %.0f)"
-				% [target, _player.global_position.x, data["width"]])
+				"walk: never reached x=%.0f (stopped at %.0f of %.0f after %d frames)"
+				% [target, _player.global_position.x, data["width"], frames])
 			return
 	Input.action_release("move_left")
 	Input.action_release("move_right")

@@ -22,15 +22,86 @@ const DOOR_REACH := 62.0
 const DOOR_HEIGHT := 260.0
 const SAFE_DISTANCE := 160.0
 
-# Palette 0-4 varies density and crack lean, never hue. Edge stays a lighter
-# value than the STONE fill so the walkable line is always readable.
+# Palette 0-4 varies density, crack lean and how each depth plane is built,
+# never hue. Edge stays a lighter value than the STONE fill so the walkable line
+# is always readable; every palette keeps that same edge/fill pair, so a floor
+# changes its character without changing where the ground is.
+#
+#   vault   far-wall base value        course  first course offset on a terrace
+#   niche   recessed niches per room   shaft   light-shaft alpha on the gallery
+#   chain   hanging chains per room    near    near-plane parapet value
+#   panel   recessed vault-panel alpha (0 leaves the arcade bare)
 const PALETTE := [
-	{"speck": 0.13, "crack": 0.020, "column": 2, "fog": 3, "edge": MathArt.STONE_HI, "seam": 48.0},
-	{"speck": 0.22, "crack": 0.034, "column": 3, "fog": 4, "edge": MathArt.STONE_HI, "seam": 40.0},
-	{"speck": 0.10, "crack": 0.014, "column": 4, "fog": 2, "edge": MathArt.MID_DIM, "seam": 56.0},
-	{"speck": 0.26, "crack": 0.042, "column": 3, "fog": 5, "edge": MathArt.STONE_HI, "seam": 36.0},
-	{"speck": 0.07, "crack": 0.008, "column": 2, "fog": 1, "edge": MathArt.PALE_DIM, "seam": 64.0},
+	{"speck": 0.13, "crack": 0.020, "column": 2, "fog": 3, "edge": MathArt.STONE_HI, "seam": 48.0,
+		"vault": MathArt.BG_1, "course": 15.0, "niche": 2, "shaft": 0.075, "chain": 1,
+		"near": MathArt.BG_1, "panel": 0.40},
+	{"speck": 0.22, "crack": 0.034, "column": 3, "fog": 4, "edge": MathArt.STONE_HI, "seam": 40.0,
+		"vault": MathArt.BG_0, "course": 12.0, "niche": 3, "shaft": 0.055, "chain": 2,
+		"near": MathArt.BG_2, "panel": 0.22},
+	{"speck": 0.10, "crack": 0.014, "column": 4, "fog": 2, "edge": MathArt.MID_DIM, "seam": 56.0,
+		"vault": MathArt.BG_1, "course": 21.0, "niche": 1, "shaft": 0.095, "chain": 1,
+		"near": MathArt.INK, "panel": 0.55},
+	{"speck": 0.26, "crack": 0.042, "column": 3, "fog": 5, "edge": MathArt.STONE_HI, "seam": 36.0,
+		"vault": MathArt.BG_0, "course": 11.0, "niche": 3, "shaft": 0.060, "chain": 2,
+		"near": MathArt.BG_2, "panel": 0.16},
+	{"speck": 0.07, "crack": 0.008, "column": 2, "fog": 1, "edge": MathArt.PALE_DIM, "seam": 64.0,
+		"vault": MathArt.BG_1, "course": 26.0, "niche": 1, "shaft": 0.110, "chain": 1,
+		"near": MathArt.BG_1, "panel": 0.60},
 ]
+
+## Hanging chains and their braziers, in their own node so the sway redraws a
+## dozen short polylines instead of the whole floor: Level's own _draw() only
+## runs when something asks for it.
+class VaultHang extends Node2D:
+	const SAMPLES := 10
+	var chains: Array = []   # { x, top, len, phase }
+	var niches: Array = []   # Vector2: ember sources in the wall recesses
+	var t := 0.0
+	var ember_t := 1.4
+	var _slot := 0
+	var _niche_index := 0
+	var _chain_index := 0
+
+	func _process(delta: float) -> void:
+		t += delta
+		# Ambience pulses on a timer: one small burst at a time, never per frame.
+		ember_t -= delta
+		if ember_t <= 0.0:
+			ember_t = 1.2
+			_burst()
+		queue_redraw()
+
+	func _burst() -> void:
+		_slot += 1
+		if _slot % 2 == 0 and not niches.is_empty():
+			_niche_index = (_niche_index + 1) % niches.size()
+			Juice.ember_drift(self, niches[_niche_index], MathArt.PALE_DIM, 3, 2.2)
+		elif not chains.is_empty():
+			_chain_index = (_chain_index + 1) % chains.size()
+			Juice.ember_drift(self, _sample(chains[_chain_index], 1.0), MathArt.PALE_DIM, 3, 2.4)
+
+	## Pendulum sway off the node's own clock: the tip circles on a Lissajous
+	## instead of sliding sideways, and k² keeps the anchor perfectly still.
+	func _sample(chain: Dictionary, k: float) -> Vector2:
+		var s := MathArt.lissajous(t * 0.55 + float(chain["phase"]), 1.0, 1.0, PI * 0.5)
+		return Vector2(float(chain["x"]) + s.x * 15.0 * k * k,
+			float(chain["top"]) + float(chain["len"]) * k + s.y * 3.0 * k * k)
+
+	func _draw() -> void:
+		for chain in chains:
+			var prev := Vector2(float(chain["x"]), float(chain["top"]))
+			for j in range(1, SAMPLES):
+				var point := _sample(chain, float(j) / float(SAMPLES - 1))
+				MathArt.line(self, prev, point, Color(MathArt.STONE_HI, 0.8), 1.0)
+				prev = point
+			_draw_brazier(prev, float(chain["phase"]))
+
+	func _draw_brazier(at: Vector2, phase: float) -> void:
+		var flicker := 0.5 + 0.5 * sin(t * 6.0 + phase)
+		MathArt.glow(self, at + Vector2(0.0, -7.0), 10.0 + 3.0 * flicker, MathArt.PALE_DIM, 2)
+		MathArt.arc(self, at + Vector2(0.0, -5.0), 5.0, 0.0, PI, Color(MathArt.STONE_HI, 0.9), 1.5)
+		MathArt.px_rect(self, Rect2(at.x - 2.0, at.y - 12.0, 4.0, 6.0),
+			Color(MathArt.WHITE, 0.45 + 0.35 * flicker))
 
 
 ## The exit gate. Closed it turns slowly and dim; open it spins faster and
@@ -82,6 +153,14 @@ var _door: Door
 var _specks: Array = []
 var _cracks: Array = []
 var _columns: Array = []
+# Foundation detailing per ground rect, indexed like _specks: _draw() walks it,
+# it is never built there.
+var _strata: Array = []
+var _shafts: Array = []
+var _niches: Array = []
+# y where the near plane starts: below every terrace, so the foreground mass can
+# never cover a walkable edge.
+var _near_y := 0.0
 
 
 func build(floor_index: int, seed_value: int) -> void:
@@ -111,6 +190,8 @@ func build(floor_index: int, seed_value: int) -> void:
 
 	_build_decoration()
 
+	_spawn_caches()
+
 	_door = Door.new()
 	_door.position = data["exit"]
 	add_child(_door)
@@ -139,6 +220,19 @@ func progress() -> Vector2:
 
 func enemies_remaining() -> int:
 	return _alive.size() + _pending_total
+
+
+## Reward for taking the high route. The generator places these on decks at
+## least two tiers above a room slab and the BFS has already proven those decks
+## reachable, so a cache is always a real detour and never bait in a wall.
+func _spawn_caches() -> void:
+	for entry in (data.get("caches", []) as Array):
+		var spot: Dictionary = entry
+		var pickup := CellPickup.new()
+		pickup.resting = true
+		pickup.value = int(spot.get("value", 6))
+		pickup.position = spot.get("pos", Vector2.ZERO)
+		add_child(pickup)
 
 
 func _count(groups: Array) -> int:
@@ -289,6 +383,28 @@ func _build_decoration() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = _seed * 7919 + int(data.get("palette", 0)) * 131 + 17
 	var pal := _palette()
+
+	# Mass boundaries - room edges and the faces of every solid pillar or wall -
+	# are where stress collects. Cracks are anchored to them (see below) so they
+	# read as structure failing instead of as more noise.
+	var edges: Array = []
+	var lowest := 0.0
+	for room in _rooms:
+		var rr: Rect2 = room["rect"]
+		edges.append(rr.position.x)
+		edges.append(rr.end.x)
+		lowest = maxf(lowest, rr.end.y)
+		var platforms: Array = room["platforms"]
+		var oneway: Array = room["oneway"]
+		for j in platforms.size():
+			if bool(oneway[j]):
+				continue
+			var pr: Rect2 = platforms[j]
+			edges.append(pr.position.x)
+			edges.append(pr.end.x)
+	edges.sort()
+	_near_y = lowest - 30.0
+
 	for rect in _ground_sorted:
 		var specks: Array = []
 		for i in int(rect.size.x * float(pal["speck"])):
@@ -297,14 +413,20 @@ func _build_decoration() -> void:
 				rng.randf_range(rect.position.y + 6.0, rect.position.y + 96.0),
 				rng.randf()))
 		_specks.append(specks)
+		var bounds: Array = []
+		for edge in edges:
+			if float(edge) > rect.position.x + 8.0 and float(edge) < rect.end.x - 8.0:
+				bounds.append(edge)
 		var cracks: Array = []
 		for i in int(rect.size.x * float(pal["crack"])):
-			cracks.append(Vector4(
-				rng.randf_range(rect.position.x + 12.0, rect.end.x - 12.0),
-				rng.randf_range(8.0, 40.0),
-				rng.randf_range(4.0, 12.0),
-				rng.randf()))
+			var x := rng.randf_range(rect.position.x + 12.0, rect.end.x - 12.0)
+			if not bounds.is_empty() and rng.randf() < 0.66:
+				x = clampf(float(bounds[rng.randi_range(0, bounds.size() - 1)]) + rng.randf_range(-9.0, 9.0),
+					rect.position.x + 8.0, rect.end.x - 8.0)
+			cracks.append(Vector4(x, rng.randf_range(8.0, 40.0),
+				rng.randf_range(4.0, 12.0), rng.randf()))
 		_cracks.append(cracks)
+		_strata.append(_foundation(rect, _is_terrace(rect), pal, rng))
 
 	for i in _rooms.size():
 		var room: Dictionary = _rooms[i]
@@ -330,6 +452,129 @@ func _build_decoration() -> void:
 				"sigil": c % 2 == 0,
 			})
 
+	_build_shafts()
+	_build_chains()
+
+
+## A room's own terrace slab, as opposed to the continuous ledge under it. Only
+## terraces get foundation detailing: the ledge is either covered by the slab or
+## below the near plane.
+func _is_terrace(rect: Rect2) -> bool:
+	for room in _rooms:
+		if (room["rect"] as Rect2) == rect:
+			return true
+	return false
+
+
+## How one ground rect is built: courses that open up by φ, mortar joints
+## staggered by the golden angle, a pilaster under each room edge and arched
+## niches in the face. Everything is precomputed; _draw() only paints.
+func _foundation(rect: Rect2, terrace: bool, pal: Dictionary, rng: RandomNumberGenerator) -> Array:
+	var ops: Array = []
+	var top := rect.position.y + 9.0
+	var bottom := rect.end.y - 3.0
+	var left := rect.position.x + 3.0
+	var width := rect.size.x - 6.0
+	var joint := float(pal["seam"]) * MathArt.PHI
+	var step := maxf(float(pal["course"]), 8.0)
+	var prev := top
+	var y := top + step
+	var row := 0
+	while y < bottom - 6.0:
+		ops.append({"k": "course", "r": Rect2(left, y, width, 1.0)})
+		var x := left + 3.0 + joint * fposmod(float(row) * MathArt.GOLDEN_ANGLE, 1.0)
+		while x < rect.end.x - 6.0:
+			ops.append({"k": "joint", "r": Rect2(roundf(x), prev + 1.0, 1.0, maxf(y - prev - 2.0, 2.0))})
+			x += joint
+		prev = y
+		step *= MathArt.PHI
+		y += step
+		row += 1
+
+	if not terrace:
+		return ops
+
+	var face := bottom - top
+	# Pilasters under the room edges: the corner the terrace is founded on.
+	for side in 2:
+		var px := rect.position.x + 2.0 if side == 0 else rect.end.x - 14.0
+		ops.append({"k": "recess", "r": Rect2(px, top, 12.0, face)})
+		ops.append({"k": "lit", "r": Rect2(px + (11.0 if side == 0 else 0.0), top, 1.0, face)})
+		ops.append({"k": "lit", "r": Rect2(px - 1.0, top, 14.0, 2.0)})
+
+	# Arched niches, keyed off the palette: the ember sources of the floor.
+	var count := int(pal["niche"])
+	for n in count:
+		var nx := rect.position.x + rect.size.x * (0.34 + 0.32 * (float(n) + 0.5) / float(count))
+		var nw := 30.0 + 10.0 * fposmod(float(n) * MathArt.INV_PHI, 1.0)
+		var nh := 46.0 + 18.0 * fposmod(float(n) * MathArt.PHI, 1.0)
+		var ny := rect.position.y + 30.0 + rng.randf_range(0.0, 22.0)
+		var niche := PackedVector2Array()
+		for i in 9:
+			var angle := PI + PI * float(i) / 8.0
+			niche.append(Vector2(nx + cos(angle) * nw * 0.5, ny + sin(angle) * nw * 0.5))
+		niche.append(Vector2(nx + nw * 0.5, ny + nh))
+		niche.append(Vector2(nx - nw * 0.5, ny + nh))
+		ops.append({"k": "poly", "p": niche, "r": Rect2(nx, ny, nw, nh)})
+		_niches.append(Vector2(nx, ny + nh * 0.5))
+	return ops
+
+
+## One light shaft per room that has a wide gallery deck: it starts at the vault
+## ceiling and lands on that deck, so the upper route is lit from above instead
+## of being a dark band nobody looks at.
+func _build_shafts() -> void:
+	for room in _rooms:
+		var platforms: Array = room["platforms"]
+		var oneway: Array = room["oneway"]
+		var best := -1
+		for j in platforms.size():
+			if not bool(oneway[j]):
+				continue
+			var pr: Rect2 = platforms[j]
+			if pr.size.x < 90.0:
+				continue
+			if best < 0 or pr.position.y < (platforms[best] as Rect2).position.y:
+				best = j
+		if best < 0:
+			continue
+		var deck: Rect2 = platforms[best]
+		var shaft := {
+			"x": deck.get_center().x, "half": minf(deck.size.x * 0.32, 44.0),
+			"top": -620.0, "bottom": deck.position.y,
+		}
+		_shafts.append(shaft)
+		# Permanent emitter, spawned once with the level, never from _draw().
+		Juice.shaft_motes(self, Vector2(float(shaft["x"]), float(shaft["bottom"]) - 2.0),
+			float(shaft["half"]) * 0.85, float(shaft["bottom"]) - float(shaft["top"]),
+			MathArt.PALE if _shafts.size() == 1 else MathArt.PALE_DIM,
+			10 if _shafts.size() == 1 else 7, 3.4)
+
+
+## Chains hang in the vault over each room, but only as far as that room's
+## highest deck allows: a chain across a walkable edge would be the only thing
+## on the floor competing with the bright line the player reads the route from.
+func _build_chains() -> void:
+	var hang := VaultHang.new()
+	hang.name = "VaultHang"
+	hang.niches = _niches
+	for i in _rooms.size():
+		var rect: Rect2 = _rooms[i]["rect"]
+		var top_surface := rect.position.y
+		for pr in (_rooms[i]["platforms"] as Array):
+			top_surface = minf(top_surface, (pr as Rect2).position.y)
+		var clear := top_surface - (-620.0) - 30.0
+		if clear < 90.0:
+			continue
+		for c in int(_palette()["chain"]):
+			hang.chains.append({
+				"x": rect.position.x + rect.size.x * (0.30 + 0.36 * float(c)),
+				"top": -620.0,
+				"len": clear * (0.55 + 0.22 * float(c)),
+				"phase": float(i) * MathArt.GOLDEN_ANGLE + float(c) * 1.7,
+			})
+	add_child(hang)
+
 
 func _draw() -> void:
 	_draw_vault()
@@ -337,6 +582,9 @@ func _draw() -> void:
 	_draw_rose_window()
 	for i in _ground_sorted.size():
 		_draw_ground(_ground_sorted[i], _specks[i], _cracks[i])
+		# In the same pass, so a later (raised) slab paints over the ledge's
+		# detailing exactly where it stands on it.
+		_draw_strata(i)
 	for room in _rooms:
 		var platforms: Array = room["platforms"]
 		var oneway: Array = room["oneway"]
@@ -348,8 +596,63 @@ func _draw() -> void:
 				_draw_mass(pr)
 			else:
 				_draw_platform(pr)
+	_draw_shaft_pools()
+	_draw_near_plane()
 	_draw_bounds()
 	_draw_fog()
+
+
+## The stone between the walkable line and the near plane: courses that open up
+## by φ, mortar joints staggered off the golden angle, a pilaster under each
+## room edge, arched niches.
+func _draw_strata(index: int) -> void:
+	for op in _strata[index]:
+		match str(op["k"]):
+			"course":
+				MathArt.px_rect(self, op["r"], Color(MathArt.INK, 0.30))
+			"joint":
+				MathArt.px_rect(self, op["r"], Color(MathArt.STONE_DIM, 0.55))
+			"recess":
+				MathArt.px_rect(self, op["r"], Color(MathArt.BLACK, 0.42))
+			"lit":
+				MathArt.px_rect(self, op["r"], Color(MathArt.STONE_HI, 0.22))
+			"poly":
+				MathArt.px_poly(self, op["p"], Color(MathArt.BLACK, 0.42),
+					Color(MathArt.STONE_DIM, 0.5), 1.0)
+
+
+## Where a shaft meets its gallery deck. Drawn after the decks so the light
+## lands on the stone instead of being buried behind it.
+func _draw_shaft_pools() -> void:
+	var alpha := float(_palette()["shaft"])
+	for shaft in _shafts:
+		var at := Vector2(float(shaft["x"]), float(shaft["bottom"]))
+		var half: float = shaft["half"]
+		MathArt.px_rect(self, Rect2(at.x - half * 1.5, at.y + 1.0, half * 3.0, 2.0),
+			Color(MathArt.PALE, alpha * 0.6))
+		MathArt.glow(self, at - Vector2(0.0, 2.0), half * 1.3, Color(MathArt.PALE, alpha), 3)
+
+
+## The third plane: the mass closest to the camera. It gives the terraces
+## something to stand on and closes the 340 px of ledge the old floor left as
+## flat fill. Everything here stays dark - nothing may compete with the lit edge
+## of the walkable stone.
+func _draw_near_plane() -> void:
+	if _rooms.is_empty():
+		return
+	var left := -120.0
+	var width := float(data.get("width", 0.0)) + 240.0
+	MathArt.px_rect(self, Rect2(left, _near_y, width, 42.0), Color(MathArt.BG_2, 0.35))
+	MathArt.px_rect(self, Rect2(left, _near_y + 42.0, width, 52.0), Color(MathArt.BG_1, 0.55))
+	MathArt.px_rect(self, Rect2(left, _near_y + 94.0, width, 300.0), Color(MathArt.INK, 0.88))
+	# Parapet: teeth on a φ walk, so the silhouette never metronomes.
+	var x := left
+	while x < left + width:
+		var t := fposmod(x * MathArt.INV_PHI * 0.01, 1.0)
+		var h := 16.0 + 20.0 * t
+		MathArt.px_rect(self, Rect2(x, _near_y - h, 22.0, h + 6.0), Color(_palette()["near"], 0.85))
+		MathArt.px_rect(self, Rect2(x, _near_y - h, 22.0, 1.0), Color(MathArt.STONE_DIM, 0.45))
+		x += 30.0 + 14.0 * fposmod(t * MathArt.PHI, 1.0)
 
 
 ## The space behind the geometry. Without it the multi-deck floors read as
@@ -363,9 +666,10 @@ func _draw_vault() -> void:
 		return
 	var pal := _palette()
 	var depth := 640.0
-	# Far wall: one flat value, darker than any stone.
+	# Far wall: one flat value, darker than any stone, keyed off the palette so
+	# two floors do not share a backdrop.
 	MathArt.px_rect(self, Rect2(-40.0, -depth, width + 80.0, depth + 60.0),
-		Color(MathArt.INK, 0.95))
+		Color(pal["vault"], 0.95))
 	# Courses 22 px apart. This is the only thing that gives the wall scale.
 	var y := -depth
 	var row := 0
@@ -392,6 +696,18 @@ func _draw_vault() -> void:
 		var half := (step - 11.0) * 0.5
 		var cx := x + 11.0 + half
 		var top := foot - rise
+		# Recessed panel in the jamb region of the bay: what makes the far wall a
+		# colonnade at a distance instead of a flat plane at any distance.
+		var panel := float(pal["panel"])
+		if panel > 0.01 and foot - 26.0 - (top + half + 16.0) > 40.0:
+			var ptop := top + half + 16.0
+			var pw := step - 70.0
+			MathArt.px_rect(self, Rect2(cx - pw * 0.5, ptop, pw, foot - 26.0 - ptop),
+				Color(MathArt.BLACK, panel))
+			MathArt.px_rect(self, Rect2(cx - pw * 0.5, ptop, pw, 1.0),
+				Color(MathArt.STONE_DIM, 0.22))
+			MathArt.px_rect(self, Rect2(cx - pw * 0.5, foot - 27.0, pw, 1.0),
+				Color(MathArt.STONE_DIM, 0.14))
 		# Two quarter-arcs meeting at the apex, then the jambs down to the floor.
 		MathArt.arc(self, Vector2(cx - half, top + half), half, -PI * 0.5, 0.0,
 			Color(MathArt.MID, 0.10), 1.0)
@@ -402,6 +718,21 @@ func _draw_vault() -> void:
 		MathArt.px_rect(self, Rect2(cx + half, top + half, 1.0, foot - top - half),
 			Color(MathArt.MID, 0.075))
 		x += step
+
+	# Light shafts through the height of the room: three nested trapezoids a 1/φ
+	# apart, which is what gives a hard-edged polygon a soft horizontal falloff,
+	# and each lands on the gallery deck the upper route runs along.
+	for shaft in _shafts:
+		var sx: float = shaft["x"]
+		var stop: float = shaft["top"]
+		var sbot: float = shaft["bottom"]
+		var shalf: float = shaft["half"]
+		for tier in 3:
+			var half := shalf * pow(MathArt.INV_PHI, float(tier))
+			MathArt.poly(self, PackedVector2Array([
+				Vector2(sx - half * MathArt.INV_PHI, stop), Vector2(sx + half * MathArt.INV_PHI, stop),
+				Vector2(sx + half, sbot), Vector2(sx - half, sbot)]),
+				Color(MathArt.PALE, float(pal["shaft"]) * (1.0 + float(tier) * 0.5)))
 
 	# One landmark per floor, keyed off the palette, so no two floors read alike.
 	var center := Vector2(width * 0.5, foot - rise - 150.0)

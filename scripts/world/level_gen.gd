@@ -34,6 +34,13 @@ const BASE_Y := 150.0
 const LEDGE_H := 340.0
 const SLAB_H := 150.0
 const GAP_MIN := 70.0
+## Width of the walkable slot a pillar must leave on the approach side. The
+## player body is 28 px wide; 46 leaves room to line up a jump inside it.
+const SLOT := 46.0
+## Vertical air a generated surface must leave over/under another overlapping
+## surface before anything may spawn on it: the tallest body (50 px) plus the
+## spawn lift (38) with margin. Any two surfaces closer than this are a trap.
+const BODY_HEADROOM := 72.0
 const GAP_MAX := 190.0
 ## Centre of a spawn point above its surface. WHY 38 and not 42: the tightest
 ## ceiling over any spawn surface is a 26 px solid mass exactly TIER (92) above
@@ -42,6 +49,9 @@ const SPAWN_LIFT := 38.0
 ## Widest body in data/enemies.json (the Warden). A spawn point must clear this
 ## much on both sides, or the enemy is born inside the platform above it.
 const SPAWN_RADIUS := 20.0
+## Matches tests/audit_a3.gd FALLBACK_BOX.y and tests/audit_v1.gd's body half.
+## Keep them equal: this is the width of the body a spawn point must clear.
+const SPAWN_HALF_MIN := 25.0
 const DECK_H := 13.0
 
 const KIND_WEIGHT := {"gate": 1.2, "hall": 1.4, "shaft": 0.8, "vault": 1.0, "bridge": 0.9, "well": 0.9}
@@ -119,9 +129,15 @@ static func generate(floor_index: int, seed_value: int) -> Dictionary:
 		rooms.append(room)
 		cursor += w + gap_after
 
-	# Pillars between rooms. They rise from the ledge past the slab line, so the
-	# only way forward is up and over the room's decks.
+	# Order matters, and it is pillars FIRST. A pillar raises a 126-176 px wall
+	# plus a step deck in the gap; a gallery connector placed before it landed
+	# 14 px above the pillar top and left the boss lane spawning with its head in
+	# stone (audit_v1, floor 2 seed 37). The macro layer only ever ADDS surfaces,
+	# so it has to be the part that knows what is already there.
+	# Spawns stay last: they are derived from the FINAL surface list.
 	_place_pillars(rooms, rng)
+	_link_gallery(rooms, rng)
+	_stack_ladders(rooms, rng)
 
 	# WHY after the pillars: _place_pillars adds a step deck and a pillar to the
 	# room it leaves, and a spawn point computed before that does not know they
@@ -130,6 +146,8 @@ static func generate(floor_index: int, seed_value: int) -> Dictionary:
 	for i in room_count:
 		rooms[i]["spawns"] = _spawns_for(rooms[i]["rect"], rooms[i]["platforms"],
 			_spawn_half(plan[i]))
+
+	var caches := _caches(rooms, floor_index)
 
 	var first: Rect2 = rooms[0]["rect"]
 	var last: Rect2 = rooms[room_count - 1]["rect"]
@@ -149,6 +167,7 @@ static func generate(floor_index: int, seed_value: int) -> Dictionary:
 		"start": Vector2(first.position.x + 70.0, first.position.y - 44.0),
 		"exit": Vector2(last.end.x - 90.0, last.position.y),
 		"boss": boss,
+		"caches": caches,
 		"reachable": _verify(rooms, Vector2(first.position.x + 70.0, first.position.y - 44.0), floor_index, seed_value),
 	}
 
@@ -250,6 +269,178 @@ static func _build_room(kind: String, rect: Rect2, rng: RandomNumberGenerator) -
 	return {"platforms": out, "oneway": flags}
 
 
+# --- macro layer: one continuous upper route --------------------------------
+#
+# The rooms are individually verified puzzles; on their own they read as a row
+# of set pieces rather than a place. These three passes give the floor a
+# SECOND, continuous route above the ledge and make the climb optional instead
+# of mandatory:
+#
+#   _link_gallery  bridges the gaps at the height of the rooms' own upper
+#                  decks, so the gallery is one line rather than six islands.
+#   _stack_ladders puts a ladder of rungs at a few gaps so the player can get
+#                  up (and back down) anywhere, not only through a shaft room.
+#   _caches        puts the reward on the high route.
+
+## Best deck in `room` within `tolerance` px of `want_y`, nearest to x.
+static func _deck_near(room: Dictionary, x: float, want_y: float, tolerance: float) -> Rect2:
+	var best := Rect2()
+	var best_score := 1.0e9
+	for entry in (room["platforms"] as Array):
+		var r: Rect2 = entry
+		if absf(r.position.y - want_y) > tolerance:
+			continue
+		# A one-way deck is the natural gallery floor, but a solid mass top is a
+		# legal surface too (the verification pass treats every surface the same
+		# way). Refusing the solid ones left a third of the gaps unbridged, and
+		# the upper route then read as three separate perches instead of a route.
+
+		var score := absf(clampf(x, r.position.x, r.end.x) - x)
+		if score < best_score:
+			best_score = score
+			best = r
+	return best
+
+
+## A connector is kept only if the SAME predicate the BFS uses accepts the step
+## from both neighbours. Generating then verifying is what stops this pass from
+## ever adding an unreachable perch (which audit_v1 would flag as a softlock).
+static func _link_gallery(rooms: Array, rng: RandomNumberGenerator) -> void:
+	if rooms.size() < 2:
+		return
+	for i in range(1, rooms.size()):
+		var prev: Rect2 = rooms[i - 1]["rect"]
+		var here: Rect2 = rooms[i]["rect"]
+		var gap := here.position.x - prev.end.x
+		if gap < 60.0 or gap > GAP_MAX + 30.0:
+			continue
+		# Each neighbour is matched on its OWN upper-deck line (slab - TIER*2).
+		# Matching both against one shared height looked right and produced a
+		# link on only ~1 gap in 6: adjacent slabs differ by up to 96 px, so one
+		# of the two decks was always 30+ px off the queried line and the pair
+		# was thrown away. The connector then rides the HIGHER of the two decks;
+		# climbing to it from the lower one is at most 96 px, inside MAX_UP.
+		var a := _deck_near(rooms[i - 1], prev.end.x - 20.0, prev.position.y - TIER * 2.0, 30.0)
+		var b := _deck_near(rooms[i], here.position.x + 20.0, here.position.y - TIER * 2.0, 30.0)
+		if a.size.x <= 0.0 or b.size.x <= 0.0:
+			continue
+		var y := minf(a.position.y, b.position.y)
+		var conn := Rect2(prev.end.x + 4.0, y, maxf(40.0, gap - 8.0), DECK_H)
+		# Both directions: up from each deck onto the connector, and the drop
+		# back down. _reach() already treats "down" as free.
+		if not (_reach(a, conn) and _reach(b, conn)):
+			continue
+		if not (_reach(conn, a) and _reach(conn, b)):
+			continue
+		if not _headroom(conn, [rooms[i - 1], rooms[i]]):
+			continue
+		(rooms[i - 1]["platforms"] as Array).append(conn)
+		(rooms[i - 1]["oneway"] as Array).append(true)
+		rooms[i - 1]["gallery"] = true
+		rooms[i]["gallery"] = true
+
+
+## Is any solid mass already standing between x0 and x1? Used to keep a ladder
+## out of a gap that already carries a pillar.
+static func _gap_has_solid(room: Dictionary, x0: float, x1: float) -> bool:
+	for index in (room["platforms"] as Array).size():
+		if bool((room["oneway"] as Array)[index]):
+			continue
+		var r: Rect2 = (room["platforms"] as Array)[index]
+		if r.end.x > x0 and r.position.x < x1:
+			return true
+	return false
+
+
+## A connector must not become a ceiling. The two neighbours can carry surfaces
+## at any height (their own TIER decks, masses, a pillar step), and a connector
+## that lands 14 px above one of them leaves a body spawning there with its head
+## in stone - audit_v1 reports that as a softlock. Require a real body's worth of
+## air above and below every surface it overlaps horizontally.
+static func _headroom(conn: Rect2, neighbours: Array) -> bool:
+	for room in neighbours:
+		for entry in (room["platforms"] as Array):
+			var r: Rect2 = entry
+			if r.position.x > conn.end.x or r.end.x < conn.position.x:
+				continue
+			var gap := absf(r.position.y - conn.position.y)
+			if gap < BODY_HEADROOM:
+				return false
+	return true
+
+
+## A ladder of pass-through rungs in the gap before rooms with no pillar. Every
+## rung is TIER above the last, i.e. the same 92 px the room decks use, so the
+## climb is guaranteed to be inside MAX_UP (100) without any per-rung solving.
+static func _stack_ladders(rooms: Array, rng: RandomNumberGenerator) -> void:
+	var made := 0
+	for i in range(1, rooms.size()):
+		# Two ladders a floor is enough to make the climb a choice everywhere;
+		# more turns every gap into scaffolding.
+		if made >= 2:
+			return
+		if rng.randf() > 0.5:
+			continue
+		var prev: Rect2 = rooms[i - 1]["rect"]
+		var here: Rect2 = rooms[i]["rect"]
+		var gap := here.position.x - prev.end.x
+		if gap < 96.0:
+			continue
+		# A connector already bridges this gap at TIER*2; a ladder under it puts
+		# a rung SPAWN_LIFT below the connector floor, and a body spawning on the
+		# connector is then born with its head inside stone (audit_a3 flags it).
+		if bool(rooms[i - 1].get("gallery", false)):
+			continue
+		# A pillar already stands in this gap, and its step deck lies at exactly
+		# the first rung's height. Two ladders is not worth a wall of stone.
+		if _gap_has_solid(rooms[i - 1], prev.end.x - 8.0, prev.end.x + gap):
+			continue
+		var rung_w := clampf(gap * 0.55, 70.0, 110.0)
+		var left := prev.end.x + (gap - rung_w) * 0.5
+		var kept := true
+		var rungs: Array = []
+		for step in 3:
+			var rung := Rect2(left, BASE_Y - TIER * float(step + 1), rung_w, DECK_H)
+			if not _headroom(rung, [rooms[i - 1], rooms[i]]):
+				kept = false
+				break
+			rungs.append(rung)
+		if not kept:
+			continue
+		for rung in rungs:
+			(rooms[i - 1]["platforms"] as Array).append(rung)
+			(rooms[i - 1]["oneway"] as Array).append(true)
+		made += 1
+
+
+## Cell caches on the high route. Chosen from the decks the BFS can already
+## reach at least two tiers above their room's slab, so a cache is always
+## "optional route, real reward" and never a collectible in a wall.
+static func _caches(rooms: Array, floor_index: int) -> Array:
+	var out: Array = []
+	var value := 4 + floor_index * 2
+	for room in rooms:
+		var slab: Rect2 = room["rect"]
+		var best := Rect2()
+		for entry in (room["platforms"] as Array):
+			var r: Rect2 = entry
+			if r.size.x < 60.0 or r.size.y > DECK_H + 0.5:
+				continue
+			if r.position.y > slab.position.y - TIER * 2.0 + 6.0:
+				continue
+			if r.position.y < best.position.y or best.size.x <= 0.0:
+				best = r
+		if best.size.x > 0.0:
+			out.append({
+				"pos": Vector2(best.get_center().x, best.position.y - 12.0),
+				"value": value,
+			})
+	if out.size() > 3:
+		out.shuffle()
+		out = out.slice(0, 3)
+	return out
+
+
 ## Tall solid columns between rooms. Height is capped at two tiers so the room
 ## decks next to them always provide a way over.
 static func _place_pillars(rooms: Array, rng: RandomNumberGenerator) -> void:
@@ -264,13 +455,20 @@ static func _place_pillars(rooms: Array, rng: RandomNumberGenerator) -> void:
 		var gap_width := here.position.x - gap_start
 		if gap_width < 60.0:
 			continue
-		# Wide enough to be a landing pad, never wider than the gap.
-		var pw := clampf(gap_width * 0.62, 64.0, 92.0)
+
+		# The slot between the pillar and the next room must fit a body, or the
+		# player lands in a 23 px crack after climbing over and can never reach
+		# the next slab (audit_a3 walk cases caught it). Leaving SLOT on the
+		# approach side and letting the pillar sit FLUSH against the next room
+		# turns that crack into the landing pad it was meant to be.
+		var pw := clampf(gap_width - SLOT, 56.0, 96.0)
+		if gap_width - pw < SLOT - 4.0:
+			continue
 		# Capped at 176: from the step deck at TIER (92) the climb to the top is
 		# 84 px, inside MAX_UP (100). A taller pillar could not be climbed at
 		# all and would wall the floor off.
 		var height := lerpf(126.0, 176.0, rng.randf())
-		var left := gap_start + (gap_width - pw) * 0.5
+		var left := gap_start + (gap_width - pw)
 		# The step deck must TOUCH the pillar. With a gap between them the
 		# player drops into it, and from the ledge the pillar top is out of
 		# reach (apex is 110, the top is 126-176 up) - a guaranteed softlock.
@@ -355,11 +553,40 @@ static func _spawns_for(rect: Rect2, platforms: Array, half: float) -> Array:
 	for i in 4:
 		var t := fposmod(float(i) * MathArt.INV_PHI, 1.0)
 		var x := rect.position.x + 40.0 + span * t
-		out.append(_settle(x, rect.position.y - SPAWN_LIFT, platforms, half))
+		_offer(out, x, rect.position.y - SPAWN_LIFT, platforms, half)
 	for pr in platforms:
 		var r: Rect2 = pr
-		out.append(_settle(r.get_center().x, r.position.y - SPAWN_LIFT, platforms, half))
+		_offer(out, r.get_center().x, r.position.y - SPAWN_LIFT, platforms, half)
+	# A room with every point rejected (a pillar filled the gap) still needs one
+	# landing pad: the slab centre, lifted, is the widest clear lane there is.
+	if out.is_empty():
+		_offer(out, rect.get_center().x, rect.position.y - SPAWN_LIFT, platforms, half)
+	if out.is_empty():
+		out.append(Vector2(rect.get_center().x, rect.position.y - SPAWN_LIFT))
 	return out
+
+
+## Settle one candidate and only keep it if the body is provably out of stone.
+## The old code trusted _settle() unconditionally; once the macro layer added
+## surfaces at arbitrary heights, a point could be re-anchored INSIDE a pillar
+## and the audit would find a body born in a wall.
+static func _offer(out: Array, x: float, y: float, platforms: Array, half: float) -> void:
+	var p := _settle(x, y, platforms, half)
+	if _inside_any(p, platforms, half):
+		return
+	out.append(p)
+
+
+## Does the box a body would occupy at `p` intersect terrain? The same rule the
+## audits use: half-width SPAWN_RADIUS, half-height from the tallest body.
+static func _inside_any(p: Vector2, platforms: Array, half: float) -> bool:
+	for pr in platforms:
+		var r: Rect2 = pr
+		if p.x + SPAWN_RADIUS < r.position.x or p.x - SPAWN_RADIUS > r.end.x:
+			continue
+		if p.y + half > r.position.y and p.y - half < r.end.y:
+			return true
+	return false
 
 
 ## Lift a point out of stone, then re-anchor it over the surface it will
@@ -402,7 +629,11 @@ static func _support(p: Vector2, platforms: Array, half: float) -> Vector2:
 static func _spawn_half(groups: Array) -> float:
 	# Lift from the tallest body that will actually use this room's points; a
 	# room with no enemies needs no clearance at all.
-	var half := 0.0
+	# The floor of 25 px is the audits' FALLBACK_BOX.y, and it has to be the
+	# SAME number: generation used the room's own tallest body (21 px for a
+	# room of grunts) while the audits check every point against 25 px, so a
+	# point 24 px under a deck passed generation and failed the audit.
+	var half := SPAWN_HALF_MIN
 	var table := _enemy_table()
 	for group in groups:
 		var cfg: Dictionary = table.get(str(group[0]), {})

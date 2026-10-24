@@ -3,6 +3,9 @@ extends Area2D
 ## Currency drop: a 3px rotating diamond with a pixel glint.
 
 var value := 1
+## A cache is placed, not dropped: it rests where the generator put it and never
+## expires. A killed enemy's drop keeps the pop-up arc and the 14 s timeout.
+var resting := false
 var _t := 0.0
 var _velocity := Vector2(randf_range(-60.0, 60.0), -170.0)
 var _collected := false
@@ -26,7 +29,7 @@ func _physics_process(delta: float) -> void:
 	_t += delta
 	if _collected:
 		return
-	if _t > 14.0:
+	if _t > 14.0 and not resting:
 		queue_free()
 		return
 
@@ -44,8 +47,14 @@ func _physics_process(delta: float) -> void:
 		if distance < 16.0:
 			_collect()
 			return
+	elif resting:
+		_velocity = Vector2.ZERO
 	else:
 		_velocity = _velocity.lerp(Vector2(0.0, 18.0), delta)
+
+	if resting:
+		queue_redraw()
+		return
 
 	global_position += _velocity * delta
 	_velocity *= (1.0 - delta * 1.2)

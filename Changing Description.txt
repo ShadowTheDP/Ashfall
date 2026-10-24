@@ -269,3 +269,63 @@ After each meaningful completed task, append:
   Damage.compute; audit_v2 now asserts spitter/leaper spawn FROM DATA instead
   of injecting them into the floor table.
 - Ready to push: yes.
+
+2026-10-24 19:45
+- Summary: maps, impact, hub. Plus the restart bug that was skipping floors.
+  1) BUG: R inside a floor called reload_current_scene(), which rebuilt Main,
+     showed the title and landed in the hub. Because Game.start_floor()
+     advances Profile.best_floor on ENTRY, the door then offered the NEXT
+     floor - a retry banked progression, skipped the floor and (after a death)
+     recorded a death whose body it then discarded. Main.restart_attempt()
+     replays the chosen floor: Game.reset_run() is Game-only state, Profile is
+     never touched, the old player is freed, stale projectiles/waves are
+     purged and the pending hub transition is cancelled. tests/restart_probe
+     covers both the paused retry and the dead retry.
+  2) MAPS are no longer a row of rooms. Floors: 5600-8200 px, 5-7 rooms,
+     29-42 surfaces (was 4200-6400 / 4-6 / ~15). Three new generator passes
+     give the floor a second continuous route:
+       _link_gallery  bridges the gap at the height of each room's OWN upper
+                      deck (matching both neighbours on one shared height
+                      produced a link in 1 gap out of 6; per-neighbour lines
+                      give 4.7-7.0 bridged/scaffolded gaps per floor);
+       _stack_ladders climbable rungs where a pillar does not already stand;
+       _caches        cell caches on decks two tiers above the slab, so the
+                      high route pays.
+     Every added surface goes through the same _reach() predicate the BFS
+     verification uses, plus a new _headroom() guard (a generated surface may
+     not become a ceiling over another surface closer than 72 px) and an
+     _inside_any() spawn filter. tests/gen_stats asserts the shape over 100
+     layouts.
+  3) Two real generator defects the audits then caught:
+     - _place_pillars left a 23 px crack between the pillar and the next
+       room; a 28 px body could not enter it, so falling there was final
+       (audit_a3's physical walk). The pillar now leaves a 46 px slot on the
+       approach side and sits flush against the next room.
+     - generation measured spawn clearance with the room's own tallest body
+       (21 px for grunts) while the audits check 25 px (FALLBACK_BOX), so a
+       point 24 px under a deck passed generation and failed the audit.
+       SPAWN_HALF_MIN now matches, and the two constants are linked by comment.
+  4) IMPACT: per-tier shape language instead of size scaling, crit halo,
+     kill implosion, directional block shell on the shield arc, boss slam /
+     charge / cleave telegraphs. 8 new Juice presets. Nothing covers the
+     fight: flash <= 24 px, rings are outlines, vignette centre stays clear.
+  5) HUB is a room now: far vault with arches, a light shaft with motes,
+     hanging chains and censers, a rose wheel, floor inlay medallions, a
+     foreground colonnade whose feet overlap the floor band (so it reads as
+     near, not as an obstacle) and stations raised to MID so they read from
+     across the room.
+  6) PANELS + HUD rebuilt on a proportional grid with plates, a segmented
+     health bar, tally-based floor progress and timer arcs for combo / EDGE.
+- Key files: data/floors.json, scripts/world/level_gen.gd, scripts/world/level.gd,
+  scripts/main.gd, scripts/ui/hud.gd, scripts/meta/hub.gd, hub_ui.gd,
+  scripts/ui/skill_tree.gd, archive_screen.gd, scripts/fx/impact_fx.gd,
+  scripts/autoload/combat.gd, scripts/enemies/enemy_visual.gd,
+  scripts/enemies/cell_pickup.gd, scripts/systems/juice.gd,
+  tests/restart_probe.*, tests/gen_stats.*, tests/audit_a3.gd, tools/check.ps1
+- Verification: tools/check.ps1 -> ALL CHECKS PASSED (17 steps), plus
+  audit_a3 75 floor x seed layouts with a physical walk per floor, audit_v1
+  200 layouts, gen_stats 100 layouts, restart_probe, run_probe across all 5
+  floors, and the capture harness images inspected by eye.
+- Ready to push: yes for the code. The far plane of a floor is still darker
+  than it should be (the ambience pass ran out of budget); the combo/EDGE/boss
+  HUD plates have only been verified statically.

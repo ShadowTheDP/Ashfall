@@ -287,6 +287,24 @@ flaked under load. Wait for the *condition*, not for a frame count.
   rule, not a stylistic choice. `data/rewards.json` is `#c9c9c9`, not
   `#c9d6e2`.
 
+## Drawing Loops Must Be Bounded (2026-10-24)
+
+- **A per-frame draw loop may never be driven by unbounded game state.**
+  `Hud._hp_segments()` counted segments from `player.max_hp` and the bar drew
+  one rect per segment. `audit_a3` sets `max_hp = 1e9` to survive its walk, so
+  the loop ran ~5e7 times and a single frame took **42 seconds** - the audit
+  looked like a hang, and a mod or a debug value would have done the same to
+  the real game. The count is now `clampi(..., 4, MAX_HP_SEGMENTS)`.
+- Before you add a loop to a `_draw()`, ask what its upper bound is and who can
+  raise it.
+- **Read `Game.player` with `is_instance_valid`, not `!= null`.** Between a
+  floor being torn down and the next body existing, `Game.player` is a freed
+  reference; every read becomes an engine error, and error spam is the
+  slowest thing in a headless run.
+- Two diagnostics that made this findable in minutes: a per-step millisecond
+  print inside the failing test function, and
+  `Time.get_ticks_msec()` around a single `await get_tree().process_frame`.
+
 ## Cold-Start Order
 
 `README.md` → `HANDOVER.md` → `AGENTS.md` → `MEMORY.md` →
