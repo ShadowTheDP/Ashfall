@@ -35,8 +35,8 @@ BOOT
 | Path | Owner | Purpose |
 |---|---|---|
 | `scripts/autoload/profile.gd` | **foundation (done)** | persistent save |
-| `scripts/systems/geom3d.gd` | foundation (done) | 3D→2D projection for pseudo-3D bodies |
-| `data/characters.json` | foundation (done) | playable bodies |
+| `scripts/systems/geom3d.gd` | foundation (done) | 3D→2D projection — the Warden boss only |
+| `data/characters.json` | foundation (done) | playable stat rows |
 | `data/armor.json` | foundation (done) | armour slots |
 | `data/upgrades.json` | foundation (done) | hub upgrades |
 | `data/floors.json` | foundation (done) | floor table |
@@ -44,7 +44,6 @@ BOOT
 | `scripts/meta/hub_ui.gd` | **W1** | station panels |
 | `scripts/world/level.gd` | **W2** | one generated floor |
 | `scripts/world/level_gen.gd` | **W2** | room graph generator |
-| `scripts/player/character_visual.gd` | **W3** | pseudo-3D body rendering |
 | `scripts/player/weapon_visual.gd` | **W4** | per-weapon blade drawing |
 | `scripts/systems/juice.gd` | **W5** | particle presets (extend) |
 | `scripts/fx/*` (new files only) | **W5** | new effect types |
@@ -86,6 +85,9 @@ Profile.bank(amount: int)          # add to banked cells, saves
 Profile.spend(amount: int) -> bool # false if not enough
 Profile.add_upgrade(id, levels)    # clamps to the data max
 Profile.upgrade_cost(id) -> int    # next level price, -1 if maxed
+Profile.upgrade_currency(id) -> String  # "cells" or "souls", read from the data row
+Profile.can_afford_upgrade(id) -> bool
+Profile.buy_upgrade(id) -> bool    # spends that currency, saves; false if short
 Profile.has_skill(id) -> bool
 Profile.add_skill(id) -> bool      # false if already owned / unaffordable
 Profile.is_unlocked(kind, id) -> bool   # kind = "character" | "weapon" | "armor"
@@ -96,8 +98,9 @@ Profile.stats() -> Dictionary           # everything above, for the archive UI
 ```
 
 `Profile.bonus("hp")` / `("damage")` / `("speed")` / `("knives")` /
-`("iframe")` / `("crit")` / `("cells")` are the **only** way gameplay reads
-permanent upgrades. Do not read `Profile.upgrades` directly outside the hub UI.
+`("iframe")` / `("crit")` / `("cells")` / `("brutality")` / `("tactics")` are the
+**only** way gameplay reads permanent upgrades. Do not read `Profile.upgrades`
+directly outside the hub UI.
 
 ---
 
@@ -109,9 +112,9 @@ permanent upgrades. Do not read `Profile.upgrades` directly outside the hub UI.
 "square": {
   "name": "SQUARE", "subtitle": "the first face",
   "hp": 120, "speed": 300, "jump": -630, "knives": 2,
-  "body": "prism",        // prism | octa | star | torus | helix | gyro
-  "sides": 4,             // geometry recipe parameter
-  "spokes": 0,
+  "body": "prism",        // archival: no renderer reads these three
+  "sides": 4,             // archival
+  "spokes": 0,            // archival
   "tone": "white",
   "passive": "none",      // none | glass | bulwark | dancer | hunter | echo
   "passive_text": "...",
@@ -120,8 +123,11 @@ permanent upgrades. Do not read `Profile.upgrades` directly outside the hub UI.
 }
 ```
 
-`body` selects the pseudo-3D silhouette drawn by `character_visual.gd`.
-`passive` is applied by the foundation thread in `player.gd`.
+`body` / `sides` / `spokes` are **archival descriptors only**: no renderer reads
+them. The player is always the plain square (`player_visual.gd`). The hub
+CHARACTER panel reads `name`, `hp`, `speed`, `knives`, `passive_text`,
+`cost` and `unlock_floor`; the archive has no character tab at all.
+`passive` is applied by `player.gd`.
 
 ### 4.2 `data/armor.json`
 
@@ -142,6 +148,10 @@ permanent upgrades. Do not read `Profile.upgrades` directly outside the hub UI.
 }
 ```
 
+`cost_step` is added per level already owned. A row may add
+`"currency": "souls"` — `brutality` and `tactics` do — and then
+`Profile.upgrade_currency()` decides whether it is paid in cells or souls.
+
 ### 4.4 `data/floors.json`
 
 ```jsonc
@@ -151,6 +161,9 @@ permanent upgrades. Do not read `Profile.upgrades` directly outside the hub UI.
   "boss": "", "palette": 0, "reward": 2
 }
 ```
+
+`reward` is the boon budget for the whole floor, spent one pick per cleared
+room (see "Boon budget: one per cleared room").
 
 ---
 
@@ -180,9 +193,10 @@ Workers must **not** implement these; call them if needed.
 2. Monochrome only — colours from the `MathArt` ramp.
 3. No limbs, no eyes. A hand is a single dot.
 4. No squash / stretch. Weight comes from rotation, shadow, particles, camera.
-5. Pseudo-3D is allowed and encouraged for **characters and props**, but it
-   must be built from projected wireframe/solid polygons (`Geom3D`), not from
-   pre-rendered art.
+5. Pseudo-3D exists for **exactly one actor: the Warden boss**
+   (`EnemyVisual._draw_warden()`). The player and every other enemy stay flat
+   polygons. Anything pseudo-3D must be built from projected solid polygons
+   (`Geom3D`), never from pre-rendered art.
 6. Keyboard only. Every new UI must be fully operable with arrows + Enter,
    and show its key hints on screen.
 
@@ -228,12 +242,15 @@ Deviations and load-bearing details that the next reader needs.
   off; 400 works.
 
 ### Pseudo-3D
-- `CharacterVisual` culls back faces by 3D normal. Without it the torus draws
-  ~96 quads and the whole body turns into a grey smudge.
-- Base tone is pre-darkened by 0.15: `Geom3D.draw_solid` lightens a face by up
-  to +0.275, so a WHITE base clamps every face to white and the form vanishes.
-- `prism` and `gyro` are pre-rotated 45° on z, otherwise `Geom3D.prism` reads
-  as a diamond rather than the square the game's identity depends on.
+- `Geom3D.draw_solid()` sorts faces back-to-front by averaged depth and shades
+  by winding (see "Boss placement and face shading"). No culling pass is
+  needed: back faces land in 0.05..0.30 and never compete with a front face.
+- Base tone is pre-darkened by 0.18 in `enemy_visual.gd`: `draw_solid` lightens
+  a face by up to +0.275, so an undarkened PALE base clamps every face to the
+  same value and the solid goes flat.
+- The Warden's prism is pre-rotated -90° on z so a vertex points up.
+  `Geom3D.prism` starts at +x, and an unrotated pentagon reads as a diamond,
+  not a column.
 
 ### Weapons
 - `WeaponVisual.draw_blade()` stores the pose and emits geometry from its own
@@ -249,12 +266,46 @@ Deviations and load-bearing details that the next reader needs.
 - `rose_bloom(petals=6)` renders 3 lobes: `r = cos(kθ)` closes at integer k and
   gives k lobes for odd k, 2k for even.
 
+### The two-colour build
+
+Weapons and boons carry an `attribute` colour; the run tracks how deep each
+colour is and damage scales with it.
+
+- `data/weapons.json`: every weapon has `"attribute"` — `brutality` for
+  rusty_sword / fractal_edge / chain_lash, `tactics` for arc_saber /
+  kiss_precision / orbit_rings.
+- `data/rewards.json`: `edge` and `hunter` raise brutality, `ghost` and
+  `armory` raise tactics, `vitality` / `swift` / `leech` carry no colour.
+- `Game.attr` is a `Dictionary` of in-run colour levels. `start_floor()` and
+  `reset_run()` both clear it, so colour never crosses a floor or a run.
+- `Player.attribute_level(colour)` = `Game.attr[colour] + Profile.bonus(colour)`;
+  `weapon_attr_level()` is the same for the equipped weapon. It feeds
+  `Hitbox.attr`, `FunctionWave.attr` and `Projectile.attr`.
+- `Damage.compute(damage, attr, crit, crit_mult)` multiplies by
+  `1 + attr * ATTR_SCALE` (`ATTR_SCALE = 0.12`) on top of crits, so one level is
+  +12%.
+- A kunai is always tactics: `Player._throw_knife()` sets
+  `Projectile.attr = attribute_level("tactics")` whatever the blade is.
+- The soul sink: `data/upgrades.json` gained `brutality` and `tactics` rows
+  (`per_level` 1, `max` 5, `cost` 1 with `cost_step` 1, `"currency": "souls"`).
+  `Profile.upgrade_currency()` / `can_afford_upgrade()` / `buy_upgrade()` are
+  the only path that spends souls.
+
+### Boon budget: one per cleared room
+
+`data/floors.json` `"reward"` (2 / 2 / 3 / 3 / 0) is **not** spent at the exit.
+A floor banks its cells the moment it is cleared, so an exit picker had nothing
+left to pay for. `Game.start_floor()` loads the budget into
+`Game.floor_rewards_left`, `Level` emits `room_cleared(index)`, and
+`Main._on_room_cleared()` decrements the budget and defers the picker — the
+room clears inside a physics signal flush and the picker pauses the tree. Floor
+5 pays no boons at all.
+
 ### Pseudo-3D is boss-only
 
-`CharacterVisual` (`scripts/player/character_visual.gd`) is **not wired in**.
-The player and every normal enemy stay flat polygons — that is the game's
-identity, and a rotating solid body destroyed it. `enemy_visual.gd`
-`_draw_warden()` is the only caller of `Geom3D`.
+`enemy_visual.gd` `_draw_warden()` is the **only** caller of `Geom3D`. The
+player is a flat square and every other enemy is a flat polygon — that is the
+game's identity, and a rotating solid body destroyed it.
 
 Two things the Warden needs that a small body does not:
 

@@ -11,6 +11,11 @@ const BLOOM_SHADER: Shader = preload("res://shaders/bloom.gdshader")
 ## "arena" | "hub" force one or the other.
 @export var start_mode := ""
 @export var skip_title := false
+## Harness switch, same purpose as start_mode: the headless probes drive whole
+## runs with no way to press a key, so a room reward is granted straight away
+## instead of raising the picker (which pauses the tree and would hang them).
+## A real run never sets this.
+@export var auto_rewards := false
 
 var world: Node2D
 var arena: Arena
@@ -246,6 +251,8 @@ func start_floor(floor_index: int) -> void:
 		level.cleared.connect(_on_floor_cleared)
 	if level.has_signal("player_died"):
 		level.player_died.connect(_on_player_died)
+	if level.has_signal("room_cleared"):
+		level.room_cleared.connect(_on_room_cleared)
 	if level.has_method("start_point"):
 		player.position = level.start_point()
 
@@ -266,6 +273,24 @@ func start_floor(floor_index: int) -> void:
 	hud.visible = true
 	Game.announce(Game.floor_name, 1.4)
 
+
+func _on_rooms_cleared_reward() -> void:
+	# Deferred by _on_room_cleared: this pauses the tree, and the room clears
+	# inside a physics signal flush.
+	if Game.run_over or Game.reward_open:
+		return
+	# Headless probes drive the whole run without a UI; the flag they already
+	# set for the arena path has to mean the same thing here.
+	if auto_rewards or Game.auto_choose_rewards:
+		Game.grant_random_reward()
+		return
+	Game.request_rewards(3)
+
+func _on_room_cleared(_index: int) -> void:
+	if Game.floor_rewards_left <= 0 or Game.run_over or Game.reward_open:
+		return
+	Game.floor_rewards_left -= 1
+	call_deferred("_on_rooms_cleared_reward")
 
 func _on_floor_cleared() -> void:
 	Game.finish_floor()
@@ -310,7 +335,11 @@ func _on_rewards_requested(choices: Array) -> void:
 
 
 func _on_reward_chosen(_id: String) -> void:
-	encounter.resume_after_reward()
+	# The arena director is the only thing waiting on a pick; on a floor the
+	# picker unpauses itself in RewardScreen._pick(). Calling into a null
+	# encounter here is what would have crashed the first cleared room.
+	if encounter != null and is_instance_valid(encounter):
+		encounter.resume_after_reward()
 
 
 func _add_fullscreen_shader_layer(layer_index: int, shader: Shader) -> void:

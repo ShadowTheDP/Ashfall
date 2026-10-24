@@ -190,16 +190,30 @@ func _case(floor_index: int, seed_value: int) -> void:
 	if expected > 0 and bool(_level._door.open):
 		_fail(floor_index, seed_value, "door already open with %d enemies" % expected)
 
-	# Let every spawn land, then prove nobody fell out of the world.
-	for i in 24:
+	# Let every spawn land, then prove nobody fell out of the world. Track "touched
+	# the floor at least once" instead of "is on the floor right now": the leaper
+	# hops, so a simultaneous-landing test almost never fires and burned 240
+	# frames per case. 24 fixed frames was also too tight for a Warden with a
+	# long drop, which read as "never landed" when the engine ran faster than
+	# real time.
+	var landed := {}
+	for i in 90:
 		await get_tree().physics_frame
+		for enemy in _enemies():
+			if (enemy as Enemy).is_on_floor():
+				landed[enemy] = true
+		if landed.size() >= _enemies().size():
+			break
 	var lowest := 0.0
 	for room in rooms:
 		lowest = maxf(lowest, (room["rect"] as Rect2).position.y)
 	lowest += LevelGen.LEDGE_H
 	for enemy in _enemies():
 		var body: Enemy = enemy
-		if not body.is_on_floor():
+		# "Touched the floor at least once", not "is standing on it right now":
+		# a leaper hops and a watcher may be mid-lean, and asserting the
+		# instantaneous state made this probe fail on timing alone.
+		if not landed.has(body):
 			_fail(floor_index, seed_value, "%s never landed (y=%.0f)" % [body.kind, body.global_position.y])
 		if body.global_position.y > LevelGen.BASE_Y + 60.0:
 			_fail(floor_index, seed_value,

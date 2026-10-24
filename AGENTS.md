@@ -6,11 +6,16 @@
    runtime is wired, who owns what, where every number lives. Start here if
    you need the whole picture rather than one subsystem.
 1. `README.md` — purpose, setup, structure, validation.
-2. `MEMORY.md` — durable decisions, commands, risks.
-3. `docs/agent/current-state.md` — what is being worked on now.
-4. `docs/design/math-art.md` before adding or changing any visual.
-5. `docs/design/combat-feel.md` before changing any gameplay number.
-6. The target script/scene; actors are assembled in code, so read the root
+2. `HANDOVER.md` — the session log: what was built, every bug with its
+   cause, the fragile spots, the next steps. It is the only doc that has
+   stayed current through every milestone; trust it over a contradicting
+   paragraph elsewhere.
+3. `MEMORY.md` — durable decisions, commands, risks.
+4. `docs/agent/current-state.md` — what is being worked on now.
+5. `docs/design/math-art.md` before adding or changing any visual.
+6. `docs/design/impact.md` before touching hit feedback or the swing trail.
+7. `docs/design/combat-feel.md` before changing any gameplay number.
+8. The target script/scene; actors are assembled in code, so read the root
    script before the `.tscn`.
 
 ## Scope
@@ -56,6 +61,16 @@
 
 # Full verification
 powershell -ExecutionPolicy Bypass -File tools\check.ps1
+
+# Inner loop: skips the seed sweeps and the end-to-end run (~77 s instead of ~5 min)
+powershell -ExecutionPolicy Bypass -File tools\check.ps1 -Fast
+
+# One step only (substring match on the step name; skips --import)
+powershell -ExecutionPolicy Bypass -File tools\check.ps1 -Only audit
+powershell -ExecutionPolicy Bypass -File tools\check.ps1 -Only probe
+
+# Smoke only: fixed-fps 120, ~120 s, can report false failures. Not a gate.
+powershell -ExecutionPolicy Bypass -File tools\check.ps1 -Turbo
 
 # Visual capture (requires a display)
 .\.tools\Godot_v4.7.2-stable_win64_console.exe --path . tests\title_capture.tscn

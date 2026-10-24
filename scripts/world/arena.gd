@@ -2,6 +2,11 @@ class_name Arena
 extends Node2D
 ## Handcrafted arena, drawn as pixel blocks. Collision and art share the same
 ## rects; the decoration is precomputed once so the static draw stays cheap.
+##
+## ARENA MODE ONLY. The shipping game boots into the hub (`start_mode == "hub"`),
+## so this and the rest of the arena stage (Encounter, Runes, Braziers, Motes)
+## are reached only by harnesses that set `skip_title = true`. It is the
+## combat-feel fixture; rooms come from LevelGen in the real loop.
 
 const GROUND := Rect2(-150.0, 0.0, 1750.0, 160.0)
 const PLATFORMS := [

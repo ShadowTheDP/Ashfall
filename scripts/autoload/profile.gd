@@ -233,11 +233,28 @@ func upgrade_cost(id: String) -> int:
 	return int(cfg.get("cost", 30)) + int(cfg.get("cost_step", 25)) * level
 
 
+## An upgrade is priced in cells unless it says otherwise. The attribute
+## upgrades are the soul sink: victory pays souls and nothing else spends them.
+func upgrade_currency(id: String) -> String:
+	return str(Data.upgrades.get(id, {}).get("currency", "cells"))
+
+
+func can_afford_upgrade(id: String) -> bool:
+	var cost := upgrade_cost(id)
+	if cost <= 0:
+		return true
+	return souls >= cost if upgrade_currency(id) == "souls" else cells >= cost
+
+
 func buy_upgrade(id: String) -> bool:
 	var cost := upgrade_cost(id)
 	if cost < 0:
 		return false
-	if not spend(cost):
+	if upgrade_currency(id) == "souls":
+		if souls < cost:
+			return false
+		souls -= cost
+	elif not spend(cost):
 		return false
 	upgrades[id] = upgrade_level(id) + 1
 	save()

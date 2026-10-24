@@ -161,6 +161,28 @@ func _t2_economy() -> void:
 	Profile.add_upgrade("vitality", -99)
 	_eq(Profile.upgrade_level("vitality"), 0, "add_upgrade clamps to zero")
 
+	# The soul sink: attribute upgrades are priced in souls, never in cells.
+	Profile.reset_profile()
+	_check(not Data.upgrades.get("brutality", {}).is_empty(),
+		"data/upgrades.json has no soul-priced brutality row")
+	_eq(Profile.upgrade_currency("brutality"), "souls", "brutality is priced in souls")
+	_eq(Profile.upgrade_currency("vitality"), "cells", "vitality is priced in cells")
+	Profile.cells = 500
+	Profile.souls = 0
+	_check(not Profile.can_afford_upgrade("brutality"), "0 souls can afford brutality")
+	_check(not Profile.buy_upgrade("brutality"), "bought brutality with no souls")
+	_eq(Profile.cells, 500, "a refused soul purchase spent cells")
+	Profile.souls = 3
+	var soul_cost := Profile.upgrade_cost("brutality")
+	_eq(soul_cost, 1, "first brutality level costs 1 soul")
+	_check(Profile.buy_upgrade("brutality"), "could not buy brutality with 3 souls")
+	_eq(Profile.souls, 3 - soul_cost, "souls were not spent")
+	_eq(Profile.cells, 500, "a soul purchase spent cells")
+	_eq(Profile.upgrade_level("brutality"), 1, "brutality level did not rise")
+	_eq(Profile.bonus("brutality"), 1.0, "bonus(brutality) does not follow the level")
+	_eq(Profile.upgrade_cost("brutality"), 2, "the soul cost curve is flat")
+	Profile.reset_profile()
+
 	# bonus() aggregates upgrades AND skill nodes for the same stat.
 	Profile.reset_profile()
 	Profile.upgrades = {"vitality": 2, "edge": 1}

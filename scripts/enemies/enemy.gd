@@ -488,7 +488,7 @@ func _spit() -> void:
 		float(cfg.get("projectile_speed", 250.0)), 700.0)
 	var glob := Projectile.new()
 	glob.position = spawn
-	glob.setup_ballistic(velocity, float(cfg.get("damage", 8.0)), Color(cfg.get("color", "#b8bec8")), self)
+	glob.setup_ballistic(velocity, float(cfg.get("damage", 8.0)), Color(cfg.get("color", "#bdbdbd")), self)
 	var root := Game.fx_root
 	if is_instance_valid(root):
 		root.add_child(glob)
@@ -627,7 +627,7 @@ func _spawn_shockwaves() -> void:
 			Vector2(direction, 0),
 			float(cfg.get("shockwave_speed", 430.0)),
 			float(cfg.get("shockwave_damage", 13.0)),
-			Color(cfg.get("color", "#dfe4ea")),
+			Color(cfg.get("color", "#e3e3e3")),
 			self
 		)
 		var root := Game.fx_root
@@ -662,7 +662,7 @@ func _shoot() -> void:
 	var velocity := MathArt.ballistic_velocity(spawn, target, float(cfg.get("projectile_speed", 320.0)), 700.0)
 	var projectile := Projectile.new()
 	projectile.position = spawn
-	projectile.setup_ballistic(velocity, float(cfg.get("damage", 7.0)), Color(cfg.get("color", "#b8bec8")), self)
+	projectile.setup_ballistic(velocity, float(cfg.get("damage", 7.0)), Color(cfg.get("color", "#bdbdbd")), self)
 	var root := Game.fx_root
 	if is_instance_valid(root):
 		root.add_child(projectile)
@@ -743,7 +743,7 @@ func _die() -> void:
 	collision_layer = 0
 	collision_mask = 0
 	velocity = Vector2(randf_range(-60.0, 60.0), -160.0)
-	var tint := Color(cfg.get("color", "#b8bec8"))
+	var tint := Color(cfg.get("color", "#bdbdbd"))
 	var sides := 3
 	match kind:
 		"archer":

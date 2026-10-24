@@ -33,6 +33,10 @@
 			[
 				"charger",
 				2
+			],
+			[
+				"leaper",
+				1
 			]
 		],
 		"boss": "",
@@ -59,6 +63,10 @@
 			[
 				"archer",
 				2
+			],
+			[
+				"spitter",
+				1
 			]
 		],
 		"boss": "",
@@ -85,6 +93,14 @@
 			[
 				"charger",
 				3
+			],
+			[
+				"spitter",
+				1
+			],
+			[
+				"leaper",
+				1
 			]
 		],
 		"boss": "",

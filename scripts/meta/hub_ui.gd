@@ -208,12 +208,16 @@ func _rows() -> Array:
 			for id in Data.upgrades:
 				var cfg: Dictionary = Data.upgrades[id]
 				var cost := Profile.upgrade_cost(id)
+				# A soul-priced row must never read as a cell price: the header
+				# shows both currencies and the list is the only place that says
+				# which one a row spends.
+				var suffix := "S" if Profile.upgrade_currency(id) == "souls" else "C"
 				upgrades.append({
 					"id": id, "kind": "upgrade", "name": str(cfg.get("name", id)),
 					"info": "LV %d/%d   %s" % [Profile.upgrade_level(id), int(cfg.get("max", 1)), str(cfg.get("text", ""))],
-					"price": "MAX" if cost < 0 else "%d C" % cost,
+					"price": "MAX" if cost < 0 else "%d %s" % [cost, suffix],
 					"level": Profile.upgrade_level(id), "max": int(cfg.get("max", 1)),
-					"state": 2 if cost < 0 else 1,
+					"state": 2 if cost < 0 else (1 if Profile.can_afford_upgrade(id) else 0),
 				})
 			return upgrades
 		"character":

@@ -41,12 +41,14 @@
 
 ### 第 2 層：擴張環
 
-| tier | 最大半徑 | 持續 | 線寬 |
+| tier | 最大半徑 | 持續（60 fps） | 線寬 |
 |---:|---:|---:|---|
 | 0 | 18 px | 5f | 2→0.75 px |
 | 1 | 24 px | 6f | 2→0.75 px |
 | 2 | 36 px | 8f | 2→0.75 px |
 | 3 | 54 px | 10f | 2→0.75 px |
+
+`RING_LIFE` = 0.083 / 0.100 / 0.133 / 0.167 s，也就是 5 / 6 / 8 / 10 幀。
 
 tier ≥ 2 時多一圈 `1/φ` 的內環。**圓心是接觸點**，不是角色中心。
 
@@ -82,25 +84,26 @@ tier ≥ 2 時多一圈 `1/φ` 的內環。**圓心是接觸點**，不是角色
 
 ## 4. 揮擊本體
 
-`scripts/player/player_visual.gd` 的 `_draw_smear`。
+`scripts/fx/slash_fx.gd`（`SlashFx`）是斬擊尾跡的**唯一擁有者**。
+`PlayerVisual._draw_smear()` 是空的（`pass`，註解寫著 one trail, one owner）：
+在那裡再畫一次會產生兩個各自計算相位的弧，疊成一整塊實心色。
 
-**最重要的規則：不要畫任何連續的填充形狀。**
-刀刃長 38–50 px 時，任何實心扇形或新月都會變成「月餅」。
-所以斬擊只用**斷開的直線**表達：
+**最重要的規則：不要畫任何連續的填充形狀。** 刀刃長 26–70 px（`blade`）時，
+任何實心扇形、同心帶或新月都會變成「月餅」。所以斬擊只用**斷開的弧線**表達：
 
 | 元素 | 做法 |
 |---|---|
-| 主體 | 4 圈 × 3 段的**斷開直線**，每段沿刀刃的切線方向飛出 |
-| 半徑分布 | 0.55 / 0.70 / 0.86 / 1.02 倍刀長（由內到外） |
-| 落後量 | 內圈落後 72%，外圈在刀尖上 |
-| 長度 | 7–20 px，越靠前越長 |
-| alpha | 0.75 → 0.25，越靠後越淡 |
-| 尖端主線 | 3 px 白線 + 1 px 純白核心，沿刀刃正前方 26 px |
-| 數學點綴 | 3 個黃金角間距的點，落在 0.60 倍刀長處 |
-| 刀尖延遲點 | 1 幀前的刀尖位置，45% alpha |
+| 主體 | 4 段**斷開的弧**，全部落在**同一個半徑**上（= `blade` 刀長） |
+| 弧長 | 每段連段固定，不隨掃過角度縮放：0.95 / 1.05 / 1.35 rad |
+| 寬度 | 1.2 → 2.6 px，越靠亮端越粗 |
+| alpha | 0.42 → 1.0，亮端在前 |
+| 漂移 | 整條尾跡隨時間往前 0.55 rad 並變淡，總壽命 0.13 s（≈8 幀） |
+| 收尾 | 角度上在刀後方 0.30 rad 就停住（`a1 = -0.30`），所以刀刃 + 尾跡永遠接不成一個 L |
+| 甩尾火花 | 尾跡後方 2 根 5 px 短線，alpha 0.45 / 0.30 |
+| 朝向 | 以 `scale.x = facing` 鏡射；`PlayerVisual._coil_angle()` 必須走 `_mirror()`，否則朝左揮會掃過 ~5 rad 而不是 ~3.2，整條尾跡變成一塊帶 |
 
 **為什麼用斷線**：斷開的直線無法圍出形狀，只能讀成「速度」。這是唯一
-在 38–50 px 半徑下不會變成月餅的畫法。
+在 26–70 px 半徑下不會變成月餅的畫法。
 
 **握點**：在方塊**下半部**的前緣 `(facing × 13, +4)`，劍靜止時**朝上**
 （`REST_ANGLE = -1.30` rad）。揮擊由「上後方」掃到「前下方」。
@@ -113,16 +116,16 @@ tier ≥ 2 時多一圈 `1/φ` 的內環。**圓心是接觸點**，不是角色
 
 | 問題 | 修正 |
 |---|---|
-| 手點在方塊內部 `(7,-7)`，劍看起來從身體裡長出來 | 握點移到**前緣** `(facing × 13, -7)`，並隨朝向鏡射 |
-| 可見刀刃 24 px，但 hitbox 到 72–85 px | 刀刃長度寫進 `data/weapons.json` 的 `blade`（38/40/50），hitbox 由它推導 |
+| 手點在方塊內部 `(7,-7)`，劍看起來從身體裡長出來 | 握點移到**前緣下半** `(facing × 13, +4)`，並隨朝向鏡射 |
+| 可見刀刃 24 px，但 hitbox 到 72–85 px | 刀刃長度寫進 `data/weapons.json` 的 `blade`（全武器 26–70 px，rusty_sword 是 38/40/50），hitbox 由它推導 |
 | SlashFx 圓心偏離手點 14–17 px，半徑也不對 | 圓心 = 握點，半徑 = 刀刃長度 |
 
 **幾何關係**（`data/weapons.json`）：
 
 ```
 reach = hand_x + blade + 5        // 手點 13，刀刃 38 → reach 56
-size  = [reach, 52 或 60]
-offset = [reach / 2, -7]
+size  = [reach, 依武器（30–96）]
+offset = [reach / 2, +4]          // y 與握點同一個 4
 ```
 
 所以畫出來的刀尖、斬擊弧、傷害判定三者是同一組數字。
@@ -136,7 +139,7 @@ offset = [reach / 2, -7]
 | 擊殺 | 輪廓碎片 12 片（Boss 24）+ tier 1–2 impact + 粒子 + punch |
 | 格擋 | 10 條短火花 + 4 亮點（`Juice.block`）+ 環 + tier 0 impact |
 | 完美閃避 | 8 射線（3 幀）+ 2 幀凍結 + 粒子 + `EDGE +25%` |
-| 受擊 | 4 條紅→白射線在**接觸邊緣** + 10 幀受擊硬直 + 全屏白閃 0.10 alpha |
+| 受擊 | 4 條 `DANGER`（= `WHITE`）射線在**接觸邊緣** + 10 幀受擊硬直 + 全屏白閃 0.10 alpha |
 
 ---
 
@@ -162,7 +165,7 @@ offset = [reach / 2, -7]
 | 打起來像在戳空氣 | 火花從敵人中心出現 | 改用 `info["point"]`（真實接觸點） |
 | 每一下都一樣重 | 沒有 tier 分級 | 用 `data/weapons.json` 的 `tier` |
 | 畫面被白光吃掉 | 整屏反相 / 大面積白閃 | 只反轉目標輪廓，全屏只做暗角 |
-| 斬擊像一個實心圓 | 扇形填滿整個揮擊角 | 改新月 + 只畫已走過的那一段 |
+| 斬擊像一個實心圓（月餅） | 用填充扇形／同心帶畫尾跡 | 尾跡只能是**斷開弧線、單一半徑**（`SlashFx`）；任何填滿的形狀在 26–70 px 一定變月餅 |
 | 劍從身體裡長出來 | 握點在方塊內部 | 握點放前緣 |
 | 打得到但看起來打不到 | hitbox 與刀長不一致 | 用 `blade` 推導 hitbox |
 | 淡灰長尾糊成一團 | 火花壽命太長 | 火花 ≤ 0.21 s，碎片 ≤ 0.5 s |
@@ -185,34 +188,7 @@ offset = [reach / 2, -7]
 - [Why Fighting Games Have Hitstop — Sajam](https://www.youtube.com/watch?v=KL5MNHGs5Fg)
 - [Game Feel — Steve Swink](https://www.routledge.com/Game-Feel-A-Game-Designers-Guide-to-Virtual-Sensation/Swink/p/book/9780123743282)
 
-## 7. The smear has exactly one owner
-
-`SlashFx` (`scripts/fx/slash_fx.gd`) is the **only** thing that draws the
-swing trail. `PlayerVisual._draw_smear()` is intentionally empty.
-
-This was not always true, and the duplication was the actual cause of the
-"mooncake" and of the trail fusing with the blade into an L:
-
-- `SlashFx` drew three **concentric bands** (4 px, 3 px, 1 px) across a
-  2.1-2.9 rad arc. At 38-50 px radius that is a filled crescent.
-- `PlayerVisual._draw_smear()` drew a second, independently-phased arc from
-  the grip. Two arcs with different origins overlapped into one solid shape.
-
-Rules that now hold:
-
-1. **One radius, one owner.** Trail = `SlashFx` dashes on the tip's radius.
-2. **Dashes, never bands.** 4 dashes over a 0.95-1.35 rad span, widths
-   1.2 -> 2.6 px, alpha 0.42 -> 1.0 (bright end leads).
-3. **The trail never touches the blade.** It ends 0.30 rad short, and it
-   lives behind the blade, so blade + trail cannot read as an L.
-4. **Span is capped, not proportional.** `arc` is a constant per combo step.
-   Scaling it with the live swept angle made long swings produce giant arcs.
-5. **`_coil_angle()` must go through `_mirror()`.** Without it a left-facing
-   swing travels ~5 rad instead of ~3.2 and the whole trail becomes a band.
-   This bug was invisible on the first two combo steps (they happened to
-   land near the mirrored value) and only showed on the third.
-
-## 8. Shadows
+## 9. Shadows
 
 Both player and enemies use three stacked 20-gons (scales 1.00 / 0.72 / 0.42,
 alpha 0.14 / 0.16 / 0.18). Cumulative centre density is about 0.30 and it

@@ -3,6 +3,10 @@ extends Node
 ## Wave director. Hand-authored waves keep early balance readable; room
 ## generation is a later pillar.
 ##
+## ARENA MODE ONLY: built by main.gd when `start_mode == "arena"`, which in
+## practice means the test harnesses. On a generated floor the reward beat lives
+## in data/floors.json "reward" and fires per cleared room (see Main).
+##
 ## Flow: wave -> clear -> reward choice -> next wave -> ... -> boss -> victory.
 
 const WAVES := [

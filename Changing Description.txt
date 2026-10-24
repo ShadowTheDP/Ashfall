@@ -214,3 +214,58 @@ After each meaningful completed task, append:
   soak all OK. impact_capture used to iterate the smear four times; the final
   version has no continuous arc.
 - Ready to push: yes.
+
+2026-10-24 15:40
+- Summary: Wired everything that existed but was unreachable, and deleted the
+  dead code. No new pillar; the goal was to make the shipped path match the
+  designed path.
+  1) IN-RUN BUILD IS LIVE. data/floors.json's "reward" (2/2/3/3/0) was never
+     read: Game.request_rewards() had exactly one caller, in
+     scripts/world/encounter.gd, and Encounter is built only when
+     start_mode == "arena" (test harnesses). A normal run never saw a boon.
+     Level now emits room_cleared(index); Main._on_room_cleared() decrements
+     Game.floor_rewards_left and defers the picker. Boons are paid per cleared
+     room, not at the exit, because Game.finish_floor() banks the run there.
+     Main._on_reward_chosen() also stopped calling into a null Encounter - that
+     was a guaranteed crash the moment a floor granted anything.
+  2) TWO-COLOUR BUILD. Weapons carry attribute (brutality/tactics), coloured
+     boons raise Game.attr, and Player.weapon_attr_level() feeds
+     Hitbox.attr / FunctionWave.attr / Projectile.attr so Damage.compute()
+     finally receives a non-zero attribute level (ATTR_SCALE 0.12/level).
+     Every call site used to hardcode 0, which made the archive's
+     "BRUTALITY / TACTICS" labels decorative.
+  3) SOULS HAVE A SINK. data/upgrades.json gained brutality and tactics rows
+     priced in souls (1 + 1/level, max 5); Profile.upgrade_currency() /
+     can_afford_upgrade() route the wallet and HubUi shows a C/S suffix.
+  4) spitter and leaper now spawn on floors 2, 3 and 4.
+  5) Deleted scripts/player/character_visual.gd (316 lines, zero references).
+  6) Player._apply_loadout() is idempotent: roll_iframe_end / crit_bonus /
+     armor_taken / aegis_cooldown_scale / perfect_dodge_scale / echo_every are
+     rebuilt from constants instead of +=.
+  7) Monochrome is strictly neutral. The MathArt ramp was ~10% blue
+     (#08090b, #1a1c20 ...) and two UI panels hardcoded blue-grey; all of it
+     is now r == g == b. data/rewards.json lost its one non-neutral tint.
+  8) Docs corrected where they contradicted the code: math-art.md (player
+     notch/pip, superellipse, squash/stretch numbers, colour-named feedback,
+     px_* contradiction), impact.md (the smear owner is SlashFx, not
+     player_visual._draw_smear), meta.md (character_visual deleted),
+     PRODUCT.md + README.md (hub, Profile, 5 autoloads, in-run build,
+     768x480 not 640x360), AGENTS.md read order (HANDOVER), MEMORY.md
+     (verification block + build-wiring decisions), current-state.md.
+- Key files changed: data/floors.json, data/rewards.json, data/upgrades.json,
+  project.godot, scripts/systems/math_art.gd, scripts/autoload/game.gd,
+  scripts/autoload/profile.gd, scripts/meta/hub_ui.gd, scripts/player/player.gd,
+  scripts/combat/hitbox.gd, scripts/combat/function_wave.gd,
+  scripts/enemies/projectile.gd, scripts/world/level.gd, scripts/world/arena.gd,
+  scripts/world/encounter.gd, scripts/ui/reward_screen.gd,
+  scripts/ui/archive_screen.gd, scripts/ui/skill_tree.gd,
+  scripts/player/character_visual.gd (deleted), tests/audit_a2.gd,
+  tests/audit_v2.gd, tests/reward_probe.gd, tests/run_probe.gd,
+  tests/*.tscn (auto_rewards), docs/.
+- Verification notes: tools/check.ps1 -> ALL CHECKS PASSED, exit 0, 14 steps.
+  run_tests 111, audit_a2 123, audit_a4 226, audit_v3 162 checks.
+  run_probe now asserts each floor's declared boon budget and that a cleared
+  room actually grants one; reward_probe asserts a coloured boon reaches
+  Damage.compute; audit_v2 now asserts spitter/leaper spawn FROM DATA instead
+  of injecting them into the floor table.
+- Ready to push: yes.

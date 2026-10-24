@@ -12,6 +12,8 @@ var knockback := 150.0
 var tint := MathArt.PALE
 var source: Node2D = null
 var crit_mult := 1.0
+## Colour-scaling level, set by the owner before setup_player().
+var attr := 0
 var spin := false
 var ballistic := false
 var gravity_accel := 0.0
@@ -125,7 +127,7 @@ func _on_body_entered(body: Node) -> void:
 		if source != null and source.has_method("is_crit_against"):
 			crit = source.is_crit_against(body)
 		body.take_hit({
-			"damage": Damage.compute(damage, 0, crit, crit_mult),
+			"damage": Damage.compute(damage, attr, crit, crit_mult),
 			"crit": crit,
 			"knockback": knockback,
 			"hitstop": hitstop_time,

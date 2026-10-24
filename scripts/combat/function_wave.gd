@@ -6,6 +6,8 @@ extends Area2D
 var source: Node2D = null
 var damage := 8.0
 var crit_mult := 1.5
+## Colour-scaling level, set by the player before setup().
+var attr := 0
 var direction := 1
 var speed := 540.0
 var tint := MathArt.WHITE
@@ -55,7 +57,7 @@ func _on_body_entered(body: Node) -> void:
 	if source != null and source.has_method("is_crit_against"):
 		crit = source.is_crit_against(body)
 	body.take_hit({
-		"damage": Damage.compute(damage, 0, crit, crit_mult),
+		"damage": Damage.compute(damage, attr, crit, crit_mult),
 		"crit": crit,
 		"knockback": 240.0,
 		"hitstop": 0.03,

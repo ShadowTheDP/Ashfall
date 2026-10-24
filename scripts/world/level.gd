@@ -8,6 +8,10 @@ extends Node2D
 
 signal cleared
 signal player_died
+## One room's last enemy died. The boon budget in data/floors.json is spent
+## here, room by room: a reward handed out at the exit gate would land after
+## the run is already over.
+signal room_cleared(index: int)
 
 const ENEMY_SCENE: PackedScene = preload("res://scenes/enemy.tscn")
 
@@ -256,6 +260,7 @@ func _on_enemy_died(enemy: Enemy) -> void:
 	_room_alive[index] = maxi(0, _room_alive[index] - 1)
 	if _room_alive[index] == 0 and (_room_pending[index] as Array).is_empty():
 		_room_cleared[index] = true
+		room_cleared.emit(index)
 
 
 func _update_door(player: Player) -> void:

@@ -86,7 +86,9 @@ func _draw() -> void:
 	MathArt.px_rect(self, Rect2(0, 0, size.x, size.y), Color(0.028, 0.028, 0.028, 0.86))
 	var mid_x := roundf(size.x * 0.5)
 	var title_y := roundf(size.y * 0.17)
-	draw_string(font, Vector2(mid_x - 160.0, title_y), "WAVE CLEARED",
+	# One picker serves both directors; the heading has to say which one fired.
+	var heading := "ROOM CLEARED" if Game.floor_index > 0 else "WAVE CLEARED"
+	draw_string(font, Vector2(mid_x - 160.0, title_y), heading,
 		HORIZONTAL_ALIGNMENT_CENTER, 360.0, 26, MathArt.PALE)
 	draw_string(font, Vector2(mid_x - 160.0, title_y + 16.0), "CHOOSE A BOON",
 		HORIZONTAL_ALIGNMENT_CENTER, 320.0, 7, MathArt.LIGHT)
@@ -110,7 +112,7 @@ func _draw() -> void:
 func _draw_card(font: Font, index: int, rect: Rect2) -> void:
 	var id: String = _choices[index]
 	var data: Dictionary = Data.rewards.get(id, {})
-	var tint := Color(data.get("color", "#dfe4ea"))
+	var tint := Color(data.get("color", "#e3e3e3"))
 	var selected := index == _index
 	var center := Vector2(roundf(rect.position.x + rect.size.x * 0.5), rect.position.y)
 

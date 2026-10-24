@@ -60,6 +60,23 @@ func _ready() -> void:
 	if player.knife_max != knives_before:
 		_fail("third choice unexpectedly changed knife max")
 
+	# Two-colour build: a coloured boon raises its own colour, and the equipped
+	# weapon scales with the colour it carries (rusty_sword is brutality).
+	if int(Game.attr.get("brutality", 0)) < 1:
+		_fail("hunter did not raise the brutality colour")
+	if player.weapon_attr_level() < 1:
+		_fail("brutality boon never reached the weapon (level %d)" % player.weapon_attr_level())
+	if Damage.compute(10.0, player.weapon_attr_level(), false, 1.0) <= 10:
+		_fail("brutality level does not scale damage")
+
+	# A neutral boon must not invent a colour.
+	var tactics_before := int(Game.attr.get("tactics", 0))
+	_main.reward_screen.open(["swift", "vitality", "leech"])
+	await get_tree().process_frame
+	await _press(KEY_1)
+	if int(Game.attr.get("tactics", 0)) != tactics_before:
+		_fail("a neutral boon raised a colour")
+
 	if get_tree().paused:
 		get_tree().paused = false
 	_finish()

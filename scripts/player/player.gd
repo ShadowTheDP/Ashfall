@@ -32,7 +32,9 @@ enum State { IDLE, RUN, AIR, ROLL, ATTACK, HURT, DEAD }
 @export var roll_end_speed := 200.0
 @export var roll_time := 0.30
 @export var roll_iframe_start := 0.03
-@export var roll_iframe_end := 0.24
+## Stays in sync with BASE_ROLL_IFRAME_END: _apply_loadout() rebuilds every
+## accumulator from these, so a second call cannot compound them.
+@export var roll_iframe_end := BASE_ROLL_IFRAME_END
 @export var roll_cooldown := 0.08
 
 @export_group("Combat")
@@ -55,6 +57,11 @@ enum State { IDLE, RUN, AIR, ROLL, ATTACK, HURT, DEAD }
 const ECHO_DELAY := 0.12
 const ECHO_ACTIVE := 0.08
 const ECHO_SCALE := 0.6
+
+# Defaults for the values _apply_loadout() adds to. Kept as constants so the
+# reset is one assignment and cannot drift from the exported default.
+const BASE_ROLL_IFRAME_END := 0.24
+const BASE_CRIT_BONUS := 0.0
 
 var state: State = State.IDLE
 var facing := 1
@@ -131,6 +138,16 @@ func _ready() -> void:
 ## upgrades. Everything the hub sells funnels through here, so gameplay never
 ## has to know about Profile directly.
 func _apply_loadout() -> void:
+	# Idempotent on purpose: armour, skill nodes and the passive all ADD to
+	# these, so without the reset a second call would compound every one of
+	# them. Nothing here may use `+=` without a matching default above.
+	roll_iframe_end = BASE_ROLL_IFRAME_END
+	crit_bonus = BASE_CRIT_BONUS
+	armor_taken = 1.0
+	aegis_cooldown_scale = 1.0
+	perfect_dodge_scale = 1.0
+	echo_every = 0
+
 	var character: Dictionary = Data.characters.get(Profile.selected_character, {})
 	if character.is_empty():
 		character = Data.characters.get("square", {})
@@ -170,6 +187,18 @@ func _apply_loadout() -> void:
 func on_crit() -> void:
 	if passive_id == "hunter":
 		refund_knife()
+
+
+## The two-colour build. A weapon carries a colour in data/weapons.json and
+## scales with the levels of that colour: in-run boons plus the soul upgrades
+## the hub sells. Weapons with no colour (none today) stay at baseline.
+func attribute_level(colour: String) -> int:
+	if colour.is_empty():
+		return 0
+	return int(Game.attr.get(colour, 0)) + int(Profile.bonus(colour))
+
+func weapon_attr_level() -> int:
+	return attribute_level(str(weapon.get("attribute", "")))
 
 
 func _apply_passive() -> void:
@@ -480,6 +509,7 @@ func _open_hitbox() -> void:
 	hitbox.shape_node.position = Vector2(facing * float(offset[0]), float(offset[1]))
 	var rect := hitbox.shape_node.shape as RectangleShape2D
 	rect.size = Vector2(float(size[0]), float(size[1]))
+	hitbox.attr = weapon_attr_level()
 	hitbox.enable(
 		float(attack_cfg.get("damage", 10.0)) * Game.total_damage_mult() * permanent_damage_mult,
 		float(attack_cfg.get("knockback", 180.0)),
@@ -500,6 +530,7 @@ func _open_hitbox() -> void:
 	if attack_index == weapon_combo.size() - 1 and not weapon_combo.is_empty():
 		var wave := FunctionWave.new()
 		wave.position = global_position + Vector2(facing * 26.0, -10.0)
+		wave.attr = weapon_attr_level()
 		wave.setup(facing, 8.0 * Game.total_damage_mult() * permanent_damage_mult, MathArt.WHITE, self, crit_multiplier())
 		var root := Game.fx_root
 		if is_instance_valid(root):
@@ -621,6 +652,8 @@ func _throw_knife() -> void:
 	var velocity := MathArt.ballistic_velocity(spawn, aim_point, knife_speed, Projectile.KUNAI_GRAVITY)
 	var projectile := Projectile.new()
 	projectile.position = spawn
+	# A kunai is a tactics weapon whatever the blade is.
+	projectile.attr = attribute_level("tactics")
 	projectile.setup_player(
 		velocity,
 		knife_damage * Game.total_damage_mult() * permanent_damage_mult,
@@ -681,6 +714,7 @@ func _tick_echo(delta: float) -> void:
 		echo_box.shape_node.position = Vector2(facing * float(_echo_cfg["offset"][0]), float(_echo_cfg["offset"][1]))
 		var rect := echo_box.shape_node.shape as RectangleShape2D
 		rect.size = Vector2(float(_echo_cfg["size"][0]), float(_echo_cfg["size"][1]))
+		echo_box.attr = weapon_attr_level()
 		echo_box.enable(
 			float(_echo_cfg["damage"]) * Game.total_damage_mult() * permanent_damage_mult,
 			float(_echo_cfg["knockback"]),

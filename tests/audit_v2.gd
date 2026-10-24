@@ -214,15 +214,18 @@ func _probe_spawn_embed() -> void:
 	await _frames(2)
 
 
-## The floor table is out of this worker's scope, so the probe adds the two new
-## kinds in memory only: everything else is the real Level spawn path.
+## The new kinds used to be injected here because no floor spawned them. They
+## live in data/floors.json now, so this probe tests the real content path:
+## every kind a floor declares must reach a room, in that exact count.
 func _probe_floor_new_kinds() -> void:
 	print("
 --- 1b. NEW KINDS SPAWNED BY A FLOOR ---")
 	var floor_cfg: Dictionary = Data.floors[str(FLOOR)]
-	var saved: Array = (floor_cfg["enemies"] as Array).duplicate(true)
-	(floor_cfg["enemies"] as Array).append(["spitter", 2])
-	(floor_cfg["enemies"] as Array).append(["leaper", 2])
+	var declared := {}
+	for group in (floor_cfg.get("enemies", []) as Array):
+		declared[str(group[0])] = int(group[1])
+	for kind in ["spitter", "leaper"]:
+		_check(int(declared.get(kind, 0)) > 0, "floor %d declares no %s" % [FLOOR, kind])
 	var level := Level.new()
 	add_child(level)
 	level.build(FLOOR, SEED)
@@ -241,15 +244,15 @@ func _probe_floor_new_kinds() -> void:
 		if _inside_solid(enemy.global_position):
 			embedded += 1
 			print("    %s spawned inside geometry at %s" % [enemy.kind, str(enemy.global_position.round())])
-	_check(int(counts.get("spitter", 0)) == 2, "floor spawned %d spitters, expected 2" % int(counts.get("spitter", 0)))
-	_check(int(counts.get("leaper", 0)) == 2, "floor spawned %d leapers, expected 2" % int(counts.get("leaper", 0)))
+	for kind in ["spitter", "leaper"]:
+		_check(int(counts.get(kind, 0)) == int(declared.get(kind, 0)),
+			"floor spawned %d %ss, data declares %d" % [int(counts.get(kind, 0)), kind, int(declared.get(kind, 0))])
 	_check(embedded == 0, "%d new bodies started inside geometry" % embedded)
 	_note("kinds spawned: %s" % str(counts))
 	for child in level.get_children():
 		if child is Enemy:
 			child.queue_free()
 	level.queue_free()
-	floor_cfg["enemies"] = saved
 	await _frames(2)
 
 

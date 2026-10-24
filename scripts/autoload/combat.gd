@@ -141,7 +141,7 @@ func slash(at: Vector2, facing: int, attack_index: int, tint: Color, blade_lengt
 func afterimage(at: Vector2, facing: int) -> void:
 	var fx := Afterimage.new()
 	fx.position = at
-	fx.setup(facing, Color("#dfe4ea"))
+	fx.setup(facing, MathArt.PALE)
 	_add(fx)
 
 

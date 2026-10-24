@@ -18,9 +18,9 @@ const ZOOM := 2.6
 # a 38px one. Bigger than 1:1 only because 38px reads as a doodle on a card.
 const BLADE_ZOOM := 1.9
 
-const BG := Color(0.024, 0.024, 0.028, 0.97)
-const PANEL := Color(0.047, 0.047, 0.055, 0.94)
-const ROW_SEL := Color(0.086, 0.086, 0.098, 0.97)
+const BG := Color(0.024, 0.024, 0.024, 0.97)
+const PANEL := Color(0.047, 0.047, 0.047, 0.94)
+const ROW_SEL := Color(0.086, 0.086, 0.086, 0.97)
 
 var _canvas: Control
 var _tab := "enemy"

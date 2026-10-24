@@ -35,13 +35,14 @@ Title → Enter
 | Floors | 5 | 4200 / 5200 / 5600 / 6400 / 2600 px |
 | Rooms per floor | 4 / 5 / 5 / 6 / 2 | 6 room archetypes |
 | Enemies | 6 + boss | grunt, archer, charger, bulwark, spitter, leaper, warden |
-| Enemies per floor | 6 / 9 / 10 / 13 / 6 | |
+| Enemies per floor | 6 / 10 / 11 / 15 / 5 | spitter + leaper spawn on 2-4 |
 | Playable bodies | 6 | square, octa, star, torus, helix, gyro |
 | Weapons | 6 | edge, curve, lens, fractal, chain, orbit |
 | Armour | 5 | none, plate, lattice, mantle, aegis shell |
-| Upgrades | 7 | hp, damage, speed, knives, iframe, crit, cells |
+| Upgrades | 7 cell + 2 soul | hp, damage, speed, knives, iframe, crit, cells; brutality, tactics cost souls |
 | Skill nodes | 11 | 3 roots, 1 apex |
-| Boons (in-run) | 7 | from `data/rewards.json` |
+| Boons (in-run) | 7 | from `data/rewards.json`; 4 carry a colour |
+| Boons per floor | 2 / 2 / 3 / 3 / 0 | `data/floors.json` `reward`, paid per cleared room |
 
 ---
 
@@ -69,8 +70,8 @@ The biggest change. A floor is **vertical**:
 ### 2.4 Pseudo-3D, boss only
 `Geom3D` (3D→2D projection) is used **only** by `EnemyVisual._draw_warden()`.
 The player and every normal enemy stay flat polygons — that is the game's
-identity. `scripts/player/character_visual.gd` exists but is **not wired in**;
-it is kept for a future where a character genuinely needs a rotating body.
+identity. `scripts/player/character_visual.gd` was deleted: 316 lines, zero
+references, and it contradicted the flat-square rule.
 
 ### 2.5 Two new enemies
 - **Spitter** (7-point star): lobs an arcing glob that leaves a damaging pool.
@@ -105,6 +106,19 @@ These are worth reading before touching the same code.
 | Every body spawned at 120 hp | `hp = max_hp` ran before `_apply_loadout()` | reordered |
 | Save with `null` crashed the load | `int(null)` | `_to_int()` guard, `JSON.new().parse()` |
 
+### Session 2 — things that existed but were unreachable
+
+| Area | Cause | Fix |
+|---|---|---|
+| A run never offered a boon | `Game.request_rewards()` had one caller, in `Encounter`, which is only built when `start_mode == "arena"` | `Level.room_cleared` -> `Main` spends `data/floors.json` `reward` per cleared room |
+| Clearing a room would have crashed | `Main._on_reward_chosen()` called `encounter.resume_after_reward()` unconditionally; `encounter` is null on a floor | guarded with `is_instance_valid` |
+| `attribute` was a label | every `Damage.compute()` call site passed `0` for `attr` | `Hitbox.attr` / `FunctionWave.attr` / `Projectile.attr` fed from `Player.weapon_attr_level()` |
+| Souls were unspendable | victory paid `+1`, nothing consumed it | `brutality` / `tactics` upgrades priced in souls; `Profile.upgrade_currency()` |
+| spitter + leaper never spawned | present in `enemies.json`, absent from every floor | added to floors 2, 3, 4 |
+| `_apply_loadout()` compounded | `roll_iframe_end +=`, `crit_bonus +=` | rebuilt from `BASE_ROLL_IFRAME_END` / `BASE_BONUS` constants; passives reset first |
+| "monochrome" was ~10% blue | ramp `#08090b`… and two hardcoded UI greys | every value now `r == g == b` |
+| 316 lines of dead renderer | `character_visual.gd` never wired in | deleted |
+
 ### Four floor-design softlocks that had to be designed out
 
 1. A wall **on a room boundary** — the player could never enter the room.
@@ -124,20 +138,20 @@ powershell -ExecutionPolicy Bypass -File tools\check.ps1
 ```
 
 ```
-TESTS OK (111 checks)
-PROBE OK          combat probe
-REWARD OK         boon picker
-SOAK OK           4 waves + boss + victory
-ESC TEST OK       hub panels open/close/buy
-FLOOR PROBE OK    hub → floor handoff, player can move
-RUN PROBE OK      5 floors → victory → hub, economy intact
-AUDIT A1 OK       weapons / passives / armour / death
-AUDIT A2 OK       save round-trip, economy edges (110 checks)
-AUDIT A3 OK       floor × seed reachability, spawns, gate
-AUDIT A4 OK       key ownership, text fit (224 checks)
-AUDIT V1 OK       vertical traversal, one-way, softlocks
-AUDIT V2 OK       decks, spitter, leaper, archer, cells
-AUDIT V3 OK       run flow, floor picker, state leaks (162 checks)
+TESTS OK (111 checks)                run_tests.gd
+PROBE OK                             combat probe
+REWARD OK                            boon picker (+ colour reaches the weapon)
+SOAK OK                              4 waves + boss + victory (arena mode)
+ESC TEST OK (0 failures)             hub panels open/close/buy
+FLOOR PROBE OK                       hub -> floor handoff, player can move
+RUN PROBE OK (0 failures)            5 floors -> victory -> hub, boon budget per floor
+AUDIT A1 OK                          weapons / passives / armour / death
+AUDIT A2 OK (123 checks)             save round-trip, economy edges, souls wallet
+AUDIT A3 OK                          floor x seed reachability, spawns, gate
+AUDIT A4 OK (226 checks)             key ownership, text fit
+AUDIT V1 OK (0 failures)             vertical traversal, one-way, softlocks
+AUDIT V2 OK                          decks, spitter, leaper from data, cells
+AUDIT V3 OK (162 checks)             run flow, floor picker, state leaks
 ALL CHECKS PASSED
 ```
 
@@ -153,7 +167,23 @@ tests/jump_capture.tscn     tumble frames
 
 Output goes to `output/screenshots/` (gitignored).
 
----
+**Timing.** A plain run is **~350 s**, and almost none of it is assertions:
+each step is its own Godot process (~1 s boot x 14) and several probes simulate
+real time on purpose (walking a player across a 4200-6400 px floor at 300 px/s,
+or waiting out the hub transitions).
+
+```powershell
+# Inner loop, one step, no --import
+powershell -ExecutionPolicy Bypass -File tools\check.ps1 -Only audit_a3
+# Everything except the seed sweeps + end-to-end run: ~77 s
+powershell -ExecutionPolicy Bypass -File tools\check.ps1 -Fast
+# Smoke only (fixed-fps 120, ~120 s). Can report FALSE FAILURES (audit_v2
+# crowd separation). Never a commit gate.
+powershell -ExecutionPolicy Bypass -File tools\check.ps1 -Turbo
+```
+
+Never shorten a wait loop into a fixed frame count to save time: `audit_a3` and
+`run_probe` both did and both flaked under load. Wait for the condition.
 
 ## 5. Hard rules (do not break)
 
@@ -170,6 +200,17 @@ Output goes to `output/screenshots/` (gitignored).
    up through this". Do not remove it.
 9. Keyboard only, hints always visible.
 10. Impact goes through `Combat.impact()`. Particles go through `Juice.*`.
+11. **Monochrome means `r == g == b`.** No hue, no "almost grey". Any new
+    colour must be authored neutral.
+12. **Never pass `0` for the attribute level.** `Damage.compute(damage, attr,
+    ...)` is the two-colour build; a hardcoded zero silently deletes it.
+13. **Boons are paid per cleared room**, from `data/floors.json` `reward`.
+    The exit gate is too late: `Game.finish_floor()` already banked the run.
+14. **`_apply_loadout()` stays idempotent.** Rebuild accumulators from
+    constants; never `+=` onto an exported default.
+15. **Arena mode is a fixture.** `Arena`, `Encounter`, `Runes`, `Braziers`,
+    `Motes` are built only when `start_mode == "arena"` (tests). Gameplay
+    features added there never reach a player.
 
 ---
 
@@ -177,7 +218,7 @@ Output goes to `output/screenshots/` (gitignored).
 
 | Risk | Detail |
 |---|---|
-| `_apply_loadout()` is one-shot | `roll_iframe_end` / `crit_bonus` use `+=`; calling it again on a live player compounds them |
+| ~~`_apply_loadout()` is one-shot~~ | fixed: every accumulator is rebuilt from a constant now |
 | Hub camera limits | the hub widens `camera.limit_*`; `Main.start_floor()` must reset them or the view clamps at the hub's edges |
 | `--check-only --script` is unreliable | autoload globals are missing, so it reports false `Identifier not found: Game`. Verify by running a scene, not a single script |
 | Level draw cost | ~500 specks + cracks per floor, drawn once and never re-queued. Fine now; watch it if floors get wider |
@@ -185,6 +226,9 @@ Output goes to `output/screenshots/` (gitignored).
 | English only | no CJK font, so no Chinese UI |
 | Weapon unlock cost | weapons use `unlock_cost`, armour/characters use `cost`; `Profile.unlock` reads both |
 | `rose_bloom(petals=6)` | renders 3 lobes — `r = cos(kθ)` closes at integer k |
+| `Main.auto_rewards` | harness-only switch; it bypasses the picker, so a real run must never set it |
+| Boon cadence is unplayed | rooms pay a boon the moment they are cleared; nobody has judged whether that interrupts the climb |
+| Souls cap out early | two soul upgrades x 5 levels = 10 souls, and a clear pays 1 |
 | No save-slot UI | one profile, `user://ashfall_profile.json` |
 | `Hub.is_open()` covers `HubUi` only | the archive/tree are separate layers; `Main._any_panel_open()` is the real guard |
 
@@ -192,21 +236,16 @@ Output goes to `output/screenshots/` (gitignored).
 
 ## 7. Next steps (highest value first)
 
-1. **Playtest the vertical floors.** The generator is verified reachable and
-   the player can cross every floor, but nobody has judged whether the climb
-   *feels* good. Tune `TIER`, `MAX_UP` and the pillar frequency from
-   `level_gen.gd`.
-2. **Add the new enemies to `floors.json`.** They exist and are audited but no
-   floor spawns them yet. Add `["spitter", n]` / `["leaper", n]` to floors 2–4.
-3. **Wire `character_visual.gd` or delete it.** It is dead code right now.
-   If characters are meant to stay flat, delete the file to avoid confusion.
-4. **Boon pool is still the 7 in-run boons.** With 6 weapons and 6 bodies, a
-   weapon-specific boon pool would give the runs more identity.
-5. **Add a second boss** for a second victory condition, or an endless mode
-   after floor 5.
-6. **Export preset** if a distributable build is wanted.
-
----
+1. **Playtest the boon cadence.** It now fires per cleared room. If a 6-room
+   floor paying 3 boons feels like a stutter, move the budget to every other
+   room rather than back to the exit (the exit banks the run).
+2. **Balance the two colours.** brutality and tactics are symmetric by
+   construction; the weapons are not (4 brutality, 3 tactics, and the kunai is
+   free tactics).
+3. **Give souls a longer runway.** 10 souls total exists today; a second boss
+   or an endless mode after floor 5 is the natural second sink.
+4. **Add a second boss** for a second victory condition.
+5. **Export preset** if a distributable build is wanted (templates are ~1.28 GB).
 
 ## 8. Map of the code
 
@@ -214,10 +253,11 @@ Output goes to `output/screenshots/` (gitignored).
 scripts/autoload/   data.gd  profile.gd  game.gd  combat.gd  sfx.gd
 scripts/systems/    math_art.gd  geom3d.gd  juice.gd  damage.gd  layers.gd
 scripts/meta/       hub.gd  hub_ui.gd
-scripts/world/      level.gd  level_gen.gd  arena.gd  encounter.gd
-                    braziers.gd  runes.gd  motes.gd
+scripts/world/      level.gd  level_gen.gd                    (the real loop)
+                    arena.gd  encounter.gd  braziers.gd  runes.gd  motes.gd
+                                                         (arena-mode fixture)
 scripts/player/     player.gd  player_visual.gd  weapon_visual.gd
-                    character_visual.gd (UNUSED)  player_camera.gd
+                    player_camera.gd
 scripts/enemies/    enemy.gd  enemy_visual.gd  projectile.gd  cell_pickup.gd
 scripts/combat/     hitbox.gd  function_wave.gd
 scripts/ui/         hud.gd  title_screen.gd  reward_screen.gd

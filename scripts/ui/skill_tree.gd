@@ -12,8 +12,8 @@ const CARD_RECT := Rect2(40.0, 380.0, 688.0, 66.0)
 const NODE_R := 14.0
 const PAD := 26.0
 
-const BG := Color(0.024, 0.024, 0.028, 0.97)
-const PANEL := Color(0.047, 0.047, 0.055, 0.94)
+const BG := Color(0.024, 0.024, 0.024, 0.97)
+const PANEL := Color(0.047, 0.047, 0.047, 0.94)
 
 var _canvas: Control
 var _ids: Array[String] = []

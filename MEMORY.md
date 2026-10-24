@@ -149,6 +149,12 @@
 # Verify everything
 powershell -ExecutionPolicy Bypass -File tools\check.ps1
 
+# Inner loop: ~77 s, skips the seed sweeps and the end-to-end run
+powershell -ExecutionPolicy Bypass -File tools\check.ps1 -Fast
+
+# One step, substring match, no --import
+powershell -ExecutionPolicy Bypass -File tools\check.ps1 -Only audit
+
 # Individual checks
 .\.tools\Godot_v4.7.2-stable_win64_console.exe --headless --path . --import
 .\.tools\Godot_v4.7.2-stable_win64_console.exe --headless --path . --script res://tests/run_tests.gd
@@ -162,23 +168,64 @@ powershell -ExecutionPolicy Bypass -File tools\check.ps1
 python tools\make_sfx.py
 ```
 
-## Verification Status (2026-10-23)
+## Verification Status (2026-10-24)
 
-- `run_tests.gd`: 111 checks pass (data, damage, math constants, ballistic
-  solver, boon table).
-- `combat_probe.tscn`: combo damage 11/13/24 → 42 hp husk dies on the 4th
-  swing; cells + kill counted; hurt i-frames and roll i-frames verified.
-- `reward_probe.tscn`: reward screen pauses the tree, number keys and
-  arrow+Enter both pick, effects apply (vitality/armory/hunter).
-- `soak.tscn`: all 4 waves clear including the Warden; bulwark shield rules
-  verified (front chips 1, back connects); boons auto-granted; victory.
-- `title_capture.tscn`: title pauses the tree, ENTER resumes and creates the
-  player.
-- `capture_scene.tscn`: 13 screenshots render on an RTX 4060 with OpenGL
-  Compatibility at 640x360, including the function wave, kunai parabola and
-  reward screen.
-- `title_capture.tscn`: the title pauses the tree and ENTER resumes; the rose
-  window star is drawn from `star()` points without re-offsetting the centre.
+`powershell -ExecutionPolicy Bypass -File tools\check.ps1` -> ALL CHECKS
+PASSED, exit 0, 14 steps:
+
+| Step | Result |
+|---|---|
+| import / compile | ok |
+| `run_tests.gd` | 111 checks |
+| `combat_probe.tscn` | ok |
+| `reward_probe.tscn` | ok (now also asserts the colour reaches the weapon) |
+| `soak.tscn` | ok (arena mode, 4 waves + Warden) |
+| `esc_probe.tscn` | 0 failures |
+| `floor_probe.tscn` | ok |
+| `run_probe.tscn` | 0 failures, 5 floors -> victory; asserts each floor's boon budget and that a cleared room grants one |
+| `audit_a1` combat / weapons | ok |
+| `audit_a2` save / economy | 123 checks |
+| `audit_a3` floors / spawns | 5 floors x 15 seeds |
+| `audit_a4` UI / input | 226 checks |
+| `audit_v1` vertical traversal | 5 floors x 40 seeds |
+| `audit_v2` enemies / encounters | ok (asserts spitter + leaper spawn from data) |
+| `audit_v3` run flow / progression | 162 checks |
+
+Visual harnesses need a display: `capture_scene` (13 shots), `impact_capture`
+(20 frame-by-frame), `meta_capture` (14 hub/floor/archive), `title_capture`,
+`jump_capture`. Output goes to `output/screenshots/`.
+
+### Timing and how to make it fast
+
+A plain `check.ps1` run is **~350 s** on this machine, and almost none of it is
+the assertions: every step is a separate Godot process (~1 s boot each), and
+several probes simulate real time on purpose (they walk a player across a
+4200-6400 px floor at 300 px/s, or wait out the hub transitions).
+
+Measured, descending: `audit_a3` 118 s, `audit_v1` 36-58 s, `soak` 39 s,
+`audit_v3` 39 s, `audit_v2` 21 s, `run_probe` 16 s, `audit_a1` 17 s,
+`audit_a4` 11 s, `combat_probe` 8 s, `import` 5-7 s, `floor_probe` 4 s,
+`reward_probe` 2 s, `audit_a2` 1 s, `run_tests` 1 s.
+
+Three levers, cheapest first:
+
+| Flag | Wall time | Use it for |
+|---|---|---|
+| `-Only "<substring>"` | 1-20 s | one step, no `--import`; the inner loop |
+| `-Fast` | 77 s | everything except the seed sweeps + end-to-end run |
+| (none) | ~350 s | the commit gate |
+| `-Turbo` | ~120 s | SMOKE ONLY - see the warning below |
+
+`-Turbo` adds `--fixed-fps 120`, which runs frames as fast as the CPU allows
+instead of in real time (soak 39 s -> 13 s). **It can report false failures**:
+`audit_v2` failed with "two grunts shared one silhouette" because the crowd
+separation needs real frames to resolve. It never produced a false pass in
+testing, but a false failure wastes a debugging session, so commit on a plain
+run.
+
+Do not "fix" a slow step by shortening its wait loops into fixed frame counts:
+`audit_a3` and `run_probe` both used to assume one frame was enough and both
+flaked under load. Wait for the *condition*, not for a frame count.
 
 ## Known Risks / Limits
 
@@ -207,8 +254,41 @@ python tools\make_sfx.py
 - Subagent audits live in `output/agent-reports/` (gitignored). They are
   read-only findings; re-run them rather than trusting stale line numbers.
 
+## Build Wiring (2026-10-24)
+
+- **A run is a sequence of floors, not of waves.** `Encounter` (the arena wave
+  director) only exists when `start_mode == "arena"`, which today means the
+  test harnesses. Do not add gameplay features to it; they will not run.
+- **Boons are paid per cleared room.** `data/floors.json` `"reward"` is the
+  floor's budget; `Level.room_cleared(index)` -> `Main._on_room_cleared()`
+  decrements `Game.floor_rewards_left` and defers the picker. Paying them at
+  the exit gate would be pointless: `Game.finish_floor()` already banked the
+  cells and the run is over.
+- **`Game.auto_choose_rewards` / `Main.auto_rewards` exist only for headless
+  probes.** They grant a random boon instead of raising a picker that would
+  pause the tree and hang a test with no keyboard.
+- **Two-colour build.** A weapon carries `attribute` (`brutality` /
+  `tactics`) in `data/weapons.json`; coloured boons raise `Game.attr`; the
+  total is `Game.attr[colour] + Profile.bonus(colour)` and feeds
+  `Damage.compute(damage, attr, ...)` via `Hitbox.attr` / `FunctionWave.attr`
+  / `Projectile.attr`. A kunai is always tactics. Nothing may hardcode `0`
+  for that argument again - that was the bug that made `attribute` a label.
+- **Souls are the permanent half of the build.** `data/upgrades.json` rows
+  can set `"currency": "souls"`; `Profile.upgrade_currency()` decides the
+  wallet and `can_afford_upgrade()` decides the row's dim state. A row must
+  never read as a cell price when it spends souls - the price suffix (`C` /
+  `S`) is the only cue.
+- **`_apply_loadout()` must stay idempotent.** It rebuilds `roll_iframe_end`,
+  `crit_bonus`, `armor_taken`, `aegis_cooldown_scale`, `perfect_dodge_scale`
+  and `echo_every` from constants; every one of them used to use `+=` and
+  would compound on a second call.
+- **Monochrome means `r == g == b`.** The ramp is now strictly neutral; the
+  old `#08090b`-style values were ~10% blue and were a real violation of the
+  rule, not a stylistic choice. `data/rewards.json` is `#c9c9c9`, not
+  `#c9d6e2`.
+
 ## Cold-Start Order
 
-`README.md` → `AGENTS.md` → `MEMORY.md` →
+`README.md` → `HANDOVER.md` → `AGENTS.md` → `MEMORY.md` →
 `docs/agent/current-state.md` → `docs/design/math-art.md` →
-`docs/design/combat-feel.md` → target script.
+`docs/design/impact.md` → `docs/design/combat-feel.md` → target script.

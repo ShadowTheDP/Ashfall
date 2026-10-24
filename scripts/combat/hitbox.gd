@@ -8,6 +8,10 @@ var knockback := 0.0
 var hitstop_time := 0.0
 var crit_mult := 1.0
 var tier := 0
+## Colour-scaling level for the attacker (0 = no colour). The owner sets this
+## BEFORE enable(); enable() deliberately does not touch it, so a box can be
+## re-armed for a different swing without a signature change.
+var attr := 0
 var source: Node2D = null
 var active := false
 var shape_node: CollisionShape2D = null
@@ -67,7 +71,7 @@ func _try_hit(body: Node) -> void:
 	var crit := false
 	if source != null and source.has_method("is_crit_against"):
 		crit = source.is_crit_against(body)
-	var final_damage := Damage.compute(damage, 0, crit, crit_mult)
+	var final_damage := Damage.compute(damage, attr, crit, crit_mult)
 	# HUNTER promises a knife back on every crit; the hit is the only place
 	# that knows a crit happened, so the refund lives here.
 	if crit and source != null and source.has_method("on_crit"):

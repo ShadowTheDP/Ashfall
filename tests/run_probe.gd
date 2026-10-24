@@ -22,24 +22,43 @@ func _ready() -> void:
 		if level == null:
 			_fail("floor %d: no level" % floor_index)
 			break
+		var budget := int(Data.floors.get(str(floor_index), {}).get("reward", 0))
+		if Game.floor_rewards_left != budget:
+			_fail("floor %d carries %d boons, data says %d" % [
+				floor_index, Game.floor_rewards_left, budget])
+		var rewards_before := _reward_total()
 		var name: String = level.floor_name()
 		var remaining := int(level.enemies_remaining())
 		print("floor %d '%s': %d enemies" % [floor_index, name, remaining])
 		if remaining <= 0:
 			_fail("floor %d has no enemies" % floor_index)
 
-		# Walk into every room so everything spawns, then kill it all.
+		# Walk into every room so everything spawns, then kill it all. Wait for
+		# the spawn instead of assuming one physics frame is enough: under load
+		# the position lands after the level's _physics_process, the room is
+		# never entered, and the run reports a phantom leftover enemy.
 		var rooms: Array = level.data.get("rooms", [])
 		for i in rooms.size():
 			var rect: Rect2 = rooms[i]["rect"]
 			if Game.player != null:
 				Game.player.global_position = Vector2(rect.position.x + 40.0, rect.position.y - 40.0)
-			await get_tree().process_frame
-			await get_tree().physics_frame
+			for frame in 30:
+				await get_tree().physics_frame
+				if int(level._room_alive[i]) > 0 or int(level._pending_total) == 0:
+					break
 			await _kill_all(level)
-		await get_tree().process_frame
+		# Every room has been visited, so nothing may still be pending.
+		for frame in 30:
+			await get_tree().process_frame
+			if int(level.enemies_remaining()) == 0:
+				break
 		if int(level.enemies_remaining()) != 0:
 			_fail("floor %d still has %d enemies" % [floor_index, int(level.enemies_remaining())])
+
+		# data/floors.json pays its boons per cleared room; a floor that clears
+		# rooms without granting one is the bug this probe exists to catch.
+		if budget > 0 and _reward_total() <= rewards_before:
+			_fail("floor %d cleared rooms but granted no boon" % floor_index)
 
 		# Touch the door.
 		var exit: Vector2 = level.data.get("exit", Vector2.ZERO)
@@ -88,6 +107,13 @@ func _kill_all(level: Node) -> void:
 		await get_tree().process_frame
 		if not found:
 			return
+
+func _reward_total() -> int:
+	var total := 0
+	for id in Game.reward_counts:
+		total += int(Game.reward_counts[id])
+	return total
+
 
 func _fail(msg: String) -> void:
 	_fails += 1

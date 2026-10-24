@@ -120,19 +120,39 @@ playtest tuning, then breadth.
 - Shadows (player + enemies) are three stacked 20-gons, cumulative centre
   density ~0.30, no hard rectangle anywhere.
 
-## Session end (vertical floors)
+## Session end (build wiring)
 
 All work committed. **Read `HANDOVER.md` at the repo root before anything
-else** - it lists what this session built, every bug fixed with its cause,
-the full validation matrix, the fragile spots, and the next steps.
+else**; it lists what each session built, every bug with its cause, the
+validation matrix, the fragile spots and the next steps.
 
-State: 14 headless checks green (`tools/check.ps1` -> ALL CHECKS PASSED).
-Floors are vertical (2-5 decks, one-way vs solid, 6 room kinds, 4200-6400 px).
-Hub has 4 stations + a floor-picker door. Player is flat; only the Warden is
-pseudo-3D.
+State: 14 headless checks green (`tools/check.ps1` -> ALL CHECKS PASSED,
+exit 0). Floors are vertical (2-5 decks, one-way vs solid, 6 room kinds,
+4200-6400 px). Hub has 4 stations + a floor-picker door. The player is flat;
+only the Warden is pseudo-3D.
+
+This session wired the parts that existed but were unreachable:
+
+1. **In-run build is live.** `data/floors.json` `"reward"` (2/2/3/3/0) is
+   spent one boon per cleared room. `Level` emits `room_cleared(index)`,
+   `Main` decrements `Game.floor_rewards_left` and defers the picker. The
+   old path only fired in arena mode, so a normal run never saw a boon.
+2. **Two-colour build exists.** Weapons carry `attribute` (brutality /
+   tactics); coloured boons raise `Game.attr`; `Damage.compute()` finally
+   receives a non-zero attribute level (ATTR_SCALE 0.12 per level).
+3. **Souls have a sink.** `data/upgrades.json` added soul-priced brutality
+   and tactics rows; `Profile.upgrade_currency()` / `can_afford_upgrade()`
+   decide which wallet a row spends.
+4. **`spitter` / `leaper` spawn** on floors 2, 3 and 4.
+5. **Deleted** `scripts/player/character_visual.gd` (316 lines, never wired).
+6. **`_apply_loadout()` is idempotent** - every accumulator is rebuilt from a
+   constant, not `+=`.
+7. **Monochrome is strictly neutral** (`r == g == b` everywhere); the ramp
+   used to be slightly blue.
 
 Immediate follow-ups:
-1. Playtest the vertical floors (feel, not correctness - correctness is proven).
-2. Add `spitter` / `leaper` to `data/floors.json` (they exist but no floor
-   spawns them yet).
-3. Either wire `scripts/player/character_visual.gd` or delete it.
+1. Playtest the vertical floors and the new room-by-room boon cadence (feel,
+   not correctness - correctness is proven by `audit_v3` + `run_probe`).
+2. Balance the boon pool: 7 boons, 4 of them coloured, 3 neutral.
+3. A second boss or an endless mode after floor 5; souls currently buy only
+   two attribute levels of five.

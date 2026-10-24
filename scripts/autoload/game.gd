@@ -43,6 +43,11 @@ var announce_max := 1.0
 var damage_mult := 1.0
 var edge_timer := 0.0
 var leech := 0
+## The two-colour build: boons raise their own colour, and a weapon scales with
+## the colour it carries. Cleared floors reset it; it never leaves the run.
+var attr: Dictionary = {}
+## Boons still owed by the current floor, from data/floors.json "reward".
+var floor_rewards_left := 0
 var reward_counts: Dictionary = {}
 var reward_open := false
 var auto_choose_rewards := false
@@ -100,6 +105,8 @@ func reset_run() -> void:
 	damage_mult = 1.0
 	edge_timer = 0.0
 	leech = 0
+	attr.clear()
+	floor_rewards_left = 0
 	reward_counts.clear()
 	reward_open = false
 	auto_choose_rewards = false
@@ -174,6 +181,11 @@ func start_floor(index: int) -> void:
 	run_over = false
 	victory = false
 	run_kills = 0
+	# A floor banks its cells immediately (see finish_floor), so a boon picker
+	# placed there would be useless. The budget is spent room by room instead,
+	# which is the only place the reward is still worth taking.
+	attr.clear()
+	floor_rewards_left = int(Data.floors.get(str(floor_index), {}).get("reward", 0))
 	Profile.note_floor_reached(floor_index)
 	floor_started.emit(floor_index, floor_name)
 
@@ -266,6 +278,9 @@ func apply_reward(id: String) -> void:
 		"hunter":
 			if player != null:
 				player.crit_bonus += 0.15
+	var colour := str(data.get("attribute", ""))
+	if not colour.is_empty():
+		attr[colour] = int(attr.get(colour, 0)) + 1
 	reward_counts[id] = int(reward_counts.get(id, 0)) + 1
 	reward_open = false
 	Sfx.play("reward", -6)
