@@ -27,7 +27,10 @@ func setup(facing: int, p_damage: float, p_tint: Color, p_source: Node2D, p_crit
 
 func _ready() -> void:
 	collision_layer = 0
-	collision_mask = Layers.ENEMY
+	# World too: the wave used to fly 227 px through pillars and room
+	# boundaries, which defeated the "a pillar forces you up and over" design of
+	# the level. It now dies on the first solid it meets.
+	collision_mask = Layers.ENEMY | Layers.WORLD
 	monitoring = true
 	monitorable = false
 	z_index = 7
@@ -50,7 +53,13 @@ func _physics_process(delta: float) -> void:
 
 
 func _on_body_entered(body: Node) -> void:
-	if body == source or _hit.has(body) or not body.has_method("take_hit"):
+	if body == source:
+		return
+	if not body.has_method("take_hit"):
+		Combat.burst(global_position, tint, 5, 120.0)
+		queue_free()
+		return
+	if _hit.has(body):
 		return
 	_hit.append(body)
 	var crit := false

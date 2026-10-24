@@ -147,6 +147,8 @@ Invoke-Probe -Name "Hub panels (open/close/buy)" -Scene "tests/esc_probe.tscn"
 Invoke-Probe -Name "Hub -> floor handoff" -Scene "tests/floor_probe.tscn"
 Invoke-Probe -Name "Restart in a floor (R)" -Scene "tests/restart_probe.tscn"
 Invoke-Probe -Name "Generator macro shape" -Scene "tests/gen_stats.tscn"
+Invoke-Probe -Name "Boss on a generated floor" -Scene "tests/boss_probe.tscn"
+Invoke-Probe -Name "Enemies can climb to the gallery" -Scene "tests/climb_probe.tscn"
 
 # The seed sweeps and the end-to-end run are the slow half of this script.
 Invoke-Probe -Name "Full run (5 floors -> victory)" -Scene "tests/run_probe.tscn" -Slow

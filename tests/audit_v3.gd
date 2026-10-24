@@ -361,10 +361,15 @@ func _test_leaks() -> void:
 	# (Known open bug: main.gd::_build_meta_screens() adds a new pair on every
 	# enter_hub() and never frees the old ones. Reported, not fixed: main.gd is
 	# outside this audit's write scope.)
+	# enter_hub() used to rebuild the Archive + SkillTree CanvasLayers without
+	# freeing the old pair, so this number grew by 2 on every return from a
+	# floor. It was only printed, never asserted, so it stayed silent.
 	var screens_before := _count_screens()
 	for i in 2:
 		await _enter_hub()
-	print("  meta screens per hub visit: %d -> %d" % [screens_before, _count_screens()])
+	var screens_after := _count_screens()
+	print("  meta screens per hub visit: %d -> %d" % [screens_before, screens_after])
+	_check(screens_after <= screens_before, "hub visits leaked %d meta screen(s)" % (screens_after - screens_before))
 
 
 # --------------------------------------------- 5. character floor gate

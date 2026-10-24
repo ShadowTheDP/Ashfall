@@ -33,19 +33,19 @@ const SAFE_DISTANCE := 160.0
 #   panel   recessed vault-panel alpha (0 leaves the arcade bare)
 const PALETTE := [
 	{"speck": 0.13, "crack": 0.020, "column": 2, "fog": 3, "edge": MathArt.STONE_HI, "seam": 48.0,
-		"vault": MathArt.BG_1, "course": 15.0, "niche": 2, "shaft": 0.075, "chain": 1,
+		"vault": MathArt.STONE_DIM, "course": 15.0, "niche": 2, "shaft": 0.075, "chain": 1,
 		"near": MathArt.BG_1, "panel": 0.40},
 	{"speck": 0.22, "crack": 0.034, "column": 3, "fog": 4, "edge": MathArt.STONE_HI, "seam": 40.0,
-		"vault": MathArt.BG_0, "course": 12.0, "niche": 3, "shaft": 0.055, "chain": 2,
+		"vault": MathArt.BG_2, "course": 12.0, "niche": 3, "shaft": 0.055, "chain": 2,
 		"near": MathArt.BG_2, "panel": 0.22},
 	{"speck": 0.10, "crack": 0.014, "column": 4, "fog": 2, "edge": MathArt.MID_DIM, "seam": 56.0,
-		"vault": MathArt.BG_1, "course": 21.0, "niche": 1, "shaft": 0.095, "chain": 1,
+		"vault": MathArt.STONE, "course": 21.0, "niche": 1, "shaft": 0.095, "chain": 1,
 		"near": MathArt.INK, "panel": 0.55},
 	{"speck": 0.26, "crack": 0.042, "column": 3, "fog": 5, "edge": MathArt.STONE_HI, "seam": 36.0,
-		"vault": MathArt.BG_0, "course": 11.0, "niche": 3, "shaft": 0.060, "chain": 2,
+		"vault": MathArt.BG_2, "course": 11.0, "niche": 3, "shaft": 0.060, "chain": 2,
 		"near": MathArt.BG_2, "panel": 0.16},
 	{"speck": 0.07, "crack": 0.008, "column": 2, "fog": 1, "edge": MathArt.PALE_DIM, "seam": 64.0,
-		"vault": MathArt.BG_1, "course": 26.0, "niche": 1, "shaft": 0.110, "chain": 1,
+		"vault": MathArt.STONE_DIM, "course": 26.0, "niche": 1, "shaft": 0.110, "chain": 1,
 		"near": MathArt.BG_1, "panel": 0.60},
 ]
 
@@ -295,6 +295,9 @@ func _enter_room(index: int) -> void:
 	var groups: Array = _room_pending[index]
 	_room_pending[index] = []
 	if groups.is_empty():
+		# Deliberately NO room_cleared.emit(): that signal is the reward trigger
+		# (_on_room_cleared spends one boon), and the entrance room is always
+		# empty, so emitting would hand out a free boon the moment a floor loads.
 		_room_cleared[index] = true
 		return
 
@@ -322,15 +325,19 @@ func _take_point(points: Array, from: Vector2, room: Rect2) -> Vector2:
 	# The fallback is the room slab: the floor table never asks for more
 	# enemies than a room has points, but a spot in mid air would be a spawn
 	# no player could ever reach.
-	var farthest := Vector2(room.get_center().x, room.position.y - LevelGen.SPAWN_LIFT)
-	for point in points:
-		if point.distance_to(from) >= SAFE_DISTANCE:
-			points.erase(point)
-			return point
-		farthest = point
-	if not points.is_empty():
-		points.pop_back()
-	return farthest
+	var fallback := Vector2(room.get_center().x, room.position.y - LevelGen.SPAWN_LIFT)
+	for i in points.size():
+		if (points[i] as Vector2).distance_to(from) >= SAFE_DISTANCE:
+			return points.pop_at(i)
+	if points.is_empty():
+		return fallback
+	# Every candidate is inside SAFE_DISTANCE (a cramped room, or the player
+	# standing in the middle of it). The list is sorted farthest-first, so the
+	# head is the least-bad pick. The old code reassigned its answer on every
+	# iteration of the scan and therefore returned the NEAREST point - it
+	# materialised the enemy on top of the player, which is the one outcome the
+	# whole function exists to prevent.
+	return points.pop_front()
 
 
 func _spawn(kind: String, at: Vector2, room_index: int) -> void:
@@ -563,14 +570,21 @@ func _build_chains() -> void:
 		var top_surface := rect.position.y
 		for pr in (_rooms[i]["platforms"] as Array):
 			top_surface = minf(top_surface, (pr as Rect2).position.y)
-		var clear := top_surface - (-620.0) - 30.0
-		if clear < 90.0:
-			continue
+		# The chain must END INSIDE the frame. It used to be a fraction of the
+		# whole vault height (55-77% of 406 px from y=-620), which put every
+		# chain bottom at y=-397..-308 - above the top of the 480 px view at the
+		# player's height, so the entire mid-ground ambience was drawn where
+		# nobody could see it and the vault read as an empty black box.
+		var top := -620.0
 		for c in int(_palette()["chain"]):
+			var bottom := top_surface - (96.0 + 44.0 * float(c))
+			var len := bottom - top
+			if len < 120.0:
+				continue
 			hang.chains.append({
 				"x": rect.position.x + rect.size.x * (0.30 + 0.36 * float(c)),
-				"top": -620.0,
-				"len": clear * (0.55 + 0.22 * float(c)),
+				"top": top,
+				"len": len,
 				"phase": float(i) * MathArt.GOLDEN_ANGLE + float(c) * 1.7,
 			})
 	add_child(hang)
@@ -666,16 +680,36 @@ func _draw_vault() -> void:
 		return
 	var pal := _palette()
 	var depth := 640.0
-	# Far wall: one flat value, darker than any stone, keyed off the palette so
-	# two floors do not share a backdrop.
-	MathArt.px_rect(self, Rect2(-40.0, -depth, width + 80.0, depth + 60.0),
+	# The wall has to reach the WALKABLE LINE, not a fixed y. It used to stop at
+	# y=60 while the ledge is at BASE_Y=150, which left a 90 px stripe of bare
+	# background directly above the floor: the room read as a floating slab with
+	# a black hole behind it, and the arches (which are anchored to the floor)
+	# were the only thing poking into view.
+	var floor_line := LevelGen.BASE_Y + 24.0
+	MathArt.px_rect(self, Rect2(-40.0, -depth, width + 80.0, depth + floor_line),
 		Color(pal["vault"], 0.95))
+	# Value gradient: the vault is brightest at the top, where the light enters,
+	# and falls off toward the floor. Six bands is enough to read as depth and
+	# cheap enough to redraw. Without it the far wall is one flat value and the
+	# eye cannot tell how deep the room is.
+	var bands := 6
+	var band_h := (depth + floor_line) / float(bands)
+	for b in bands:
+		var t := float(b) / float(bands - 1)
+		MathArt.px_rect(self, Rect2(-40.0, -depth + band_h * float(b), width + 80.0, band_h + 1.0),
+			Color(MathArt.BLACK, 0.16 * t * t))
 	# Courses 22 px apart. This is the only thing that gives the wall scale.
 	var y := -depth
 	var row := 0
-	while y < 40.0:
+	while y < floor_line:
 		MathArt.px_rect(self, Rect2(-40.0, y, width + 80.0, 1.0),
-			Color(MathArt.MID, 0.055 if row % 2 == 0 else 0.03))
+			Color(MathArt.MID, 0.09 if row % 2 == 0 else 0.05))
+		# Staggered vertical joints: a course line alone reads as scanlines, a
+		# brick offset reads as masonry.
+		var bx := -40.0 + (26.0 if row % 2 == 0 else 0.0)
+		while bx < width + 40.0:
+			MathArt.px_rect(self, Rect2(bx, y, 1.0, 22.0), Color(MathArt.MID, 0.045))
+			bx += 52.0
 		y += 22.0
 		row += 1
 
@@ -688,9 +722,9 @@ func _draw_vault() -> void:
 	var x := 30.0
 	while x < width:
 		MathArt.px_rect(self, Rect2(x, foot - depth, 11.0, depth),
-			Color(MathArt.BG_2, 0.62))
+			Color(MathArt.BG_2, 0.80))
 		MathArt.px_rect(self, Rect2(x, foot - depth, 1.0, depth),
-			Color(MathArt.STONE_HI, 0.12))
+			Color(MathArt.STONE_HI, 0.20))
 		MathArt.px_rect(self, Rect2(x + 10.0, foot - depth, 1.0, depth),
 			Color(MathArt.INK, 0.5))
 		var half := (step - 11.0) * 0.5
@@ -698,25 +732,44 @@ func _draw_vault() -> void:
 		var top := foot - rise
 		# Recessed panel in the jamb region of the bay: what makes the far wall a
 		# colonnade at a distance instead of a flat plane at any distance.
+		# Recessed panel in the jamb region of the bay. Now that the wall behind
+		# it carries a real value, the recess must be a NICHE (a dark void with a
+		# lit top lip and a shadow under the sill) and not a flat black rectangle
+		# - at full strength the old panels read as holes punched through to
+		# nothing, which is what made the mid-ground look unfinished.
 		var panel := float(pal["panel"])
 		if panel > 0.01 and foot - 26.0 - (top + half + 16.0) > 40.0:
 			var ptop := top + half + 16.0
 			var pw := step - 70.0
-			MathArt.px_rect(self, Rect2(cx - pw * 0.5, ptop, pw, foot - 26.0 - ptop),
-				Color(MathArt.BLACK, panel))
-			MathArt.px_rect(self, Rect2(cx - pw * 0.5, ptop, pw, 1.0),
-				Color(MathArt.STONE_DIM, 0.22))
-			MathArt.px_rect(self, Rect2(cx - pw * 0.5, foot - 27.0, pw, 1.0),
-				Color(MathArt.STONE_DIM, 0.14))
+			var ph := foot - 26.0 - ptop
+			MathArt.px_rect(self, Rect2(cx - pw * 0.5, ptop, pw, ph),
+				Color(MathArt.BLACK, panel * 0.55))
+			# Lit top lip: the surface the light in the room would catch.
+			MathArt.px_rect(self, Rect2(cx - pw * 0.5, ptop, pw, 2.0),
+				Color(MathArt.PALE_DIM, 0.10 + panel * 0.06))
+			# Inner side shadows, so the niche has a wall thickness.
+			MathArt.px_rect(self, Rect2(cx - pw * 0.5, ptop, 2.0, ph), Color(MathArt.BLACK, 0.30))
+			MathArt.px_rect(self, Rect2(cx + pw * 0.5 - 2.0, ptop, 2.0, ph), Color(MathArt.BLACK, 0.30))
+			# Sill.
+			MathArt.px_rect(self, Rect2(cx - pw * 0.5 - 2.0, foot - 27.0, pw + 4.0, 2.0),
+				Color(MathArt.STONE_DIM, 0.55))
+			MathArt.px_rect(self, Rect2(cx - pw * 0.5 - 2.0, foot - 25.0, pw + 4.0, 1.0),
+				Color(MathArt.BLACK, 0.45))
 		# Two quarter-arcs meeting at the apex, then the jambs down to the floor.
+		# Structure has to survive the value gradient above it: at 0.10 alpha
+		# over a near-black wall the colonnade was invisible and the whole vault
+		# read as flat black in the captures.
 		MathArt.arc(self, Vector2(cx - half, top + half), half, -PI * 0.5, 0.0,
-			Color(MathArt.MID, 0.10), 1.0)
+			Color(MathArt.MID, 0.22), 1.0)
 		MathArt.arc(self, Vector2(cx + half, top + half), half, PI, PI * 1.5,
-			Color(MathArt.MID, 0.10), 1.0)
+			Color(MathArt.MID, 0.22), 1.0)
 		MathArt.px_rect(self, Rect2(cx - half, top + half, 1.0, foot - top - half),
-			Color(MathArt.MID, 0.075))
+			Color(MathArt.MID, 0.16))
 		MathArt.px_rect(self, Rect2(cx + half, top + half, 1.0, foot - top - half),
-			Color(MathArt.MID, 0.075))
+			Color(MathArt.MID, 0.16))
+		# Keystone: the one lit point per bay, so the colonnade has rhythm.
+		MathArt.px_rect(self, Rect2(cx - 2.0, top - 1.0, 5.0, 3.0),
+			Color(MathArt.PALE_DIM, 0.14))
 		x += step
 
 	# Light shafts through the height of the room: three nested trapezoids a 1/φ

@@ -329,3 +329,103 @@ After each meaningful completed task, append:
 - Ready to push: yes for the code. The far plane of a floor is still darker
   than it should be (the ambience pass ran out of budget); the combo/EDGE/boss
   HUD plates have only been verified statically.
+
+2026-10-24 (bug-hunt + art pass on the committed map/hub work)
+
+- Summary: two independent static reviews of the combat / enemy / generator
+  code, then every provable finding fixed and verified. The headline is that
+  the FINAL BOSS could not damage the player on any real floor, and the whole
+  test suite missed it because the boss was only ever tested in the arena
+  fixture (where the floor is at y = 0).
+
+  Bugs found and fixed
+  1) P0 WARDEN SLAM DEALT NO DAMAGE. projectile.gd setup_wave() ended with an
+     ABSOLUTE `position.y = -16.0`, which overwrote the y computed by the
+     caller. On a generated floor (slab y 54..150) that put both shockwaves
+     10..106 px above the player's head - and the waves are the slam's ONLY
+     damage source (the slam branch never enables the boss hitbox). Fixed at
+     the call site (enemy.gd passes the -16 offset in the vector) and the
+     absolute write is gone. Regression: tests/boss_probe.tscn (4 seeds).
+  2) FunctionWave - every weapon's finisher projectile - ignored world
+     geometry: mask was ENEMY only, so the third hit of a combo killed an
+     enemy standing on the far side of a pillar. Now masks ENEMY | WORLD and
+     bursts on any body without take_hit.
+  3) The climb hop and the anti-stuck hop were DEAD CODE: both were gated on
+     `state == CHASE`, but the state machine runs _tick_chase from IDLE too, so
+     a body that had never been hit never qualified. Added _is_walking()
+     (IDLE or CHASE). Regression: tests/climb_probe.tscn.
+  4) Four of six enemy kinds could not follow the player onto the gallery,
+     which turned the high route into a free safe zone while the door waited
+     for every body to die. Added a climb hop (>40 px above, <220 px across,
+     cooldown-gated).
+  5) The Ram telegraphed from 300 px but its lunge covers ~220 px, so it
+     charged into empty space every time. attack_range 300 -> 210.
+  6) The finisher wave's damage was a hardcoded 8.0. It now comes from
+     data/weapons.json (`wave_damage`, = finisher damage x 0.33 per weapon),
+     so a Fractal Edge finisher is not the same as a Rusty Sword one. The
+     Aegis counter was also passing attr = 0 to Damage.compute; it now passes
+     the tactics level.
+  7) level_gen.gd computed a reachability verdict and NOBODY READ IT: _verify
+     only push_warning()ed, so a layout with a deck outside the jump budget
+     still carried enemy spawns and could ship as a dead floor. generate() now
+     retries up to 8 seeds until the layout verifies.
+  8) _take_point()'s cramped-room fallback returned the point NEAREST the
+     player (it reassigned its answer every loop iteration over a
+     farthest-first list), i.e. it spawned the enemy on top of the player -
+     the exact outcome the function exists to prevent. Now returns the head of
+     the list. audit_v1 asserts it directly.
+  9) A GlobPool outlived its floor. It is parented to fx_root (= world), so
+     clearing a floor with a glob still ticking carried a damaging puddle into
+     the hub. Added to group "hazard_pool" and purged with the other world FX.
+  10) J on a station while a panel was already open left the player frozen
+     (audit_a4 caught it: "skill left the player running"). The unfreeze was
+     in Hub, which cannot see whether the owner actually raised anything; the
+     owner now closes the station it refused.
+  11) Returning to the hub leaked two CanvasLayers per visit (Archive +
+     SkillTree were rebuilt without freeing the old pair). audit_v3 measured
+     it and only printed the number; it now asserts it.
+  12) Two earlier fixes kept: R inside the hub no longer reloads to the title;
+     the reward budget decrements inside the deferred call so two rooms
+     clearing in one frame cannot pay one boon for two rooms.
+
+  Art / readability
+  - ENEMY SILHOUETTE. Every enemy's body fill and its hollow interior were
+    MathArt.STONE - the exact value the floor is drawn in - so a grunt walking
+    on stone lost its mass and read as a faint outline on a flat plane. Bodies
+    are now PALE with an INK core: bright ring around a dark core is legible
+    against floor, vault and player.
+  - Slash trail: 4 dashes at 1.2-2.6 px were a hairline the eye could miss.
+    Now 2.0-4.2 px with a 1 px white core on the newest dash and three shed
+    sparks. Still four separated dashes, so it still cannot enclose a shape.
+  - Floor vault (`level.gd`): the far wall stopped at y=60 while the walkable
+    line is BASE_Y=150, leaving a 90 px stripe of bare background directly
+    above the floor - the room read as a slab floating in front of a black
+    hole. The wall now reaches the floor line, carries a 6-band value
+    gradient, staggered masonry joints, a keystone per bay, and the niches are
+    real recesses (lit top lip, inner side shadows, sill) instead of flat
+    black rectangles. Palette `vault` values raised one or two steps so the
+    far plane reads as depth rather than as absence.
+  - Chains: they were a fraction of the whole vault height and therefore all
+    ended above the top of the frame - the entire mid-ground ambience was
+    drawn where nobody could see it. They now end 96-140 px above the deck.
+  - Hub foreground colonnade: moved to the middle of each gap between
+    stations (a column standing beside a station read as an obstacle on the
+    play line), narrowed 16 -> 11 px, drawn in INK rather than pure black so
+    the vault is sensed through it, with both ends faded instead of capped.
+
+- Key files: scripts/enemies/projectile.gd, enemy.gd, enemy_visual.gd,
+  scripts/combat/function_wave.gd, scripts/player/player.gd,
+  scripts/world/level_gen.gd, scripts/world/level.gd, scripts/main.gd,
+  scripts/meta/hub.gd, scripts/fx/slash_fx.gd, data/enemies.json,
+  data/weapons.json, tests/boss_probe.*, tests/climb_probe.*,
+  tests/audit_v1.gd, tests/audit_v3.gd, tests/run_tests.gd, tools/check.ps1
+- Verification: tools/check.ps1 -> ALL CHECKS PASSED (17 steps, 424 s) on the
+  frozen tree. New: boss_probe (warden slam lands on 4 floor-5 seeds),
+  climb_probe (grunt/charger/bulwark close a 162 px gap to a high deck).
+  run_tests 118 checks. audit_a1 123, audit_a4 226, audit_v3 163. Capture
+  harness re-run after every visual change; the 13 gameplay and 14 meta
+  screenshots were inspected by eye.
+- Ready to push: yes. Known limits: the boss is still only exercised by a
+  probe, not by a full playthrough; the combo / EDGE / boss HUD plates have
+  only been verified statically because the capture harness never has a combo
+  or a boss in frame.

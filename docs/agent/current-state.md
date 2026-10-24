@@ -173,3 +173,38 @@ Immediate follow-ups:
    time there.
 3. Combo / EDGE / boss HUD plates are verified statically only - the capture
    harness never has a combo or a boss in frame.
+
+## Session (bug hunt on combat + generator, art readability)
+
+State: `tools/check.ps1` green (17 steps, 424 s). Two independent static
+reviews of the combat / enemy / generator code were read and every provable
+finding fixed. New probes: `tests/boss_probe.tscn` (the Warden's slam lands on
+four floor-5 seeds) and `tests/climb_probe.tscn` (grunt / charger / bulwark
+close a 162 px gap to a high deck).
+
+The one that matters: **the final boss could not damage the player on any real
+floor.** `projectile.gd setup_wave()` ended with an absolute `position.y =
+-16.0` that overwrote the caller's y, so both shockwaves - the slam's only
+damage source - spawned 10..106 px above the player's head on every generated
+floor. The arena fixture puts its ground at y = 0, which is the one place -16
+is correct, so `soak` passed. Lesson: a fixture that agrees with a hardcoded
+coordinate hides every bug in that coordinate.
+
+Also fixed: finisher waves flew through pillars; the climb and anti-stuck hops
+were gated on a state that untouched bodies never enter (dead code); four of
+six enemy kinds could not follow the player onto the gallery; the Ram
+telegraphed from beyond its own reach; the finisher wave had a hardcoded
+damage; `level_gen` computed a reachability verdict nobody read (a dead floor
+could ship); `_take_point`'s cramped fallback spawned the enemy on top of the
+player; a spitter glob followed the player into the hub; J on a second station
+froze the body; every hub visit leaked two CanvasLayers.
+
+Art: enemies are PALE with an INK core (their old fill was the floor's own
+value, so they dissolved on stone); the slash trail is thick enough to see;
+the floor's far wall reaches the walkable line and carries a value gradient,
+masonry and real niches; chains end inside the frame instead of above it; the
+hub foreground colonnade sits in the gaps between stations.
+
+Next:
+1. Playtest the boss on floor 5 for real - it is still only probe-covered.
+2. The combo / EDGE / boss HUD plates are still verified statically only.

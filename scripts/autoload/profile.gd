@@ -41,6 +41,11 @@ func load_profile(force: bool = false) -> void:
 	if _loaded and not force:
 		return
 	_loaded = true
+	# save() removes the live file before renaming the temp one, so a crash in
+	# that window leaves no save at all while a complete .tmp sits beside it.
+	# Recover from it instead of starting the player over.
+	if not FileAccess.file_exists(SAVE_PATH) and FileAccess.file_exists(SAVE_PATH + ".tmp"):
+		DirAccess.rename_absolute(SAVE_PATH + ".tmp", SAVE_PATH)
 	if not FileAccess.file_exists(SAVE_PATH):
 		_apply_defaults()
 		return
@@ -136,6 +141,12 @@ func _pick(kind: String, id: String, unlocked: Array[String]) -> String:
 ## Levels are clamped to the data max and ids the tables no longer know are
 ## dropped, so a hand-edited save cannot buy 99 levels of VITALITY.
 func _pruned_upgrades(source: Dictionary) -> Dictionary:
+	# Same guard the skill table already had: Data._read_json() returns {} when a
+	# file is missing or malformed, and pruning against an empty table silently
+	# deletes every purchased upgrade - then saves that deletion on the next
+	# bank(). A missing data table must never be read as "nothing is valid".
+	if Data.upgrades.is_empty():
+		return source.duplicate()
 	var out := {}
 	for id in source:
 		var cfg: Dictionary = Data.upgrades.get(id, {})

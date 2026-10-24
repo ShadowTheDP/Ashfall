@@ -163,8 +163,14 @@ func _draw_ground_sigil(half_h: float) -> void:
 	MathArt.px_poly(self, flat, Color(0, 0, 0, 0), Color(MathArt.MID, alpha), 1.0)
 
 
+## The enemy reads as a BRIGHT RING AROUND A DARK CORE.
+## Why not a filled body: the floor is drawn in MathArt.STONE and the hollow
+## interior of every enemy was MathArt.STONE too, so the two were the same
+## value and a grunt walking on stone lost its mass entirely - it read as a
+## faint outline on a flat plane. A light silhouette with an ink core is
+## readable against the floor (#404040), the vault (#1b1b1b) and the player.
 func _body_fill() -> Color:
-	return MathArt.ENEMY
+	return MathArt.PALE
 
 
 func _draw_husk(flash: bool) -> void:
@@ -173,7 +179,7 @@ func _draw_husk(flash: bool) -> void:
 	MathArt.px_poly(self, body, _c(_body_fill(), flash), Color(OUTLINE, 0.9), 2.0)
 	# Inner hollow triangle: the "face" of the shape.
 	MathArt.px_poly(self, MathArt.ngon(3, r * MathArt.INV_PHI, -PI * 0.5, Vector2(0, 0)),
-		_c(MathArt.STONE, flash, 0.9))
+		_c(MathArt.INK, flash, 0.9))
 	# Claw: one dot, extended during the attack.
 	var hand := Vector2(11, 4)
 	if e.state == Enemy.EState.ATTACK:
@@ -188,7 +194,7 @@ func _draw_watcher(flash: bool) -> void:
 	var r := _radius()
 	MathArt.disc(self, Vector2(0, -2), r, _c(_body_fill(), flash))
 	MathArt.ring(self, Vector2(0, -2), r, Color(OUTLINE, 0.9), 2.0)
-	MathArt.disc(self, Vector2(0, -2), r * 0.55, _c(MathArt.STONE, flash, 0.92))
+	MathArt.disc(self, Vector2(0, -2), r * 0.55, _c(MathArt.INK, flash, 0.92))
 	# Orbit: a dashed ellipse plus one travelling bead.
 	var orbit_rotation := 0.24 + sin(_t * 1.1) * 0.06
 	for i in 16:
@@ -219,7 +225,7 @@ func _draw_ram(flash: bool) -> void:
 	var r := _radius()
 	var body := MathArt.ngon(4, r * 1.15, PI * 0.25, Vector2(0, -2))
 	MathArt.px_poly(self, body, _c(_body_fill(), flash), Color(OUTLINE, 0.9), 2.0)
-	MathArt.px_poly(self, MathArt.ngon(4, r * 0.65, PI * 0.25, Vector2(0, -2)), _c(MathArt.STONE, flash, 0.92))
+	MathArt.px_poly(self, MathArt.ngon(4, r * 0.65, PI * 0.25, Vector2(0, -2)), _c(MathArt.INK, flash, 0.92))
 	# Horns: two short ticks that lead the charge.
 	var horn := 8.0 if e.state == Enemy.EState.ATTACK else 5.0
 	MathArt.line(self, Vector2(-r * 0.6, -r * 0.9), Vector2(-r * 0.6 - horn * 0.4, -r * 0.9 - horn),
@@ -237,7 +243,7 @@ func _draw_spitter(flash: bool) -> void:
 	MathArt.px_poly(self, MathArt.star(7, r * 1.10, r * 0.74, -PI * 0.5 + spin, Vector2(0, -2)),
 		_c(_body_fill(), flash), Color(OUTLINE, 0.9), 2.0)
 	MathArt.px_poly(self, MathArt.ngon(7, r * 0.46, -PI * 0.5 + spin, Vector2(0, -2)),
-		_c(MathArt.STONE, flash, 0.92))
+		_c(MathArt.INK, flash, 0.92))
 	var pull := 0.0
 	if e.state == Enemy.EState.WINDUP:
 		pull = clampf(e.state_t / maxf(0.001, float(e.cfg.get("windup", 0.6))), 0.0, 1.0)
@@ -262,7 +268,7 @@ func _draw_leaper(flash: bool) -> void:
 	]), _c(_body_fill(), flash), Color(OUTLINE, 0.9), 2.0)
 	MathArt.px_poly(self, PackedVector2Array([
 		Vector2(0, -h * 0.44), Vector2(r * 0.32, h * 0.28), Vector2(-r * 0.32, h * 0.28),
-	]), _c(MathArt.STONE, flash, 0.92))
+	]), _c(MathArt.INK, flash, 0.92))
 	# A coil under the body: two arcs that tighten through the windup.
 	var coil := 0.0
 	if e.state == Enemy.EState.WINDUP:
@@ -277,7 +283,7 @@ func _draw_bulwark(flash: bool) -> void:
 	var r := _radius()
 	var body := MathArt.ngon(6, r * 1.05, PI / 6.0, Vector2(0, -2))
 	MathArt.px_poly(self, body, _c(_body_fill(), flash), Color(OUTLINE, 0.9), 2.0)
-	MathArt.px_poly(self, MathArt.ngon(6, r * 0.62, PI / 6.0, Vector2(0, -2)), _c(MathArt.STONE, flash, 0.92))
+	MathArt.px_poly(self, MathArt.ngon(6, r * 0.62, PI / 6.0, Vector2(0, -2)), _c(MathArt.INK, flash, 0.92))
 	# Front shield: a flat face presented to the player.
 	var shield_center := Vector2(r * 1.05, -2)
 	for i in 3:

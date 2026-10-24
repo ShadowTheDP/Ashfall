@@ -531,7 +531,10 @@ func _open_hitbox() -> void:
 		var wave := FunctionWave.new()
 		wave.position = global_position + Vector2(facing * 26.0, -10.0)
 		wave.attr = weapon_attr_level()
-		wave.setup(facing, 8.0 * Game.total_damage_mult() * permanent_damage_mult, MathArt.WHITE, self, crit_multiplier())
+		# The wave used to carry a literal 8.0, so a Fractal Edge finisher released
+		# the same wave as a Rusty Sword. It is content: data/weapons.json.
+		wave.setup(facing, float(weapon.get("wave_damage", 8.0)) * Game.total_damage_mult() * permanent_damage_mult,
+			MathArt.WHITE, self, crit_multiplier())
 		var root := Game.fx_root
 		if is_instance_valid(root):
 			root.add_child(wave)
@@ -695,7 +698,11 @@ func _aegis_block() -> void:
 			continue
 		if global_position.distance_to(enemy.global_position) <= 118.0:
 			enemy.take_hit({
-				"damage": Damage.compute(10.0 * Game.total_damage_mult() * permanent_damage_mult, 0, false, 1.0),
+				# The Aegis counter is a tactics strike, not an untyped one: passing
+				# 0 here was the exact "attribute is a label" bug the colour system
+				# was built to remove.
+				"damage": Damage.compute(10.0 * Game.total_damage_mult() * permanent_damage_mult,
+					attribute_level("tactics"), false, 1.0),
 				"crit": false,
 				"knockback": 260.0,
 				"hitstop": 0.03,

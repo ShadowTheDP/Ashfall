@@ -85,6 +85,7 @@ var _pattern := 0
 var _slam_done := false
 var _slam_at := 0.0
 var _stuck := 0.0
+var _climb_cd := 0.0
 var _recover_cd := 0.0
 var _glob: Projectile = null
 var _glob_fired := false
@@ -154,6 +155,7 @@ func _physics_process(delta: float) -> void:
 	attack_cd = maxf(0.0, attack_cd - delta)
 	_spawn_t = maxf(0.0, _spawn_t - delta)
 	_recover_cd = maxf(0.0, _recover_cd - delta)
+	_climb_cd = maxf(0.0, _climb_cd - delta)
 	_track_glob()
 
 	if is_on_floor():
@@ -177,7 +179,12 @@ func _physics_process(delta: float) -> void:
 	# in the corner for the rest of the floor. Reverse, then hop: a step deck or
 	# a low lip is cleared by the hop, a tall pillar is not, so this cannot
 	# launch a body into geometry it could not walk to.
-	if state == EState.CHASE and is_on_wall() and absf(velocity.x) < 20.0:
+	# IDLE *is* chasing: the state match below falls through to _tick_chase() for
+	# anything that is not HURT/WINDUP/ATTACK/RECOVER, so a body only reaches
+	# EState.CHASE after its first attack. Testing `state == EState.CHASE` here
+	# meant this anti-stuck hop and the climb hop below were dead code for every
+	# untouched enemy - which is exactly the common case.
+	if _is_walking() and is_on_wall() and absf(velocity.x) < 20.0:
 		_stuck += delta
 	else:
 		_stuck = 0.0
@@ -187,6 +194,19 @@ func _physics_process(delta: float) -> void:
 		facing = -facing
 		velocity.x = facing * float(cfg.get("speed", 80.0))
 		velocity.y = -340.0
+
+	# A melee body must climb. The generator rewards the upper route with cell
+	# caches, and before this a grunt simply walked to the player's x and idled
+	# under a 92 px deck, so the gallery was a free safe zone against four of the
+	# six kinds - and the door needs every body dead, so the fight stalled until
+	# the player came back down. A hop only when the target is genuinely above,
+	# so a body never bounces on flat ground.
+	if _climb_cd <= 0.0 and _is_walking() and is_on_floor():
+		var above := global_position.y - player.global_position.y
+		if above > 40.0 and absf(player.global_position.x - global_position.x) < 220.0:
+			_climb_cd = 0.7
+			velocity.y = -560.0
+			velocity.x = _gate(facing, player) * float(cfg.get("speed", 80.0)) * 1.4
 
 	match state:
 		EState.HURT:
@@ -201,6 +221,12 @@ func _physics_process(delta: float) -> void:
 			_tick_chase(player, delta)
 
 	move_and_slide()
+
+
+## True in the states that mean "walking at the player": the state machine's
+## default branch, plus CHASE, which the body takes after its first recovery.
+func _is_walking() -> bool:
+	return state == EState.IDLE or state == EState.CHASE
 
 
 func _tick_chase(player: Player, delta: float) -> void:
@@ -527,6 +553,10 @@ func _spawn_pool(at: Vector2) -> void:
 	pool.damage = float(cfg.get("pool_damage", 6.0))
 	pool.life = float(cfg.get("pool_time", 2.4))
 	pool.source = self
+	# Group, not a type check: GlobPool is an inner class, so Main cannot name it
+	# to purge it. Without this a glob outlives its floor and follows the player
+	# into the hub (it is parented to fx_root/world, not to the level).
+	pool.add_to_group("hazard_pool")
 	root.add_child(pool)
 	Juice.shatter(root, at, MathArt.PALE_DIM, 6)
 	Sfx.play("land", -14, 1.4)
@@ -622,7 +652,9 @@ func _spawn_shockwaves() -> void:
 	Combat.dust(global_position + Vector2(0, 28), 16, Vector2(0, 1))
 	for direction in [-1.0, 1.0]:
 		var wave := Projectile.new()
-		wave.position = global_position + Vector2(direction * 34.0, 0)
+		# Relative to the boss, 16 px above its feet: the wave has to travel
+		# along the floor the player is standing on, whatever y that floor is.
+		wave.position = global_position + Vector2(direction * 34.0, -16.0)
 		wave.setup_wave(
 			Vector2(direction, 0),
 			float(cfg.get("shockwave_speed", 430.0)),

@@ -1,0 +1,11 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/main.tscn" id="1_main"]
+[ext_resource type="Script" path="res://tests/climb_probe.gd" id="2_probe"]
+
+[node name="ClimbProbe" type="Node"]
+script = ExtResource("2_probe")
+
+[node name="Main" parent="." instance=ExtResource("1_main")]
+skip_title = true
+start_mode = "hub"

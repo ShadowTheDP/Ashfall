@@ -65,7 +65,8 @@
         "tier": 3,
         "blade": 50.0
       }
-    ]
+    ],
+    "wave_damage": 7.9
   },
   "arc_saber": {
     "name": "Arc Saber",
@@ -136,7 +137,8 @@
         "tier": 2,
         "blade": 44.0
       }
-    ]
+    ],
+    "wave_damage": 6.3
   },
   "kiss_precision": {
     "name": "Kiss Precision",
@@ -207,7 +209,8 @@
         "tier": 2,
         "blade": 34.0
       }
-    ]
+    ],
+    "wave_damage": 7.9
   },
   "fractal_edge": {
     "name": "Fractal Edge",
@@ -278,7 +281,8 @@
         "tier": 3,
         "blade": 62.0
       }
-    ]
+    ],
+    "wave_damage": 12.5
   },
   "chain_lash": {
     "name": "Chain Lash",
@@ -349,7 +353,8 @@
         "tier": 3,
         "blade": 70.0
       }
-    ]
+    ],
+    "wave_damage": 8.9
   },
   "orbit_rings": {
     "name": "Orbit Rings",
@@ -420,6 +425,7 @@
         "tier": 2,
         "blade": 38.0
       }
-    ]
+    ],
+    "wave_damage": 8.6
   }
 }

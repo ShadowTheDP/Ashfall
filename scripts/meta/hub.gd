@@ -49,7 +49,11 @@ const CHAIN_X := [395.0, 700.0, 1010.0, 1345.0]
 const ROSE_AT := Vector2(818.0, -286.0)
 const ROSE_R := 50.0
 ## Near-plane columns, placed in the gaps between stations so no label is cut.
-const FOREGROUND_X := [30.0, 366.0, 675.0, 985.0, 1310.0]
+## Near-column positions. Deliberately in the MIDDLE of each gap between two
+## stations (210/520/830/1140/1560): a foreground column that lands beside a
+## station competes with it for attention and reads as an obstacle standing on
+## the walkable line instead of as something in front of the camera.
+const FOREGROUND_X := [365.0, 675.0, 985.0, 1350.0]
 
 ## Highest floor the player has unlocked (0 = nothing cleared yet).
 var floor_available := 0
@@ -488,14 +492,23 @@ func _draw_foreground() -> void:
 		# standing on the walkable line. A footer that sits on y=0 reads as an
 		# obstacle in the play plane (the first hub screenshot did exactly that);
 		# one that overlaps the floor reads as being in front of it.
-		MathArt.px_rect(self, Rect2(x - 8.0, -168.0, 16.0, 168.0), MathArt.BLACK)
-		MathArt.px_rect(self, Rect2(x + 5.0, -168.0, 3.0, 168.0), Color(MathArt.STONE_DIM, 0.45))
-		MathArt.px_rect(self, Rect2(x - 12.0, -176.0, 24.0, 9.0), MathArt.BLACK)
-		MathArt.px_rect(self, Rect2(x - 12.0, -176.0, 24.0, 1.0), Color(MathArt.STONE_DIM, 0.55))
-		MathArt.px_rect(self, Rect2(x - 13.0, -12.0, 26.0, 34.0), MathArt.BLACK)
+		# Narrower than the first pass (16 px read as a wall), and drawn as ink
+		# rather than pure black so the vault behind it is still sensed through
+		# the silhouette: a near plane should occlude, not erase.
+		MathArt.px_rect(self, Rect2(x - 5.5, -168.0, 11.0, 168.0), Color(MathArt.INK, 0.94))
+		MathArt.px_rect(self, Rect2(x + 3.0, -168.0, 2.0, 168.0), Color(MathArt.STONE_DIM, 0.30))
+		# Fade both ends instead of cut them: a hard cap at the top of the frame
+		# looked like a graphic bar, not like something passing the camera.
+		for step in 4:
+			var t := float(step) / 4.0
+			MathArt.px_rect(self, Rect2(x - 5.5, -168.0 + t * 26.0, 11.0, 26.0),
+				Color(MathArt.INK, 0.30 + t * 0.64))
+		MathArt.px_rect(self, Rect2(x - 8.5, -176.0, 17.0, 8.0), Color(MathArt.INK, 0.90))
+		MathArt.px_rect(self, Rect2(x - 8.5, -176.0, 17.0, 1.0), Color(MathArt.STONE_DIM, 0.40))
+		MathArt.px_rect(self, Rect2(x - 9.5, -12.0, 19.0, 30.0), Color(MathArt.INK, 0.94))
 		# Contact shadow in front of the foot, so the column is clearly nearer
 		# than the floor it overlaps.
-		MathArt.px_rect(self, Rect2(x - 22.0, 22.0, 44.0, 2.0), Color(MathArt.BLACK, 0.5))
+		MathArt.px_rect(self, Rect2(x - 18.0, 18.0, 36.0, 2.0), Color(MathArt.BLACK, 0.45))
 
 
 func _draw_station(index: int) -> void:

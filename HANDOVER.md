@@ -118,6 +118,26 @@ These are worth reading before touching the same code.
 | The gallery could become a ceiling | connectors were placed before pillars existed | pillars first, then `_headroom()` rejects any surface < 72 px above another |
 | Floors read as a row of set pieces | rooms were individually good but not linked | `_link_gallery` + `_stack_ladders` + `_caches` |
 
+### Session 4 — the boss that could not hit you, and the rest of the static review
+
+Two independent static reviews of the combat / enemy / generator code. Every
+provable finding below is now fixed and covered.
+
+| Area | Cause | Fix |
+|---|---|---|
+| **The Warden's slam dealt no damage on any real floor** | `projectile.gd setup_wave()` ended with an ABSOLUTE `position.y = -16.0`, overwriting the y the caller computed. On generated floors (slab y 54..150) both waves - the slam's only damage source - spawned 10..106 px above the player's head. `arena.gd` puts its ground at y = 0, the one place -16 is right, so `soak` passed | offset moved into the caller's vector; the absolute write is gone. `tests/boss_probe.tscn` |
+| Finisher waves flew through pillars | `function_wave.gd` masked ENEMY only, and `_on_body_entered` had no world branch | mask `ENEMY \| WORLD`; a body without `take_hit` bursts and frees |
+| The climb hop and the anti-stuck hop were dead code | both gated on `state == CHASE`, but `_tick_chase` also runs from `IDLE`, so a body that had never been hit never qualified | `_is_walking()` = IDLE or CHASE. `tests/climb_probe.tscn` |
+| Four of six enemy kinds could not follow you onto the gallery | no upward impulse except the leaper's hop | cooldown-gated climb hop (>40 px above, <220 px across) |
+| The Ram telegraphed from beyond its own reach | `attack_range 300` vs a ~220 px lunge + hitbox | 300 -> 210 |
+| Finisher wave had a hardcoded damage | literal `8.0` in `player.gd` | `wave_damage` per weapon in `data/weapons.json` (= finisher x 0.33) |
+| The Aegis counter passed `attr = 0` | literal | `attribute_level("tactics")` |
+| A dead floor could ship | `level_gen.generate()` computed `reachable` and no runtime code read it; `_verify` only `push_warning`s | retry up to `MAX_GENERATE_ATTEMPTS = 8` until the layout verifies |
+| `_take_point`'s cramped fallback spawned the enemy ON the player | the loop reassigned its answer every iteration of a farthest-first list, so it returned the nearest | returns the head of the list; `audit_v1` asserts it directly |
+| A spitter's glob followed you into the hub | `GlobPool` is parented to `fx_root` (= world), not to the level, and `_purge_world_fx` could not name an inner class | group `hazard_pool`, purged with the other world FX |
+| J on a second station froze the body | the unfreeze lived in `Hub`, which cannot see whether the owner raised anything | the owner closes the station it refused (`audit_a4`) |
+| Every hub visit leaked two CanvasLayers | Archive + SkillTree rebuilt without freeing the old pair | free before rebuild; `audit_v3` now asserts the count instead of printing it |
+
 ### Session 2 — things that existed but were unreachable
 
 | Area | Cause | Fix |
@@ -150,12 +170,14 @@ powershell -ExecutionPolicy Bypass -File tools\check.ps1
 ```
 
 ```
-TESTS OK (111 checks)                run_tests.gd
+TESTS OK (118 checks)                run_tests.gd
 PROBE OK                             combat probe
 REWARD OK                            boon picker (+ colour reaches the weapon)
 SOAK OK                              4 waves + boss + victory (arena mode)
 ESC TEST OK (0 failures)             hub panels open/close/buy
 FLOOR PROBE OK                       hub -> floor handoff, player can move
+BOSS PROBE OK                        the Warden's slam lands on 4 floor-5 seeds
+CLIMB PROBE OK                       grunt / charger / bulwark reach a high deck
 RUN PROBE OK (0 failures)            5 floors -> victory -> hub, boon budget per floor
 AUDIT A1 OK                          weapons / passives / armour / death
 AUDIT A2 OK (123 checks)             save round-trip, economy edges, souls wallet
@@ -163,7 +185,7 @@ AUDIT A3 OK                          floor x seed reachability, spawns, gate
 AUDIT A4 OK (226 checks)             key ownership, text fit
 AUDIT V1 OK (0 failures)             vertical traversal, one-way, softlocks
 AUDIT V2 OK                          decks, spitter, leaper from data, cells
-AUDIT V3 OK (162 checks)             run flow, floor picker, state leaks
+AUDIT V3 OK (163 checks)             run flow, floor picker, state leaks
 ALL CHECKS PASSED
 ```
 
@@ -250,6 +272,9 @@ Never shorten a wait loop into a fixed frame count to save time: `audit_a3` and
 | Souls cap out early | two soul upgrades x 5 levels = 10 souls, and a clear pays 1 |
 | No save-slot UI | one profile, `user://ashfall_profile.json` |
 | `Hub.is_open()` covers `HubUi` only | the archive/tree are separate layers; `Main._any_panel_open()` is the real guard |
+| A fixture that agrees with a hardcoded coordinate hides every bug in it | the boss slam was only ever tested in `arena.gd`, whose ground is at y = 0 - the one place the wrong absolute `-16` is right. Any test that builds the arena is blind to floor-relative maths; use `boss_probe` (a real `Level`) |
+| The boss is probe-covered, not playthrough-covered | `boss_probe` proves the slam spawns waves at the warden's feet on 4 seeds; nobody has fought it on a generated floor |
+| Enemy body is now PALE | `enemy_visual.gd _body_fill()` used `MathArt.STONE`, which is the floor's own value, so enemies dissolved on stone. If you change the floor's fill, re-check the enemy against it |
 
 ---
 

@@ -481,6 +481,13 @@ func _check_enemies_on_decks(pair: Vector2i, level: Level, player: Player) -> vo
 	var rooms: Array = data["rooms"]
 	var solids := _solids(data)
 	var where := "floor %d seed %d" % [pair.x, pair.y]
+	# Direct check of the cramped-room fallback: every candidate closer than
+	# SAFE_DISTANCE. The answer must be the FARTHEST point, because that is the
+	# entire purpose of the function.
+	var cramped: Array = [Vector2(20.0, -100.0), Vector2(10.0, -100.0), Vector2(0.0, -100.0)]
+	var picked: Vector2 = level._take_point(cramped, Vector2.ZERO, Rect2(0.0, 0.0, 40.0, 12.0))
+	if picked.x < 19.0:
+		_fail(where, "cramped-room fallback spawned at x=%.0f instead of the farthest point" % picked.x)
 	for i in rooms.size():
 		var rect: Rect2 = rooms[i]["rect"]
 		player.global_position = Vector2(rect.position.x + 2.0, rect.position.y - 40.0)

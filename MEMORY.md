@@ -171,17 +171,19 @@ python tools\make_sfx.py
 ## Verification Status (2026-10-24)
 
 `powershell -ExecutionPolicy Bypass -File tools\check.ps1` -> ALL CHECKS
-PASSED, exit 0, 14 steps:
+PASSED, exit 0, 17 steps, 424 s:
 
 | Step | Result |
 |---|---|
 | import / compile | ok |
-| `run_tests.gd` | 111 checks |
+| `run_tests.gd` | 118 checks |
 | `combat_probe.tscn` | ok |
 | `reward_probe.tscn` | ok (now also asserts the colour reaches the weapon) |
 | `soak.tscn` | ok (arena mode, 4 waves + Warden) |
 | `esc_probe.tscn` | 0 failures |
 | `floor_probe.tscn` | ok |
+| `boss_probe.tscn` | the Warden's slam spawns waves at its feet on 4 floor-5 seeds |
+| `climb_probe.tscn` | grunt / charger / bulwark close a 162 px gap to a high deck |
 | `run_probe.tscn` | 0 failures, 5 floors -> victory; asserts each floor's boon budget and that a cleared room grants one |
 | `audit_a1` combat / weapons | ok |
 | `audit_a2` save / economy | 123 checks |
@@ -189,7 +191,7 @@ PASSED, exit 0, 14 steps:
 | `audit_a4` UI / input | 226 checks |
 | `audit_v1` vertical traversal | 5 floors x 40 seeds |
 | `audit_v2` enemies / encounters | ok (asserts spitter + leaper spawn from data) |
-| `audit_v3` run flow / progression | 162 checks |
+| `audit_v3` run flow / progression | 163 checks |
 
 Visual harnesses need a display: `capture_scene` (13 shots), `impact_capture`
 (20 frame-by-frame), `meta_capture` (14 hub/floor/archive), `title_capture`,
@@ -227,13 +229,28 @@ Do not "fix" a slow step by shortening its wait loops into fixed frame counts:
 `audit_a3` and `run_probe` both used to assume one frame was enough and both
 flaked under load. Wait for the *condition*, not for a frame count.
 
+## Fixtures Hide Bugs in the Coordinate They Fix (2026-10-24)
+
+`arena.gd` puts its ground at **y = 0**. `projectile.gd setup_wave()` used to
+end with an absolute `position.y = -16.0`, which is correct there and nowhere
+else. On a generated floor (slab y 54..150) it put the Warden's shockwaves -
+the slam's only damage source - 10..106 px above the player's head, so the
+final boss could not hurt anyone. `soak`, the only test that fights the boss,
+builds the arena, so it passed for months.
+
+Rule: **any test that builds the arena is blind to floor-relative maths.** If a
+value is meant to be an offset, pass it as one and never write it as an
+absolute. `tests/boss_probe.tscn` builds a real `Level` for exactly this.
+
 ## Known Risks / Limits
 
 - No export templates installed, so no `.exe` has been produced yet.
 - Input map is runtime-only; the editor's Input Map panel is empty.
 - `godot --script` runs without autoload globals; tests that need the scene
   (probe/soak) must run as scenes, not as `--script`.
-- Enemy AI does not jump between platforms; archers can walk off a ledge.
+- Enemy AI hops up to a player more than 40 px above it (cooldown-gated), but
+  it does not path around a wall: `climb_probe` proves a 162 px gap closes,
+  not that every gallery is reachable from every spot.
 - `Enemy._die` defers `CellPickup` creation because death happens inside a
   physics signal flush. Keep that defer if the death flow is refactored.
 - The reward screen is a `CanvasLayer` child of `Main`, not an autoload, so

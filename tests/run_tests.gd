@@ -70,6 +70,12 @@ func _test_weapon_data() -> void:
 		previous_damage = float(step.get("damage", 0.0))
 		var size: Array = step.get("size", [])
 		_check(size.size() == 2 and float(size[0]) > 0.0, "hitbox size must be a 2D vector")
+	# The finisher wave is content: it used to be a literal 8.0 in player.gd, so
+	# every weapon released an identical wave.
+	_check(float(sword.get("wave_damage", 0.0)) > 0.0, "weapon needs wave_damage")
+	for id in data:
+		_check(float((data[id] as Dictionary).get("wave_damage", 0.0)) > 0.0,
+			"%s needs wave_damage" % str(id))
 
 
 func _test_enemy_data() -> void:

@@ -169,6 +169,14 @@ func enter_hub() -> void:
 
 
 func _build_meta_screens() -> void:
+	# enter_hub() runs on every floor clear and every death, so without this the
+	# world accumulated a fresh pair of CanvasLayers per visit (audit_v3 already
+	# printed the growth; nothing asserted on it).
+	for old in [archive, skill_tree]:
+		if is_instance_valid(old):
+			old.queue_free()
+	archive = null
+	skill_tree = null
 	# Archives and the skill tree are their own CanvasLayers because they need
 	# the full 768x480 and their own cursor geometry.
 	var archive_script: Script = _script("res://scripts/ui/archive_screen.gd")
@@ -190,8 +198,11 @@ func _build_meta_screens() -> void:
 func _on_station_opened(id: String) -> void:
 	# A panel opened while another is up would leave two Esc owners and one of
 	# them unreachable. The hub already guards the key path; this guards the
-	# API path.
+	# API path - and it MUST release the freeze the hub applied, or the player is
+	# left unable to move until some unrelated panel closes.
 	if _any_panel_open():
+		if hub != null and hub.has_method("close_station"):
+			hub.close_station()
 		return
 	match id:
 		"skill":
@@ -287,15 +298,20 @@ func _on_rooms_cleared_reward() -> void:
 		return
 	# Headless probes drive the whole run without a UI; the flag they already
 	# set for the arena path has to mean the same thing here.
+	if Game.floor_rewards_left <= 0:
+		return
+	Game.floor_rewards_left -= 1
 	if auto_rewards or Game.auto_choose_rewards:
 		Game.grant_random_reward()
 		return
 	Game.request_rewards(3)
 
 func _on_room_cleared(_index: int) -> void:
+	# Two rooms can clear in the same frame, and both deferred calls land before
+	# either picker sets reward_open. Spending the budget here would then pay one
+	# boon for two rooms; the decrement therefore lives in the deferred call.
 	if Game.floor_rewards_left <= 0 or Game.run_over or Game.reward_open:
 		return
-	Game.floor_rewards_left -= 1
 	call_deferred("_on_rooms_cleared_reward")
 
 func _on_floor_cleared() -> void:
@@ -330,6 +346,9 @@ func _purge_world_fx() -> void:
 			if node is Area2D:
 				(node as Area2D).monitoring = false
 			node.queue_free()
+	for node in world.get_children():
+		if node.is_in_group("hazard_pool"):
+			node.queue_free()
 
 
 ## R mid-run: replay the floor that is already chosen. It must NOT reload the
@@ -338,7 +357,16 @@ func _purge_world_fx() -> void:
 ## nothing banked. Game.reset_run() is Game-only state, which is exactly the
 ## scope of a retry.
 func restart_attempt() -> void:
-	if start_mode != "hub" or Game.floor_index <= 0:
+	if start_mode == "hub" and Game.floor_index <= 0:
+		# Paused in the HUB. There is no attempt to replay, and reloading the
+		# scene threw the player back to the title screen (the pause overlay
+		# advertises R RESTART, so this was reachable). Just resume.
+		if hud != null:
+			hud.paused = false
+		get_tree().paused = false
+		Engine.time_scale = 1.0
+		return
+	if start_mode != "hub":
 		# Arena / harness modes have no floor to replay.
 		get_tree().reload_current_scene()
 		return

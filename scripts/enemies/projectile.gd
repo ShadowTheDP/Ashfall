@@ -72,7 +72,12 @@ func setup_wave(aim: Vector2, p_speed: float, p_damage: float, p_tint: Color, p_
 	_life = 1.25
 	knockback = 260.0
 	hitstop_time = 0.02
-	position.y = -16.0
+	# WHY there is no y here: this used to be `position.y = -16.0`, an ABSOLUTE
+	# write that is only correct when the ground is y = 0 - i.e. only in the
+	# arena fixture. On a generated floor the slab sits at y 54..150, so both
+	# slam waves spawned ~100 px above the fight and the Warden's slam, whose
+	# only damage source is those waves, dealt nothing. The -16 offset belongs
+	# at the call site, relative to the body that fired it (enemy.gd).
 
 
 func _ready() -> void:

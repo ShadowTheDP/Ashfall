@@ -59,7 +59,33 @@ const KIND_MIN := {"gate": 420.0, "hall": 460.0, "shaft": 280.0, "vault": 380.0,
 const MIDDLE_KINDS := ["shaft", "vault", "gate", "bridge", "hall", "well"]
 
 
+## A layout that failed its own verification is not a warning, it is a dead
+## floor: an enemy on an unreachable deck means enemies_remaining() never hits
+## zero, the door never opens, and the player is stuck with no exit. `_verify`
+## used to only push_warning(), and nothing at runtime read its result. Retry
+## with a perturbed seed instead - the generator is deterministic per seed, so
+## the retry is deterministic too.
+const MAX_GENERATE_ATTEMPTS := 8
+
+
 static func generate(floor_index: int, seed_value: int) -> Dictionary:
+	var data := _generate_once(floor_index, seed_value)
+	for attempt in range(1, MAX_GENERATE_ATTEMPTS):
+		var reach: Dictionary = data.get("reachable", {})
+		if bool(reach.get("ok", true)) and int(reach.get("decks", 0)) == 0:
+			if attempt > 1:
+				push_warning("LevelGen: floor %d seed %d needed %d attempt(s) to verify"
+					% [floor_index, seed_value, attempt - 1])
+			return data
+		data = _generate_once(floor_index, seed_value + attempt * 104729)
+	var reach_last: Dictionary = data.get("reachable", {})
+	if not bool(reach_last.get("ok", true)) or int(reach_last.get("decks", 0)) != 0:
+		push_error("LevelGen: floor %d seed %d could not produce a verified layout in %d tries"
+			% [floor_index, seed_value, MAX_GENERATE_ATTEMPTS])
+	return data
+
+
+static func _generate_once(floor_index: int, seed_value: int) -> Dictionary:
 	var cfg := _floor_config(floor_index)
 	var rng := RandomNumberGenerator.new()
 	# The floor index is folded in so one run seed does not produce five
