@@ -78,6 +78,10 @@ var visual: EnemyVisual
 var fade := 1.0
 
 var _dead := false
+## The tier of the hit that killed this body, so a finisher kill can read
+## heavier than a chip kill. take_hit() resolves the tier; _die() is the only
+## place that needs to know it afterwards.
+var last_tier := 0
 var _spawn_t := 0.0
 var _was_on_floor := true
 var _pending_attack := "cleave"
@@ -275,7 +279,10 @@ func _tick_chase(player: Player, delta: float) -> void:
 				return
 			var hold := 0.0
 			if distance < 170.0:
-				hold = -facing * speed
+				# Backing off goes through the ledge gate like every other intent:
+				# a retreat that steps off a deck drops the archer out of the fight
+				# instead of holding the ledge.
+				hold = float(_gate(-facing, player)) * speed
 			elif distance > 360.0:
 				hold = _gate(facing, player) * speed
 			velocity.x = move_toward(velocity.x, hold + push, 1200.0 * delta)
@@ -650,6 +657,11 @@ func _spawn_shockwaves() -> void:
 	Combat.shake(0.5)
 	Sfx.play("slam", -7, 0.85)
 	Combat.dust(global_position + Vector2(0, 28), 16, Vector2(0, 1))
+	# The feet take the hit, not the body: a ring on the ground line is what makes
+	# the slam read as "the floor moved" rather than "the boss stopped".
+	var feet := global_position + Vector2(0.0, float(cfg.get("body_height", 64.0)) * 0.5)
+	Combat.ring(feet, MathArt.PALE, 62.0)
+	Juice.land_dust(get_parent(), feet, 1.4)
 	for direction in [-1.0, 1.0]:
 		var wave := Projectile.new()
 		# Relative to the boss, 16 px above its feet: the wave has to travel
@@ -718,6 +730,10 @@ func take_hit(info: Dictionary) -> void:
 	if bool(cfg.get("shield", false)) and not crit and to_source == float(facing):
 		hp -= 1.0
 		flash = 0.06
+		# A chip kill must pop quietly: last_tier still holds the tier of the last
+		# UNSHIELDED hit, so without this a bulwark finished by a 1-damage front
+		# chip inherited the finisher's 133 ms freeze and screen punch.
+		last_tier = 0
 		Combat.block_number(global_position + Vector2(0, -54))
 		var shield_point := global_position + Vector2(float(facing) * 18.0, -10.0)
 		Combat.spark(shield_point, Vector2(float(facing), 0.0), false, MathArt.WHITE)
@@ -744,6 +760,7 @@ func take_hit(info: Dictionary) -> void:
 
 	var contact: Vector2 = info.get("point", global_position + Vector2(0, -18))
 	var tier: int = clampi(int(info.get("tier", 0)) + (1 if crit else 0), 0, 3)
+	last_tier = tier
 	Combat.impact(contact, Vector2(float(dir), 0.0), tier, MathArt.WHITE)
 	if tier >= 2:
 		Combat.screen_punch(float(tier) / 3.0)
@@ -792,13 +809,18 @@ func _die() -> void:
 			sides = 5
 	var is_boss := bool(cfg.get("boss", false))
 	# Kill feedback: the silhouette itself breaks into 12-24 shards, plus a
-	# directional spark burst and a heavy screen punch.
+	# directional spark burst and a heavy screen punch. The pop is the tier of
+	# the hit that landed it, so killing with the finisher is the loudest thing
+	# in a fight and chipping a husk to death stays quiet.
+	var kill_tier := clampi(maxi(1, last_tier), 1, 3)
 	Combat.shatter(global_position + Vector2(0, -14), tint, sides,
 		24 if is_boss else 12, 420.0 if is_boss else 320.0)
-	Combat.impact(global_position + Vector2(0, -16), Vector2(0, -1), 2 if is_boss else 1, MathArt.WHITE)
+	Combat.impact(global_position + Vector2(0, -16), Vector2(0, -1), 3 if is_boss else kill_tier, MathArt.WHITE)
 	Juice.shatter(get_parent(), global_position + Vector2(0, -14), MathArt.WHITE, 24 if is_boss else 12)
 	if is_boss:
 		Combat.screen_punch(0.9)
+	elif kill_tier >= 3:
+		Combat.screen_punch(0.55)
 	else:
 		Combat.punch(0.35)
 	if bool(cfg.get("boss", false)):

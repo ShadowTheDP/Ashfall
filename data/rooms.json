@@ -1,0 +1,236 @@
+{
+  "_comment": [
+    "Hand-authored room chunks. This is the Ashfall answer to the 'hybrid'",
+    "approach: the generator never invents a layout, it picks one of these",
+    "authored tiles for a room whose ROLE and WIDTH fit, then the graph layer",
+    "connects them and a BFS proves the result is playable.",
+    "",
+    "part formats, x/w are fractions of the room width:",
+    "  [\"d\", x, tier, w, oneway]  deck whose TOP is tier*LevelGen.TIER (92) above",
+    "                             the room slab. oneway 1 = jump up through it,",
+    "                             0 = a 26 px solid slab.",
+    "  [\"m\", x, tier, w, h]       solid mass whose TOP is tier*TIER above the slab,",
+    "                             hanging DOWN h px. Fractional tiers are legal",
+    "                             (a 1.5 tier wall is 138 px).",
+    "Every template is authored to be self-contained: each surface is within one",
+    "TIER (92 px) of the surface it is climbed from, and every surface TOP is at",
+    "least LevelGen.BODY_HEADROOM (72 px) above any other surface top it overlaps.",
+    "Note the guard compares tops, so a 26 px mass one tier up leaves 66 px of",
+    "real air - the case LevelGen.SPAWN_LIFT is tuned against."
+  ],
+  "gate": {
+    "templates": [
+      {
+        "id": "gate_twin",
+        "parts": [
+          ["d", 0.06, 1, 0.52, 1],
+          ["d", 0.62, 1, 0.32, 1],
+          ["d", 0.30, 2, 0.34, 1]
+        ]
+      },
+      {
+        "id": "gate_stair",
+        "min_width": 460,
+        "parts": [
+          ["d", 0.04, 1, 0.28, 1],
+          ["d", 0.36, 1, 0.24, 1],
+          ["d", 0.66, 1, 0.26, 1],
+          ["d", 0.14, 2, 0.42, 1],
+          ["d", 0.62, 2, 0.32, 1]
+        ]
+      },
+      {
+        "id": "gate_mezzanine",
+        "min_width": 460,
+        "parts": [
+          ["m", 0.00, 2, 0.34, 26],
+          ["d", 0.40, 1, 0.44, 1],
+          ["d", 0.86, 1, 0.12, 1],
+          ["d", 0.36, 2, 0.48, 1]
+        ]
+      }
+    ]
+  },
+  "hall": {
+    "templates": [
+      {
+        "id": "hall_capital",
+        "parts": [
+          ["d", 0.12, 1, 0.18, 1],
+          ["d", 0.41, 1, 0.18, 1],
+          ["d", 0.70, 1, 0.18, 1],
+          ["d", 0.04, 2, 0.44, 1],
+          ["d", 0.56, 2, 0.40, 1]
+        ]
+      },
+      {
+        "id": "hall_processional",
+        "min_width": 480,
+        "parts": [
+          ["d", 0.10, 1, 0.16, 1],
+          ["d", 0.40, 1, 0.16, 1],
+          ["d", 0.70, 1, 0.16, 1],
+          ["d", 0.02, 2, 0.46, 1],
+          ["d", 0.52, 2, 0.44, 1]
+        ]
+      },
+      {
+        "id": "hall_gallery_run",
+        "min_width": 520,
+        "parts": [
+          ["d", 0.05, 2, 0.90, 1],
+          ["d", 0.20, 1, 0.18, 1],
+          ["d", 0.62, 1, 0.18, 1],
+          ["m", 0.86, 1, 0.12, 26]
+        ]
+      }
+    ]
+  },
+  "shaft": {
+    "templates": [
+      {
+        "id": "shaft_zigzag",
+        "parts": [
+          ["d", 0.00, 1, 0.62, 1],
+          ["d", 0.38, 2, 0.62, 1],
+          ["d", 0.00, 3, 0.62, 1],
+          ["d", 0.38, 4, 0.62, 1],
+          ["m", 0.10, 5, 0.80, 26]
+        ]
+      },
+      {
+        "id": "shaft_steps",
+        "parts": [
+          ["d", 0.00, 1, 0.56, 1],
+          ["d", 0.44, 2, 0.56, 1],
+          ["d", 0.00, 3, 0.56, 1],
+          ["m", 0.14, 4, 0.72, 26]
+        ]
+      },
+      {
+        "id": "shaft_chimney",
+        "min_width": 300,
+        "parts": [
+          ["d", 0.08, 1, 0.44, 1],
+          ["d", 0.48, 2, 0.44, 1],
+          ["d", 0.08, 3, 0.44, 1],
+          ["d", 0.48, 4, 0.44, 1],
+          ["d", 0.16, 5, 0.68, 1]
+        ]
+      }
+    ]
+  },
+  "vault": {
+    "templates": [
+      {
+        "id": "vault_hole",
+        "parts": [
+          ["m", 0.04, 2, 0.30, 26],
+          ["m", 0.52, 2, 0.42, 26],
+          ["d", 0.06, 1, 0.32, 1],
+          ["d", 0.55, 1, 0.24, 1]
+        ]
+      },
+      {
+        "id": "vault_cells",
+        "min_width": 420,
+        "parts": [
+          ["m", 0.02, 2, 0.26, 26],
+          ["m", 0.38, 2, 0.24, 26],
+          ["m", 0.72, 2, 0.26, 26],
+          ["d", 0.08, 1, 0.22, 1],
+          ["d", 0.44, 1, 0.20, 1],
+          ["d", 0.78, 1, 0.18, 1]
+        ]
+      },
+      {
+        "id": "vault_dais",
+        "min_width": 420,
+        "parts": [
+          ["m", 0.30, 1, 0.40, 26],
+          ["d", 0.04, 2, 0.30, 1],
+          ["d", 0.60, 2, 0.34, 1],
+          ["m", 0.10, 3, 0.24, 26]
+        ]
+      }
+    ]
+  },
+  "bridge": {
+    "templates": [
+      {
+        "id": "bridge_stones",
+        "parts": [
+          ["d", 0.065, 1, 0.155, 1],
+          ["d", 0.315, 1, 0.155, 1],
+          ["d", 0.565, 1, 0.155, 1],
+          ["d", 0.815, 1, 0.155, 1],
+          ["d", 0.113, 2, 0.115, 1],
+          ["d", 0.446, 2, 0.115, 1],
+          ["d", 0.780, 2, 0.115, 1]
+        ]
+      },
+      {
+        "id": "bridge_long",
+        "min_width": 480,
+        "parts": [
+          ["d", 0.04, 1, 0.14, 1],
+          ["d", 0.24, 1, 0.14, 1],
+          ["d", 0.44, 1, 0.14, 1],
+          ["d", 0.64, 1, 0.14, 1],
+          ["d", 0.84, 1, 0.14, 1],
+          ["d", 0.20, 2, 0.20, 1],
+          ["d", 0.62, 2, 0.20, 1]
+        ]
+      },
+      {
+        "id": "bridge_high_line",
+        "min_width": 480,
+        "parts": [
+          ["d", 0.15, 1, 0.12, 1],
+          ["d", 0.50, 1, 0.12, 1],
+          ["d", 0.85, 1, 0.12, 1],
+          ["d", 0.10, 2, 0.22, 1],
+          ["d", 0.42, 2, 0.22, 1],
+          ["d", 0.74, 2, 0.22, 1]
+        ]
+      }
+    ]
+  },
+  "well": {
+    "templates": [
+      {
+        "id": "well_wall",
+        "parts": [
+          ["m", 0.44, 2, 0.09, 224],
+          ["d", 0.06, 1, 0.38, 1],
+          ["d", 0.18, 2, 0.26, 1],
+          ["d", 0.66, 1, 0.22, 1]
+        ]
+      },
+      {
+        "id": "well_double",
+        "min_width": 520,
+        "parts": [
+          ["m", 0.30, 1.5, 0.07, 190],
+          ["m", 0.62, 1.5, 0.07, 190],
+          ["d", 0.02, 1, 0.24, 1],
+          ["d", 0.37, 1, 0.22, 1],
+          ["d", 0.70, 1, 0.24, 1],
+          ["d", 0.10, 2, 0.18, 1],
+          ["d", 0.72, 2, 0.18, 1]
+        ]
+      },
+      {
+        "id": "well_chimney",
+        "min_width": 460,
+        "parts": [
+          ["m", 0.44, 2, 0.09, 224],
+          ["d", 0.06, 1, 0.38, 1],
+          ["d", 0.18, 2, 0.26, 1],
+          ["d", 0.10, 3, 0.30, 1],
+          ["d", 0.66, 1, 0.22, 1]
+        ]
+      }
+    ]
+  }
+}

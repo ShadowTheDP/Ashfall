@@ -76,7 +76,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		_restart()
 		get_viewport().set_input_as_handled()
 		return
-	if event.is_action_pressed("pause") and not Game.run_over:
+	if event.is_action_pressed("pause") and not Game.run_over and Game.hub_return_in <= 0.0:
+		# Not while the scene is about to change: Main's fade veil sits above this
+		# layer, and pausing would freeze Main's _process and its tween with the
+		# veil at alpha 1 - an opaque black screen with the PAUSED overlay
+		# painted underneath it, which reads as a hung game.
 		_set_paused(not paused)
 		get_viewport().set_input_as_handled()
 		return
@@ -226,7 +230,24 @@ func _draw_cells(font: Font, plate: Rect2) -> void:
 		center + Vector2(0, -5), center + Vector2(4, 0),
 		center + Vector2(0, 5), center + Vector2(-4, 0),
 	]), FG_HI, FG_HI, 1.0)
-	draw_string(font, Vector2(plate.position.x + 24.0, plate.position.y + 16.0), "%d" % Game.cells,
+	# WHICH wallet: in the hub the only number that matters is the bank the
+	# stations spend from, and Game.cells is 0 there (it is a run counter), so
+	# the plate read "CELLS 0" next to a hub header reading "CELLS 420". On a
+	# floor the number at stake is what this floor has earned, because that is
+	# what a death forfeits.
+	# WHICH wallet: in the hub the only number that matters is the bank the
+	# stations spend from (Game.cells is a run counter and is 0 there). On a
+	# floor it is what this floor has earned, because that is what a death
+	# forfeits. In the arena fixture nothing ever calls start_floor(), so
+	# run_cells stays 0 for the whole run and the plate would read "0 CELLS"
+	# while cells were being picked up - hence the third case. After the floor is
+	# banked (run_over) the run total is the only number that still exists.
+	var shown := Profile.cells
+	if not _in_hub():
+		shown = Game.cells if Game.floor_index <= 0 else Game.run_cells
+		if Game.run_over and Game.cells > 0:
+			shown = Game.cells
+	draw_string(font, Vector2(plate.position.x + 24.0, plate.position.y + 16.0), "%d" % shown,
 		HORIZONTAL_ALIGNMENT_LEFT, 60.0, 12, FG)
 	_text(font, Vector2(plate.position.x + 88.0, plate.position.y + 15.0), "CELLS", DIM2, 8)
 
@@ -282,24 +303,26 @@ func _draw_aegis(font: Font, plate: Rect2) -> void:
 		FG if ready else DIM, 8)
 
 
-## Floor progress: name, hostiles as tally marks (never a bare number) and the
-## boon budget still owed by this floor. Hub mode draws none of this.
+## Floor progress: name, a route strip, hostiles as tally marks (never a bare
+## number) and the boon budget still owed by this floor. Hub mode draws none of
+## this.
 func _draw_progress(font: Font, size: Vector2) -> void:
-	var plate := Rect2(size.x * 0.5 - 168.0, MARGIN * 0.75, 336.0, 42.0)
 	if Game.floor_index <= 0:
 		if Game.wave <= 0:
 			return
-		_plate(plate)
-		draw_string(font, Vector2(plate.position.x + 8.0, plate.position.y + 14.0),
+		var wave_plate := Rect2(size.x * 0.5 - 168.0, MARGIN * 0.75, 336.0, 42.0)
+		_plate(wave_plate)
+		draw_string(font, Vector2(wave_plate.position.x + 8.0, wave_plate.position.y + 14.0),
 			"WAVE %d / %d" % [Game.wave, Game.wave_total],
 			HORIZONTAL_ALIGNMENT_CENTER, 320.0, 11, FG)
 		if Game.enemies_left > 0:
-			_draw_tally(font, Vector2(plate.position.x + 8.0, plate.position.y + 18.0),
+			_draw_tally(font, Vector2(wave_plate.position.x + 8.0, wave_plate.position.y + 18.0),
 				Game.enemies_left)
-			_text(font, Vector2(plate.position.x + 336.0 - 158.0, plate.position.y + 36.0),
+			_text(font, Vector2(wave_plate.position.x + 336.0 - 158.0, wave_plate.position.y + 36.0),
 				"%d HOSTILE%s" % [Game.enemies_left, "" if Game.enemies_left == 1 else "S"], DIM, 8)
 		return
 
+	var plate := Rect2(size.x * 0.5 - 168.0, MARGIN * 0.75, 336.0, 52.0)
 	_plate(plate)
 	draw_string(font, Vector2(plate.position.x + 8.0, plate.position.y + 14.0),
 		Game.floor_name, HORIZONTAL_ALIGNMENT_CENTER, 320.0, 11, FG)
@@ -307,15 +330,51 @@ func _draw_progress(font: Font, size: Vector2) -> void:
 	var remaining := -1
 	if level != null and level.has_method("enemies_remaining"):
 		remaining = int(level.enemies_remaining())
+	_draw_route(level, plate)
+	var summary := "FLOOR %d / %d   BOONS %d" % [Game.floor_index, Game.max_floor(),
+		Game.floor_rewards_left]
 	if remaining > 0:
-		_draw_tally(font, Vector2(plate.position.x + 10.0, plate.position.y + 18.0), remaining)
-		draw_string(font, Vector2(plate.position.x + 8.0, plate.position.y + 36.0),
-			"FLOOR %d / %d   BOONS %d" % [Game.floor_index, Game.max_floor(),
-				Game.floor_rewards_left], HORIZONTAL_ALIGNMENT_RIGHT, 320.0, 8, DIM)
+		_draw_tally(font, Vector2(plate.position.x + 10.0, plate.position.y + 30.0), remaining)
 	else:
-		draw_string(font, Vector2(plate.position.x + 8.0, plate.position.y + 36.0),
-			"FLOOR %d / %d   GATE OPEN   BOONS %d" % [Game.floor_index, Game.max_floor(),
-				Game.floor_rewards_left], HORIZONTAL_ALIGNMENT_RIGHT, 320.0, 8, DIM)
+		_text(font, Vector2(plate.position.x + 10.0, plate.position.y + 38.0), "GATE OPEN", FG_HI, 8)
+	draw_string(font, Vector2(plate.position.x + 8.0, plate.position.y + 47.0), summary,
+		HORIZONTAL_ALIGNMENT_RIGHT, 320.0, 8, DIM)
+
+
+## The floor on one line: one block per room (lit once cleared), a marker for
+## the gate and a dot for the player. Without it the only navigation aid on a
+## 8200 px floor is "hold right", and a player who took the upper route has no
+## idea whether the gate is behind them.
+func _draw_route(level: Node, plate: Rect2) -> void:
+	if level == null:
+		return
+	var data: Variant = level.get("data")
+	if typeof(data) != TYPE_DICTIONARY:
+		return
+	var rooms: Array = (data as Dictionary).get("rooms", [])
+	if rooms.is_empty():
+		return
+	var width := maxf(1.0, float((data as Dictionary).get("width", 1.0)))
+	var x0 := plate.position.x + 10.0
+	var span := plate.size.x - 20.0
+	var y := plate.position.y + 22.0
+	var flags: Array = level.room_flags() if level.has_method("room_flags") else []
+	for i in rooms.size():
+		var r: Rect2 = (rooms[i] as Dictionary)["rect"]
+		var a := x0 + span * (r.position.x / width)
+		var b := x0 + span * (r.end.x / width)
+		var done := i < flags.size() and bool(flags[i])
+		MathArt.px_rect(self, Rect2(a, y, maxf(b - a - 1.0, 2.0), 3.0),
+			Color(FG_HI, 0.70) if done else Color(MathArt.STONE, 0.55))
+	var gate_open := false
+	if level.has_method("enemies_remaining"):
+		gate_open = int(level.enemies_remaining()) == 0
+	var gx := x0 + span * clampf(float(((data as Dictionary).get("exit", Vector2.ZERO) as Vector2).x) / width, 0.0, 1.0)
+	MathArt.px_rect(self, Rect2(gx - 1.0, y - 3.0, 2.0, 9.0), FG_HI if gate_open else DIM)
+	var player := Game.player if is_instance_valid(Game.player) else null
+	if player != null:
+		var px := x0 + span * clampf(player.global_position.x / width, 0.0, 1.0)
+		MathArt.px_rect(self, Rect2(px - 1.0, y - 2.0, 3.0, 7.0), FG_HI)
 
 
 ## One tick per hostile, grouped in fives so the count stays countable at a
@@ -340,6 +399,17 @@ func _level_node() -> Node:
 	return main.get("level")
 
 
+## True only while the walkable hub is the live scene. `hub` is a field on Main
+## that is nulled by _clear_terrain(), so a freed node cannot answer here.
+func _in_hub() -> bool:
+	var main := get_parent()
+	while main != null and not main.has_method("start_floor"):
+		main = main.get_parent()
+	if main == null:
+		return false
+	return is_instance_valid(main.get("hub"))
+
+
 ## The boss keeps the top-centre slot. The game exposes no attack name, so the
 ## bar shows the name and the segmented pool only.
 func _draw_boss(font: Font, size: Vector2) -> void:
@@ -347,7 +417,9 @@ func _draw_boss(font: Font, size: Vector2) -> void:
 		return
 	var boss := Game.boss
 	var width := 320.0
-	var plate := Rect2(size.x * 0.5 - 168.0, MARGIN * 0.75 + 42.0 + STEP, 336.0, 22.0)
+	# 52 is the progress plate's height (hud.gd _draw_progress): the boss plate sits
+	# one STEP under it, like every other pair on this HUD.
+	var plate := Rect2(size.x * 0.5 - 168.0, MARGIN * 0.75 + 52.0 + STEP, 336.0, 22.0)
 	_plate(plate)
 	var x := plate.position.x + 8.0
 	var y := plate.position.y + 14.0
@@ -417,9 +489,20 @@ func _draw_build(font: Font, size: Vector2) -> void:
 
 
 func _draw_hints(font: Font, size: Vector2) -> void:
+	# A modal panel (hub card, archive, tree) prints its own hint strip at the
+	# bottom of the card, and this one contradicted it under the same screen.
+	if _modal_open():
+		return
 	_plate(Rect2(MARGIN, size.y - 32.0, size.x - MARGIN * 2.0, 22.0))
-	draw_string(font, Vector2(20, size.y - 14.0),
-		"A/D MOVE    SPACE JUMP    J EDGE    K KUNAI    L AEGIS    SHIFT ROLL    ESC PAUSE",
+	# Contextual: the hub has no combat, and a hint that does not work where it is
+	# printed teaches the player that the hints are decoration. Tested on the hub
+	# NODE, not on Game.in_hub: the arena fixture never calls start_floor(), so
+	# in_hub stays true there and the capture harness printed J INTERACT over a
+	# fight.
+	var hints := "A/D MOVE    SPACE JUMP    J EDGE    K KUNAI    L AEGIS    SHIFT ROLL    ESC PAUSE"
+	if _in_hub():
+		hints = "A/D MOVE    SPACE JUMP    J INTERACT    ESC PAUSE"
+	draw_string(font, Vector2(20, size.y - 14.0), hints,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(DIM, 0.85))
 	draw_string(font, Vector2(size.x - 130.0, size.y - 14.0), "ASHFALL 0.3",
 		HORIZONTAL_ALIGNMENT_RIGHT, 110.0, 8, Color(DIM2, 0.6))
@@ -434,6 +517,13 @@ func _draw_announce(font: Font, size: Vector2) -> void:
 	draw_string(font, Vector2(size.x * 0.5 - 200.0, y), Game.announce_text,
 		HORIZONTAL_ALIGNMENT_CENTER, 400.0, 24, Color(FG, alpha))
 	MathArt.px_rect(self, Rect2(size.x * 0.5 - 50.0, y + 6.0, 100, 1), Color(FG_HI, alpha * 0.8))
+	# A floor clear hands the player back to the hub on a timer. Saying so under
+	# the headline is the difference between "the game moved on" and "the game
+	# dropped me".
+	if Game.hub_return_in > 0.05:
+		draw_string(font, Vector2(size.x * 0.5 - 200.0, y + 24.0),
+			"RETURNING TO HUB IN %.1fs" % Game.hub_return_in,
+			HORIZONTAL_ALIGNMENT_CENTER, 400.0, 8, Color(DIM, alpha))
 
 
 ## Low health is an edge state: it never paints over the fight, and the pulse
@@ -492,5 +582,14 @@ func _draw_run_over(font: Font, size: Vector2) -> void:
 	]
 	draw_string(font, Vector2(size.x * 0.5 - 240.0, y + 44.0), stats,
 		HORIZONTAL_ALIGNMENT_CENTER, 480.0, 10, FG)
-	draw_string(font, Vector2(size.x * 0.5 - 240.0, y + 72.0), "PRESS R TO RUN IT BACK",
+	# The overlay used to promise "PRESS R TO RUN IT BACK" and then leave for the
+	# hub on a timer two seconds later, which made the only key it offered a
+	# gamble on how fast the player read the screen. Say both things - and only
+	# say the second one when a return is actually pending (the arena fixture
+	# never returns to a hub).
+	var back := "R RUN IT BACK" if Game.victory else "R RETRY"
+	var leaving := ""
+	if Game.hub_return_in > 0.05:
+		leaving = "      RETURNING TO HUB IN %.1fs" % Game.hub_return_in
+	draw_string(font, Vector2(size.x * 0.5 - 240.0, y + 72.0), back + leaving,
 		HORIZONTAL_ALIGNMENT_CENTER, 480.0, 9, DIM)

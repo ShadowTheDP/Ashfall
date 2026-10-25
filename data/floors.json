@@ -1,7 +1,7 @@
 {
 	"1": {
 		"name": "THE ASH GATE",
-		"rooms": 5,
+		"rooms": 8,
 		"width": 5600.0,
 		"enemies": [
 			[
@@ -15,11 +15,21 @@
 		],
 		"boss": "",
 		"palette": 0,
-		"reward": 2
+		"reward": 2,
+		"beats": [
+			"entry",
+			"combat",
+			"climb",
+			"combat",
+			"treasure",
+			"climb",
+			"combat",
+			"exit"
+		]
 	},
 	"2": {
 		"name": "THE HOLLOW STAIR",
-		"rooms": 6,
+		"rooms": 9,
 		"width": 6800.0,
 		"enemies": [
 			[
@@ -41,11 +51,22 @@
 		],
 		"boss": "",
 		"palette": 1,
-		"reward": 2
+		"reward": 2,
+		"beats": [
+			"entry",
+			"combat",
+			"climb",
+			"combat",
+			"treasure",
+			"combat",
+			"climb",
+			"elite",
+			"exit"
+		]
 	},
 	"3": {
 		"name": "THE GEAR VAULT",
-		"rooms": 6,
+		"rooms": 10,
 		"width": 7000.0,
 		"enemies": [
 			[
@@ -71,11 +92,23 @@
 		],
 		"boss": "",
 		"palette": 2,
-		"reward": 3
+		"reward": 3,
+		"beats": [
+			"entry",
+			"climb",
+			"combat",
+			"treasure",
+			"combat",
+			"climb",
+			"combat",
+			"elite",
+			"treasure",
+			"exit"
+		]
 	},
 	"4": {
 		"name": "THE QUIET FOUNDRY",
-		"rooms": 7,
+		"rooms": 11,
 		"width": 8200.0,
 		"enemies": [
 			[
@@ -105,12 +138,25 @@
 		],
 		"boss": "",
 		"palette": 3,
-		"reward": 3
+		"reward": 3,
+		"beats": [
+			"entry",
+			"combat",
+			"climb",
+			"combat",
+			"treasure",
+			"elite",
+			"combat",
+			"climb",
+			"combat",
+			"treasure",
+			"exit"
+		]
 	},
 	"5": {
 		"name": "THE WARDEN'S THRONE",
-		"rooms": 2,
-		"width": 2600,
+		"rooms": 3,
+		"width": 3400.0,
 		"enemies": [
 			[
 				"grunt",
@@ -123,6 +169,11 @@
 		],
 		"boss": "warden",
 		"palette": 4,
-		"reward": 0
+		"reward": 0,
+		"beats": [
+			"entry",
+			"elite",
+			"exit"
+		]
 	}
 }

@@ -97,6 +97,42 @@ static func lissajous(t: float, a: float, b: float, delta: float) -> Vector2:
 	return Vector2(sin(a * t + delta), sin(b * t))
 
 
+## Gielis superformula: one equation that produces every rounded/starred shape
+## the game needs (petals, gear teeth, shields, blobs) without a per-shape
+## function. m = symmetry count, n1..n3 = roundness/spike blend.
+##   r(θ) = (|cos(mθ/4)/a|^n2 + |sin(mθ/4)/b|^n3)^(-1/n1)
+## m=6,n1=8,n2=12,n3=12 is a soft hexagon; m=6,n1=2,n2=7,n3=7 is a spiked star.
+static func superformula(m: float, n1: float, n2: float, n3: float, radius: float,
+		segments := 64, rotation := 0.0, center := Vector2.ZERO, a := 1.0, b := 1.0) -> PackedVector2Array:
+	var points := PackedVector2Array()
+	for i in segments:
+		var theta := TAU * float(i) / float(segments)
+		var t1 := pow(absf(cos(m * theta * 0.25) / a), n2)
+		var t2 := pow(absf(sin(m * theta * 0.25) / b), n3)
+		var sum := t1 + t2
+		var r := radius if sum <= 0.0 else radius * pow(sum, -1.0 / n1)
+		# The formula is unbounded at the lobes; clamp so a bad parameter set can
+		# never draw a shape that swallows the screen.
+		r = minf(r, radius * 2.2)
+		points.append(center + Vector2.from_angle(theta + rotation) * r)
+	return points
+
+
+## Spirograph: a circle of radius r rolling inside a circle of radius big_r,
+## with the pen at distance d. Closed, symmetric, and it reads as machinery.
+static func hypotrochoid(big_r: float, r: float, d: float, turns: float,
+		samples := 96, rotation := 0.0, center := Vector2.ZERO) -> PackedVector2Array:
+	var points := PackedVector2Array()
+	if absf(r) < 0.001:
+		return points
+	for i in samples:
+		var theta := TAU * turns * float(i) / float(samples - 1)
+		var x := (big_r - r) * cos(theta) + d * cos((big_r - r) / r * theta)
+		var y := (big_r - r) * sin(theta) - d * sin((big_r - r) / r * theta)
+		points.append(center + Vector2(x, y).rotated(rotation))
+	return points
+
+
 static func rose(t: float, k: float, radius: float) -> Vector2:
 	return Vector2.from_angle(t) * (radius * cos(k * t))
 

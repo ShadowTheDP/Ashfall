@@ -234,9 +234,13 @@ Deviations and load-bearing details that the next reader needs.
 - `LevelGen` keeps a continuous bottom ledge at `BASE_Y = 150` under every
   room. A missed gap lands on stone instead of falling out of the world, and
   every step back up is ≤ 90 px. True void pits were rejected as unrecoverable.
-- Reachability is BFS-verified per room with a 110 px up / 180 px across jump
-  budget. 125 layouts (floors 1-5 × seeds 1-25) produce zero warnings.
-- Floor 5 has one room, so it is simultaneously start, boss and exit.
+- Reachability is BFS-verified per room with a 100 px up / 170 px across jump
+  budget (`MAX_UP` / `MAX_SPAN`), and the generator retries up to 8 times before
+  it will ship a layout. `gen_stats` covers 100 layouts, `audit_v1` 200, and a
+  one-off 600-layout sweep found zero unreachable rooms and zero decks outside
+  the budget.
+- Floor 5 has three rooms (entry / elite / throne), 3400 px; the Warden holds the last one.
+  It used to be a single room, which made the finale a corridor with one door.
 - The camera clamps its **centre**, so `limit_bottom` must be at least one half
   viewport (240) below the deepest floor slab. 140 and 240 both cut the player
   off; 400 works.
@@ -406,7 +410,10 @@ Six room kinds: `gate` (route split), `hall` (column capitals + gallery),
 hole), `bridge` (stepping stones at two heights), `well` (a solid wall inside
 the room, climbed over).
 
-Floors are 4200-6400 px wide, 4-6 rooms, 6-13 enemies.
+Floors are 5600-8200 px wide with 8-11 rooms (5-9 enemies per floor by data),
+plus a 3400 px boss floor. The room INTERIORS are authored tiles
+(`data/rooms.json`) chosen by the floor's beat sheet - see
+`docs/design/map-generation.md`, which supersedes this section where they differ.
 
 ### Four softlock traps that had to be designed out
 
@@ -430,8 +437,8 @@ These all produced a floor the player could not finish:
    gate is now a column: `|dx| < 62 and |dy| < 260`.
 
 `tests/audit_a3.gd` drives the real player right through every floor and
-asserts it reaches the gate; `LevelGen._verify()` BFS-checks 300 layouts
-(floors 1-5 x seeds 1-60) with zero unreachable rooms.
+asserts it reaches the gate; `LevelGen._verify()` BFS-checks every generated
+layout and the generator retries until it passes.
 
 ### Camera
 

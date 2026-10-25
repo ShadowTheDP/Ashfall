@@ -14,6 +14,10 @@ signal run_ended(victory: bool)
 const COMBO_WINDOW := 1.6
 const PERFECT_DODGE_TIME := 2.5
 const PERFECT_DODGE_MULT := 1.25
+## Combo is the only readout that says how a fight is going, and it used to
+## climb silently. A milestone gets one line of text and one ring: enough to be
+## felt at ten hits, short enough not to cover the next telegraph.
+const COMBO_MILESTONES := [10, 20, 35, 50]
 
 var player: Player = null
 var fx_root: Node = null
@@ -46,6 +50,12 @@ var leech := 0
 ## The two-colour build: boons raise their own colour, and a weapon scales with
 ## the colour it carries. Cleared floors reset it; it never leaves the run.
 var attr: Dictionary = {}
+## Set the moment a floor's gate fires. The run can no longer be lost (its
+## cells are banked and best_floor is written), so anything picked up during the
+## 1.6 s transition is banked on the spot instead of landing in run_cells, which
+## the hub wipes. Cell drops from the bodies killed on the way to the gate
+## regularly land in that window.
+var bank_cells_now := false
 ## Boons still owed by the current floor, from data/floors.json "reward".
 var floor_rewards_left := 0
 var reward_counts: Dictionary = {}
@@ -66,6 +76,11 @@ var run_kills := 0
 
 # Presentation
 var hurt_flash := 0.0
+## Seconds until Main returns to the hub, set every frame by Main while a
+## transition is pending and 0 otherwise. The HUD prints it so the end-of-floor
+## and death overlays can say where the player is about to be instead of only
+## offering a key that is about to stop working.
+var hub_return_in := 0.0
 
 
 func _enter_tree() -> void:
@@ -110,9 +125,11 @@ func reset_run() -> void:
 	reward_counts.clear()
 	reward_open = false
 	auto_choose_rewards = false
+	bank_cells_now = false
 	boss = null
 	boss_defeated = false
 	hurt_flash = 0.0
+	hub_return_in = 0.0
 	floor_index = 0
 	floor_name = ""
 	run_cells = 0
@@ -128,6 +145,11 @@ func combo_hit() -> void:
 	combo_time = COMBO_WINDOW
 	combo_pop = 1.0
 	max_combo = maxi(max_combo, combo)
+	if COMBO_MILESTONES.has(combo):
+		announce("%d HIT CHAIN" % combo, 0.85)
+		Combat.shake(0.14)
+		if is_instance_valid(player):
+			Combat.ring(player.global_position + Vector2(0, -8), MathArt.WHITE, 34.0)
 
 
 func combo_break() -> void:
@@ -141,7 +163,10 @@ func add_cells(amount: int) -> void:
 	var scaled := int(roundf(float(amount) * (1.0 + Profile.bonus("cells"))))
 	cells += scaled
 	if not in_hub:
-		run_cells += scaled
+		if bank_cells_now:
+			Profile.bank(scaled)
+		else:
+			run_cells += scaled
 
 
 func add_kill() -> void:
@@ -178,9 +203,12 @@ func start_floor(index: int) -> void:
 	floor_index = maxi(1, index)
 	in_hub = false
 	run_cells = 0
+	bank_cells_now = false
 	run_over = false
 	victory = false
-	run_kills = 0
+	# run_kills is NOT reset here. It is the run's kill count, and end_run()
+	# persists it to Profile.total_kills; a per-floor reset meant a 5-floor
+	# victory recorded only the Warden's single kill. reset_run() owns it.
 	# A floor banks its cells immediately (see finish_floor), so a boon picker
 	# placed there would be useless. The budget is spent room by room instead,
 	# which is the only place the reward is still worth taking.

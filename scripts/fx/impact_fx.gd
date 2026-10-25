@@ -114,10 +114,69 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	_draw_flash()
 	_draw_ring()
+	_draw_signature()
 	_draw_crack()
 	_draw_blade_path()
 	_draw_polygon()
 	_draw_sparks()
+
+
+## The hit's own curve. Every tier is a different MATHEMATICAL event, so a jab
+## and a finisher differ in kind before they differ in size (the size ladder is
+## already handled by the ring/spark tables):
+##
+##   LIGHT     a 5-petal rose opening outward - a clean snap
+##   MEDIUM    a 3-lobed hypotrochoid sweeping with the knockback - a rip
+##   HEAVY     a 8-fold superformula gear, spiked - a crunch
+##   FINISHER  a 3:2 Lissajous knot - the blade's own function, unresolved
+##
+## Everything is a thin line at <=0.6 alpha inside 1.4x the tier's ring radius,
+## so the shape never becomes a white blob over the fight and never leaves the
+## contact area. Lives at most as long as the ring.
+func _draw_signature() -> void:
+	var life: float = float(RING_LIFE[tier]) * 1.25
+	if _t > life:
+		return
+	var k := clampf(_t / life, 0.0, 1.0)
+	var alpha := (1.0 - k) * (1.0 - k) * 0.62
+	if alpha <= 0.01:
+		return
+	var base: float = float(RING_RADIUS[tier])
+	var spin := direction.angle()
+	match tier:
+		Tier.LIGHT:
+			var r := base * lerpf(0.22, 1.15, ease(k, 2.0))
+			var points := PackedVector2Array()
+			for i in 33:
+				var theta := TAU * float(i) / 32.0 + spin
+				points.append(MathArt.rose(theta, 5.0, r))
+			MathArt.px_poly(self, points, Color(0, 0, 0, 0), Color(MathArt.WHITE, alpha), 1.0)
+		Tier.MEDIUM:
+			# r=28, rho=9, d=15: three lobes, drawn as one broken sweep so it reads
+			# as a direction rather than a badge.
+			var loop := MathArt.hypotrochoid(base * 0.34, base * 0.11, base * 0.19, 1.0, 48, spin)
+			for i in loop.size() - 1:
+				if i % 3 == 2:
+					continue
+				MathArt.line(self, loop[i], loop[i + 1], Color(MathArt.PALE, alpha), 1.5)
+		Tier.HEAVY:
+			var gear := MathArt.superformula(8.0, 2.2, 7.0, 7.0, base * lerpf(0.45, 0.95, ease(k, 1.6)),
+				48, spin + k * 0.9)
+			MathArt.px_poly(self, gear, Color(0, 0, 0, 0), Color(MathArt.WHITE, alpha), 2.0)
+		Tier.FINISHER:
+			# 3:2 Lissajous, rotating with the blade: the finisher's own function
+			# released as a shape, one frame longer than the ring.
+			var knot := PackedVector2Array()
+			var scale := base * lerpf(0.5, 1.05, ease(k, 1.8))
+			for i in 41:
+				var theta := TAU * float(i) / 40.0 + k * 0.8
+				knot.append(MathArt.lissajous(theta, 3.0, 2.0, PI * 0.5) * scale)
+			MathArt.px_poly(self, knot, Color(0, 0, 0, 0), Color(MathArt.WHITE, alpha), 2.0)
+			var inner := PackedVector2Array()
+			for i in 41:
+				var theta := TAU * float(i) / 40.0 - k * 1.2
+				inner.append(MathArt.lissajous(theta, 3.0, 2.0, PI * 0.5) * scale * MathArt.INV_PHI)
+			MathArt.px_poly(self, inner, Color(0, 0, 0, 0), Color(MathArt.PALE, alpha * 0.55), 1.0)
 
 
 func _draw_polygon() -> void:

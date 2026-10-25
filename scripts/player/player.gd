@@ -34,6 +34,11 @@ enum State { IDLE, RUN, AIR, ROLL, ATTACK, HURT, DEAD }
 @export var roll_iframe_start := 0.03
 ## Stays in sync with BASE_ROLL_IFRAME_END: _apply_loadout() rebuilds every
 ## accumulator from these, so a second call cannot compound them.
+## The window is measured from the START of the roll and is allowed to outlast
+## the ROLL state (0.30 s): armour, GHOST and the GLASS passive all add to it,
+## and before this the gate was `state == ROLL and roll_t <= roll_iframe_end`,
+## so every value above 0.30 was silently unreachable - a paid upgrade that
+## provably did nothing.
 @export var roll_iframe_end := BASE_ROLL_IFRAME_END
 @export var roll_cooldown := 0.08
 
@@ -73,6 +78,9 @@ var squash := 1.0
 var coyote := 0.0
 var jump_buffer := 0.0
 var roll_t := 0.0
+## Counts up from the start of a roll and keeps counting through the recovery,
+## so i-frames bought past roll_time (up to 0.43 s) actually exist.
+var roll_iframe_t := 999.0
 var roll_cd := 0.0
 var attack_t := 0.0
 var attack_total := 0.0
@@ -300,6 +308,7 @@ func _physics_process(delta: float) -> void:
 
 func _tick_timers(delta: float) -> void:
 	invuln = maxf(0.0, invuln - delta)
+	roll_iframe_t += delta
 	roll_cd = maxf(0.0, roll_cd - delta)
 	jump_buffer = maxf(0.0, jump_buffer - delta)
 	flash = maxf(0.0, flash - delta)
@@ -399,6 +408,9 @@ func _tick_roll(delta: float) -> void:
 		return
 
 	if roll_t > roll_time * 0.55 and Input.is_action_just_pressed("attack"):
+		# Cancelling into an attack used to skip the cooldown entirely: the roll
+		# is the cheapest i-frame path, and it was the one that never paid.
+		roll_cd = roll_cooldown
 		_start_attack(0)
 
 
@@ -475,6 +487,7 @@ func _start_roll(dir: float) -> void:
 		facing = 1 if dir > 0.0 else -1
 	_cancel_swing()
 	roll_t = 0.0
+	roll_iframe_t = 0.0
 	_trail_t = 0.0
 	velocity.x = facing * roll_speed
 	velocity.y = 0.0
@@ -529,7 +542,7 @@ func _open_hitbox() -> void:
 	)
 	if attack_index == weapon_combo.size() - 1 and not weapon_combo.is_empty():
 		var wave := FunctionWave.new()
-		wave.position = global_position + Vector2(facing * 26.0, -10.0)
+		wave.position = global_position + Vector2(facing * 26.0, -18.0)
 		wave.attr = weapon_attr_level()
 		# The wave used to carry a literal 8.0, so a Fractal Edge finisher released
 		# the same wave as a Rusty Sword. It is content: data/weapons.json.
@@ -555,11 +568,13 @@ func _open_hitbox() -> void:
 func take_hit(info: Dictionary) -> void:
 	if state == State.DEAD:
 		return
-	if state == State.ROLL and roll_t >= roll_iframe_start and roll_t <= roll_iframe_end:
+	# The reward is tied to the ROLL's i-frame window, not to `is_invulnerable()`:
+	# that also reports the post-hit invulnerability, so rolling out of a hit's
+	# 0.55 s tail paid EDGE + a knife + an announce for a hit that was stopped by
+	# hurt frames, not by the dodge. And the window now runs past roll_time (up to
+	# 0.43 s with armour + GHOST + GLASS), so the state check had to go too.
+	if is_roll_invulnerable():
 		Game.perfect_dodge()
-		# Dancer: the dodge window is the reward, so the buff it grants is scaled
-		# here. Game.perfect_dodge() only knows the baseline duration.
-		Game.edge_timer *= perfect_dodge_scale
 		return
 	if invuln > 0.0:
 		return
@@ -581,14 +596,28 @@ func take_hit(info: Dictionary) -> void:
 	velocity = Vector2(dir * hurt_knockback, -150.0)
 	set_state(State.HURT)
 
-	Combat.hitstop(0.09)
-	Combat.shake(0.6)
+	# Feedback scales with what was taken. A spitter glob (6) and the Warden's
+	# cleave (18) used to land as the same fixed 0.09 s freeze and 0.6 shake,
+	# so the fight never told the player which hit had just happened. Every
+	# value here stays inside the impact doc's ceilings: the freeze tops out at
+	# 0.12 s and the flash never exceeds the 12% play-area budget.
+	var weight := clampf(damage / 20.0, 0.0, 1.0)
+	Combat.hitstop(0.06 + 0.06 * weight)
+	Combat.shake(0.34 + 0.48 * weight)
 	Combat.damage_number(global_position + Vector2(0, -46), int(damage), false)
-	Combat.spark(global_position + Vector2(0, -14), Vector2(dir, 0), false, MathArt.WHITE)
-	Combat.hurt_burst(global_position + Vector2(float(dir) * 10.0, -10.0), int(dir))
+	# The spark belongs at the contact EDGE, not on the body centre: a hit that
+	# explodes in the middle of the square reads as the square hurting itself.
+	var contact := global_position + Vector2(float(dir) * 14.0, -8.0)
+	Combat.spark(contact, Vector2(dir, 0), false, MathArt.WHITE)
+	Combat.hurt_burst(contact, int(dir))
 	Juice.hit_sparks(get_parent(), global_position + Vector2(float(dir) * 8.0, -10.0), Vector2(dir, 0), 1.2)
+	if weight > 0.6:
+		# Only a genuinely heavy hit punches the frame; a chip hit must never
+		# take the player's eyes off the telegraph that is still coming.
+		Combat.screen_punch(0.5 * weight)
+		Combat.ring(global_position + Vector2(0, -12), MathArt.WHITE, 40.0)
 	Sfx.play("hurt", -6)
-	Game.hurt_flash = 0.32
+	Game.hurt_flash = 0.22 + 0.20 * weight
 	Game.combo_break()
 
 	if hp <= 0.0:
@@ -601,9 +630,15 @@ func heal(amount: float) -> void:
 
 
 func is_invulnerable() -> bool:
-	if invuln > 0.0:
-		return true
-	return state == State.ROLL and roll_t >= roll_iframe_start and roll_t <= roll_iframe_end
+	return invuln > 0.0 or is_roll_invulnerable()
+
+
+## The roll's own window, measured from the start of the roll and independent of
+## the ROLL state: an i-frame window longer than the roll (armour + GHOST +
+## GLASS reach 0.43 s against a 0.30 s roll) is still a dodge, and it still has
+## to pay.
+func is_roll_invulnerable() -> bool:
+	return roll_iframe_t >= roll_iframe_start and roll_iframe_t <= roll_iframe_end
 
 
 func is_crit_against(target: Node) -> bool:

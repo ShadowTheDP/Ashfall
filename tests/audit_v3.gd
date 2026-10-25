@@ -96,18 +96,24 @@ func _test_door_input() -> void:
 	player.global_position = Vector2(float(hub.DOOR_X) - 30.0, -30.0)
 	await _wait(0.15)
 	_check(int(hub.floor_target) == 4, "door did not open on best+1")
-	await _press(KEY_LEFT)
-	await _press(KEY_LEFT)
-	_check(int(hub.floor_target) == 2, "two LEFT presses -> %d, expected 2" % int(hub.floor_target))
-	await _press(KEY_RIGHT)
-	await _press(KEY_RIGHT)
-	await _press(KEY_RIGHT)
-	_check(int(hub.floor_target) == 4, "RIGHT past the top -> %d, expected 4" % int(hub.floor_target))
+	await _press(KEY_Q)
+	await _press(KEY_Q)
+	_check(int(hub.floor_target) == 2, "two Q presses -> %d, expected 2" % int(hub.floor_target))
+	await _press(KEY_E)
+	await _press(KEY_E)
+	await _press(KEY_E)
+	_check(int(hub.floor_target) == 4, "E past the top -> %d, expected 4" % int(hub.floor_target))
+	# The movement keys must NOT step the picker: they are polled by the player,
+	# so consuming them here walked the body out of the door's reach on the same
+	# press and the second press did nothing.
+	await _press(KEY_A)
+	await _press(KEY_D)
+	_check(int(hub.floor_target) == 4, "A/D at the door moved the floor picker")
 	# Away from the door the same keys must only walk.
 	player.global_position = Vector2(500.0, -30.0)
 	await _wait(0.15)
-	await _press(KEY_LEFT)
-	_check(int(hub.floor_target) == 4, "LEFT away from the door moved the picker")
+	await _press(KEY_Q)
+	_check(int(hub.floor_target) == 4, "Q away from the door moved the picker")
 
 
 # ------------------------------------------------------- 4. camera and bounds
@@ -152,8 +158,20 @@ func _test_camera_and_bounds() -> void:
 	_check(width > 1600.0, "floor 1 is not wider than the hub")
 	_check(cam.limit_left == -120 and cam.limit_right == int(width) + 120,
 		"floor did not reset the camera x limits (%d..%d)" % [cam.limit_left, cam.limit_right])
-	_check(cam.limit_top == -600 and cam.limit_bottom == 400,
-		"floor did not reset the camera y limits (%d..%d)" % [cam.limit_top, cam.limit_bottom])
+	# The floor's top limit must clear the floor's OWN highest surface plus half
+	# a viewport (the camera clamps its centre), not a fixed number: annex
+	# chambers sit up to five tiers above a slab, so a hardcoded -600 would pin
+	# the camera below the place the player can actually stand.
+	var highest := 0.0
+	for room in (_main.level.data["rooms"] as Array):
+		for entry in (room["platforms"] as Array):
+			highest = minf(highest, (entry as Rect2).position.y)
+	var half_view := 240.0 / 0.86
+	_check(float(cam.limit_top) <= highest - half_view + 1.0,
+		"camera top %d does not clear the highest surface %.0f (needs %.0f)" % [
+			cam.limit_top, highest, highest - half_view])
+	_check(cam.limit_bottom >= 400 and cam.limit_bottom < 2000,
+		"floor camera bottom limit implausible (%d)" % cam.limit_bottom)
 	_check(cam.limit_right > 1620, "floor camera narrower than the hub's")
 
 	# Walk bounds on the floor: the right wall is the level width.
@@ -196,8 +214,13 @@ func _test_loop() -> void:
 
 	await _clear(level)
 	await _wait(0.2)
+	# run_cells must be empty: after the gate fires, Game.bank_cells_now sends
+	# every further pickup straight to the bank, so a body killed on the way to
+	# the gate cannot leave an unbanked pile for the hub to wipe.
 	_check(Game.run_cells == 0, "run_cells not zeroed after banking")
-	_check(Profile.cells == banked_before + 7, "clear banked %d, expected %d" % [
+	# At least the 7: the corpses made on the way to the gate drop cells that are
+	# now banked on pickup rather than carried.
+	_check(Profile.cells >= banked_before + 7, "clear banked %d, expected at least %d" % [
 		Profile.cells - banked_before, 7])
 	_check(Profile.best_floor == 1, "best_floor not advanced to 1")
 	var banked_after_clear := Profile.cells
@@ -231,6 +254,11 @@ func _test_loop() -> void:
 	await _descend_via_door(hub, 2)
 	_check(Game.floor_index == 2, "second run went to floor %d, not 2" % Game.floor_index)
 	Game.add_cells(5)
+	# Re-sample AFTER the floor-1 transition has settled: cells dropped by the
+	# bodies killed on the way to that gate are now banked on pickup instead of
+	# being wiped by the hub, so a sample taken mid-transition is one or two
+	# short. The death check below stays an exact equality.
+	banked_after_clear = Profile.cells
 	_died_count = 0
 	(_main.level as Node).player_died.connect(func() -> void: _died_count += 1)
 	var p := Game.player
@@ -262,7 +290,10 @@ func _test_loop() -> void:
 	await _clear(_main.level)
 	await _wait(2.0)
 	await _wait(0.4)
-	_check(Profile.cells == banked_before_3 + 4, "double-banking: clear 3 banked %d, expected 4" % [
+	# At least its own 4: the corpses the clear made drop cells too, and those are
+	# banked on pickup now (Game.bank_cells_now), so an exact equality would be
+	# asserting that the player LOSES them.
+	_check(Profile.cells >= banked_before_3 + 4, "double-banking: clear 3 banked %d, expected at least 4" % [
 		Profile.cells - banked_before_3])
 	hub = _main.hub
 	if hub != null:

@@ -72,6 +72,19 @@ func _try_hit(body: Node) -> void:
 	if source != null and source.has_method("is_crit_against"):
 		crit = source.is_crit_against(body)
 	var final_damage := Damage.compute(damage, attr, crit, crit_mult)
+	# The contact point, not the target's centre: the impact spec allows 2 px of
+	# error, and a spark popping in the middle of the silhouette it just hit
+	# reads as the body hurting itself. Offset toward the attacker by the
+	# target's own radius.
+	var point: Vector2 = body.global_position + Vector2(0.0, -6.0)
+	if source != null:
+		var away := signf(body.global_position.x - source.global_position.x)
+		if away == 0.0:
+			away = 1.0
+		var radius := 12.0
+		if body is Enemy:
+			radius = float((body as Enemy).cfg.get("body_radius", 12.0))
+		point.x += away * radius
 	# HUNTER promises a knife back on every crit; the hit is the only place
 	# that knows a crit happened, so the refund lives here.
 	if crit and source != null and source.has_method("on_crit"):
@@ -82,6 +95,11 @@ func _try_hit(body: Node) -> void:
 		"knockback": knockback,
 		"hitstop": hitstop_time,
 		"source_pos": source.global_position if source != null else global_position,
-		"point": global_position,
+		# The body that was hit, offset to its contact edge - not this box. A
+		# Hitbox lives on the attacker and its shape is offset in front of the
+		# body, so `global_position` here put every spark, ring, flash and
+		# shockwave inside the PLAYER square while the damage number popped on the
+		# enemy - the one anti-pattern the impact spec exists to prevent.
+		"point": point,
 		"tier": tier,
 	})

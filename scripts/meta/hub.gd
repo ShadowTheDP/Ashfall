@@ -232,6 +232,14 @@ func _spawn_ambience() -> void:
 	for i in _pool_x.size():
 		Juice.shaft_motes(self, Vector2(_pool_x[i], -2.0), _pool_half[i] * 0.75, 240.0,
 			MathArt.PALE if i == 0 else MathArt.PALE_DIM, 12 if i == 0 else 8, 3.6)
+	# Ash over the whole hall, not only in the beams. The room is 1600 px long and
+	# the only motion in it used to be four swinging braziers, so from the middle
+	# of the floor the hall read as a still image. Four wide, slow, permanent
+	# emitters cost 56 particles and give the air a direction.
+	for i in 4:
+		var x := 180.0 + 400.0 * float(i)
+		Juice.shaft_motes(self, Vector2(x, 26.0), 210.0, 0.0,
+			MathArt.PALE_DIM, 14, 6.5)
 
 
 func _build_player() -> void:
@@ -283,11 +291,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if not (event is InputEventKey) or not event.pressed or event.echo:
 		return
-	if _near_door and event.physical_keycode in [KEY_LEFT, KEY_A]:
+	# Q/E, not A/D. A and D are the movement keys, and movement is polled with
+	# Input.get_axis(): consuming the event here does NOT stop the body from
+	# walking. Stepping the floor picker with A/D therefore also walked the
+	# player out of the door's REACH on the same press, so the second press did
+	# nothing and the picker looked broken. Q/E are unbound, so the picker and
+	# the body can never fight over one key.
+	if _near_door and event.physical_keycode == KEY_Q:
 		_step_floor(-1)
 		get_viewport().set_input_as_handled()
 		return
-	if _near_door and event.physical_keycode in [KEY_RIGHT, KEY_D]:
+	if _near_door and event.physical_keycode == KEY_E:
 		_step_floor(1)
 		get_viewport().set_input_as_handled()
 		return
@@ -323,6 +337,15 @@ func close_station() -> void:
 
 
 func _on_panel_closed() -> void:
+	# A purchase or a body change writes Profile and nothing else, so the hub body
+	# kept the old max_hp / knives / blade until the next floor. Every close path
+	# (HubUi, archive, skill tree) routes through here, so this is the one place
+	# that has to re-read the loadout.
+	if is_instance_valid(player):
+		player._apply_loadout()
+		player.weapon_combo = player.weapon.get("combo", [])
+		player.hp = minf(player.hp, player.max_hp)
+		player.knife_charges = mini(player.knife_charges, player.knife_max)
 	player.set_physics_process(true)
 	station_closed.emit()
 	queue_redraw()
@@ -340,6 +363,7 @@ func _draw() -> void:
 	_draw_floor()
 	_draw_floor_inlay()
 	_draw_pools()
+	_draw_near_steps()
 	for i in STATIONS.size():
 		_draw_station(i)
 	_draw_door()
@@ -357,6 +381,7 @@ func _draw_vault() -> void:
 	# vault and the lit floor, so the monument row is a plane and not a layer.
 	MathArt.px_rect(self, Rect2(-400.0, ARCADE_BASE, WIDTH + 800.0, -ARCADE_BASE), MathArt.BG_1)
 	MathArt.px_rect(self, Rect2(-400.0, ARCADE_BASE, WIDTH + 800.0, 2.0), Color(MathArt.STONE_DIM, 0.7))
+	_draw_blind_arcade()
 	# Gallery above it: a black recess with lit piers and arch rims, so the dead
 	# 300 px of vault carries a colonnade instead of a flat wash.
 	MathArt.px_rect(self, Rect2(-400.0, PIER_TOP, WIDTH + 800.0, ARCADE_BASE - PIER_TOP), MathArt.INK)
@@ -370,6 +395,50 @@ func _draw_vault() -> void:
 	_draw_rose()
 
 
+## The band the monuments stand in (ARCADE_BASE..0) used to be one flat BG_1
+## rectangle: a 156 px stripe with nothing in it to judge height against, so the
+## station row looked pasted onto a wall rather than built into one. A blind
+## arcade gives it scale, and because it is drawn from the SAME bay rhythm as the
+## gallery above, the two planes read as one building.
+func _draw_blind_arcade() -> void:
+	var spring := -30.0
+	var foot := -5.0
+	for i in _bay.size():
+		var bay := _bay[i]
+		var half := bay.y - 12.0
+		if half < 16.0:
+			continue
+		var cx := bay.x
+		# Recess: one value below the wall, so it reads as an opening.
+		MathArt.px_rect(self, Rect2(cx - half, spring, half * 2.0, foot - spring),
+			Color(MathArt.BG_0, 0.50))
+		# The arch itself: two quarter arcs meeting at the apex.
+		MathArt.arc(self, Vector2(cx - half, spring), half, -PI * 0.5, 0.0,
+			Color(MathArt.STONE_DIM, 0.55), 1.0)
+		MathArt.arc(self, Vector2(cx + half, spring), half, PI, PI * 1.5,
+			Color(MathArt.STONE_DIM, 0.55), 1.0)
+		# Jambs.
+		MathArt.px_rect(self, Rect2(cx - half, spring, 1.0, foot - spring), Color(MathArt.STONE_DIM, 0.45))
+		MathArt.px_rect(self, Rect2(cx + half, spring, 1.0, foot - spring), Color(MathArt.STONE_DIM, 0.45))
+		# Lit inner lip: the only thing that gives the recess a wall thickness.
+		MathArt.arc(self, Vector2(cx - half, spring), half - 1.5, -PI * 0.5, 0.0,
+			Color(MathArt.PALE_DIM, 0.07), 1.0)
+		MathArt.arc(self, Vector2(cx + half, spring), half - 1.5, PI, PI * 1.5,
+			Color(MathArt.PALE_DIM, 0.07), 1.0)
+	# Pilasters on the bay boundaries carry the wall band up to the gallery.
+	for i in _pier.size():
+		var px: float = _pier[i]
+		MathArt.px_rect(self, Rect2(px - 6.0, ARCADE_BASE, 12.0, -ARCADE_BASE),
+			Color(MathArt.BG_2, 0.55))
+		MathArt.px_rect(self, Rect2(px - 6.0, ARCADE_BASE, 1.0, -ARCADE_BASE),
+			Color(MathArt.STONE_DIM, 0.40))
+	# Skirting: the wall has to meet the floor somewhere.
+	MathArt.px_rect(self, Rect2(-400.0, -5.0, WIDTH + 800.0, 2.0), Color(MathArt.STONE, 0.55))
+	MathArt.px_rect(self, Rect2(-400.0, -3.0, WIDTH + 800.0, 1.0), Color(MathArt.INK, 0.6))
+
+
+## The rose window: the one focal point above the monuments and the source of
+## the main beam.
 func _draw_rose() -> void:
 	# The one focal point above the monuments, and the source of the main beam.
 	var breathe := 0.5 + 0.5 * sin(_t * 0.5)
@@ -453,6 +522,18 @@ func _draw_floor() -> void:
 			Color(MathArt.STONE, 0.5 - float(i) * 0.07))
 	for i in _paving.size():
 		MathArt.px_rect(self, Rect2(_paving[i].x, _paving[i].y, 1.0, 3.0), Color(MathArt.STONE, 0.45))
+	# Processional axis: 1600 px of floor with the gate at the far end. A dashed
+	# inlay from the spawn to the door is the cheapest way to say "this way"
+	# without a waypoint marker, and it gives the near floor (which is otherwise
+	# a dark band) a line to look along.
+	var dash := 40.0
+	while dash < WIDTH:
+		MathArt.px_rect(self, Rect2(dash, 30.0, 10.0, 1.0), Color(MathArt.STONE_HI, 0.34))
+		dash += 24.0
+	var tick := 60.0
+	while tick < WIDTH:
+		MathArt.px_rect(self, Rect2(tick, 27.0, 1.0, 7.0), Color(MathArt.STONE_HI, 0.22))
+		tick += 132.0
 
 
 func _draw_floor_inlay() -> void:
@@ -481,6 +562,45 @@ func _draw_pools() -> void:
 		MathArt.line(self, Vector2(x - half, 1.0), Vector2(x + half, 1.0), Color(MathArt.PALE_DIM, 0.16), 1.0)
 	# Sheen: the main beam reflects off the stone under it.
 	MathArt.px_rect(self, Rect2(_pool_x[0] - 9.0, 16.0, 18.0, 22.0), Color(MathArt.PALE, 0.03))
+
+
+## The near floor used to be a 280 px band of flat values, i.e. the largest
+## single area on screen carrying nothing. Two lit risers plus a balustrade give
+## it depth: the hall reads as a terrace the player stands on rather than a
+## strip they stand at.
+##
+## Values matter here. The band below y=88 is BG_0 and below y=164 is INK, so
+## anything drawn in INK there is invisible - the first version of this pass drew
+## black posts on a black band and changed nothing on screen. The near plane is
+## therefore LIT (STONE_HI edges on BG_2 bodies): it is closest to the camera, so
+## it catches the most light from the beams, and its brightness is what pushes
+## the monument row back.
+func _draw_near_steps() -> void:
+	var left := -60.0
+	var width := WIDTH + 120.0
+	var y := 26.0
+	var depth := 20.0
+	for step in 2:
+		# Lit nose of the step, then the riser falling into shadow.
+		MathArt.px_rect(self, Rect2(left, y, width, 2.0), Color(MathArt.STONE_HI, 0.40))
+		MathArt.px_rect(self, Rect2(left, y + 2.0, width, 3.0), Color(MathArt.BLACK, 0.55))
+		y += depth
+		depth *= MathArt.PHI
+	# Balustrade: a rail on posts every 132 px, both lit on top. It sits just
+	# inside the camera's bottom edge (the view ends at y~200), so it reads as a
+	# low wall passing in front of the hall rather than a line on the floor.
+	var rail_y := 74.0
+	MathArt.px_rect(self, Rect2(left, rail_y, width, 4.0), Color(MathArt.STONE, 0.95))
+	MathArt.px_rect(self, Rect2(left, rail_y, width, 1.0), Color(MathArt.PALE_DIM, 0.70))
+	MathArt.px_rect(self, Rect2(left, rail_y + 4.0, width, 2.0), Color(MathArt.BLACK, 0.8))
+	var x := 18.0
+	while x < WIDTH:
+		MathArt.px_rect(self, Rect2(x, rail_y + 6.0, 7.0, 52.0), Color(MathArt.STONE, 0.9))
+		MathArt.px_rect(self, Rect2(x, rail_y + 6.0, 2.0, 52.0), Color(MathArt.STONE_HI, 0.75))
+		MathArt.px_rect(self, Rect2(x + 5.0, rail_y + 6.0, 2.0, 52.0), Color(MathArt.BLACK, 0.6))
+		# Foot: a small flare, so the post is founded and not pasted.
+		MathArt.px_rect(self, Rect2(x - 3.0, rail_y + 54.0, 13.0, 4.0), Color(MathArt.STONE_HI, 0.55))
+		x += 132.0
 
 
 func _draw_foreground() -> void:
@@ -600,41 +720,56 @@ func _draw_door() -> void:
 	var bright := _near_door
 	var tint := MathArt.WHITE if bright else MathArt.STONE_HI
 	var foot := Vector2(DOOR_X, 0.0)
+	# 118 px tall, not 84: at 84 the only exit on the floor was shorter than a
+	# station's plinth and read as another piece of furniture. The stepped lintel
+	# and the double light band give it the one silhouette in the hall that is
+	# unmistakably a way out.
+	var h := 118.0
 	if bright:
-		MathArt.glow(self, foot + Vector2(0.0, -46.0), 62.0, MathArt.PALE, 5)
+		MathArt.glow(self, foot + Vector2(0.0, -h * 0.5), 78.0, MathArt.PALE, 5)
 
-	MathArt.px_rect(self, Rect2(DOOR_X - 21.0, -84.0, 7.0, 84.0), Color(MathArt.BG_2, 0.95))
-	MathArt.px_rect(self, Rect2(DOOR_X + 14.0, -84.0, 7.0, 84.0), Color(MathArt.BG_2, 0.95))
+	# Reveal behind the jambs, so the doorway is a depth and not a stripe.
+	MathArt.px_rect(self, Rect2(DOOR_X - 14.0, -h, 28.0, h), Color(MathArt.BG_0, 0.95))
+	MathArt.px_rect(self, Rect2(DOOR_X - 21.0, -h, 7.0, h), Color(MathArt.BG_2, 0.95))
+	MathArt.px_rect(self, Rect2(DOOR_X + 14.0, -h, 7.0, h), Color(MathArt.BG_2, 0.95))
 	MathArt.px_poly(self, PackedVector2Array([
-		Vector2(DOOR_X - 21.0, -84.0), Vector2(DOOR_X - 14.0, -84.0),
+		Vector2(DOOR_X - 21.0, -h), Vector2(DOOR_X - 14.0, -h),
 		Vector2(DOOR_X - 14.0, 0.0), Vector2(DOOR_X - 21.0, 0.0),
 	]), Color(0, 0, 0, 0), tint, 1.0)
 	MathArt.px_poly(self, PackedVector2Array([
-		Vector2(DOOR_X + 14.0, -84.0), Vector2(DOOR_X + 21.0, -84.0),
+		Vector2(DOOR_X + 14.0, -h), Vector2(DOOR_X + 21.0, -h),
 		Vector2(DOOR_X + 21.0, 0.0), Vector2(DOOR_X + 14.0, 0.0),
 	]), Color(0, 0, 0, 0), tint, 1.0)
-	MathArt.arc(self, Vector2(DOOR_X, -84.0), 17.5, PI, TAU, tint, 1.5)
+	MathArt.arc(self, Vector2(DOOR_X, -h), 17.5, PI, TAU, tint, 1.5)
+	# Lintel: two stepped courses over the arch.
+	MathArt.px_rect(self, Rect2(DOOR_X - 30.0, -h - 4.0, 60.0, 4.0), Color(MathArt.BG_2, 0.95))
+	MathArt.px_rect(self, Rect2(DOOR_X - 30.0, -h - 4.0, 60.0, 1.0), Color(tint, 0.55))
+	MathArt.px_rect(self, Rect2(DOOR_X - 24.0, -h - 10.0, 48.0, 6.0), Color(MathArt.BG_2, 0.9))
+	MathArt.px_rect(self, Rect2(DOOR_X - 24.0, -h - 10.0, 48.0, 1.0), Color(tint, 0.35))
 
 	# Light in the doorway is the only thing on the door that moves.
 	var pulse := 0.5 + 0.5 * sin(_t * 2.2)
-	MathArt.px_rect(self, Rect2(DOOR_X - 3.0, -80.0, 6.0, 80.0), Color(MathArt.PALE, 0.08 + pulse * 0.16))
+	MathArt.px_rect(self, Rect2(DOOR_X - 3.0, -h + 6.0, 6.0, h - 6.0), Color(MathArt.PALE, 0.08 + pulse * 0.16))
+	MathArt.px_rect(self, Rect2(DOOR_X - 9.0, -h + 10.0, 2.0, h - 10.0), Color(MathArt.PALE, 0.04 + pulse * 0.06))
+	MathArt.px_rect(self, Rect2(DOOR_X + 7.0, -h + 10.0, 2.0, h - 10.0), Color(MathArt.PALE, 0.04 + pulse * 0.06))
 	# Spill on the floor, so the goal is legible from the far end of the hall.
+	MathArt.px_rect(self, Rect2(DOOR_X - 26.0, 1.0, 52.0, 9.0), Color(MathArt.PALE, 0.07 + 0.04 * pulse))
 	MathArt.px_rect(self, Rect2(DOOR_X - 13.0, 1.0, 26.0, 7.0), Color(MathArt.PALE, 0.09 + 0.05 * pulse))
-	MathArt.line(self, Vector2(DOOR_X - 13.0, 1.0), Vector2(DOOR_X + 13.0, 1.0),
-		Color(MathArt.WHITE, 0.14 + 0.06 * pulse), 1.0)
+	MathArt.line(self, Vector2(DOOR_X - 26.0, 1.0), Vector2(DOOR_X + 26.0, 1.0),
+		Color(MathArt.WHITE, 0.12 + 0.05 * pulse), 1.0)
 
 	var font := ThemeDB.fallback_font
 	# The picker's ceiling is the unlocked top; the label quotes the whole game,
 	# so a new player reads "FLOOR 1 / 5" and not "FLOOR 1 / 1".
 	var top := maxi(1, Data.floors.size())
 	var floor_data: Dictionary = Data.floors.get(str(floor_target), {})
-	draw_string(font, Vector2(DOOR_X - 70.0, -120.0), "FLOOR %d / %d" % [floor_target, top],
+	draw_string(font, Vector2(DOOR_X - 70.0, -h - 30.0), "FLOOR %d / %d" % [floor_target, top],
 		HORIZONTAL_ALIGNMENT_CENTER, 140.0, 8, Color(tint, 0.75))
-	draw_string(font, Vector2(DOOR_X - 90.0, -105.0), str(floor_data.get("name", "")),
+	draw_string(font, Vector2(DOOR_X - 90.0, -h - 16.0), str(floor_data.get("name", "")),
 		HORIZONTAL_ALIGNMENT_CENTER, 180.0, 9, tint)
 	if bright:
 		draw_string(font, Vector2(DOOR_X - 20.0, 22.0), "[J]",
 			HORIZONTAL_ALIGNMENT_CENTER, 40.0, 9, Color(MathArt.WHITE, 0.55 + 0.45 * sin(_t * 4.0)))
 		if floor_available > 0:
-			draw_string(font, Vector2(DOOR_X - 70.0, 36.0), "< A    D >",
+			draw_string(font, Vector2(DOOR_X - 70.0, 36.0), "Q <  FLOOR  > E",
 				HORIZONTAL_ALIGNMENT_CENTER, 140.0, 8, Color(MathArt.LIGHT, 0.6))

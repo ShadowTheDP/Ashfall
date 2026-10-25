@@ -288,7 +288,10 @@ func _draw_list(font: Font) -> void:
 	if pages > 1:
 		_canvas.draw_string(font, Vector2(CARD.position.x, CARD.position.y + CARD.size.y - FOOTER_H - 9.0),
 			"PAGE %d/%d" % [_page + 1, pages], HORIZONTAL_ALIGNMENT_CENTER, CARD.size.x, 8, MathArt.MID)
-	_draw_hints(font, "UP/DOWN MOVE     LEFT/RIGHT PAGE     ENTER CONFIRM     ESC CLOSE")
+	# Only advertise paging when there is more than one page: the character list
+	# fits on one, and a hint that does nothing is worse than no hint.
+	var paging := "LEFT/RIGHT PAGE     " if pages > 1 else ""
+	_draw_hints(font, "UP/DOWN MOVE     " + paging + "ENTER CONFIRM     ESC CLOSE")
 
 
 func _body_rect() -> Rect2:

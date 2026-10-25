@@ -10,13 +10,15 @@ other games or from the `Code-Project` workspace except as read-only reference.
 
 ## Standard Entry Flow
 
+0. `HANDOVER.md` §0 — state, next three tasks, commands.
 1. `README.md`
 2. `AGENTS.md`
 3. `MEMORY.md`
 4. `docs/agent/current-state.md`
-5. For gameplay work: `docs/design/combat-feel.md`
-6. For new systems: `docs/design/pillars.md`
-7. Only then inspect the target scripts.
+5. For the generator: `docs/design/map-generation.md`
+6. For gameplay work: `docs/design/combat-feel.md`, `docs/design/impact.md`
+7. For new systems: `docs/design/pillars.md`
+8. Only then inspect the target scripts.
 
 ## Change Discipline
 

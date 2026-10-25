@@ -38,8 +38,12 @@ const GAP_MIN := 70.0
 ## player body is 28 px wide; 46 leaves room to line up a jump inside it.
 const SLOT := 46.0
 ## Vertical air a generated surface must leave over/under another overlapping
-## surface before anything may spawn on it: the tallest body (50 px) plus the
-## spawn lift (38) with margin. Any two surfaces closer than this are a trap.
+## surface before anything may spawn on it. NOTE: this is measured TOP to TOP,
+## so a 26 px mass one tier (92) up leaves 66 px of real air - which is exactly
+## what SPAWN_LIFT (38, plus half the tallest 50 px body) was tuned against.
+## The number is deliberately not "92 - 26": comparing bottom edges instead
+## would reject every authored mass one tier above a deck, and the tight case is
+## already proven safe by the audits' spawn checks.
 const BODY_HEADROOM := 72.0
 const GAP_MAX := 190.0
 ## Centre of a spawn point above its surface. WHY 38 and not 42: the tightest
@@ -56,7 +60,39 @@ const DECK_H := 13.0
 
 const KIND_WEIGHT := {"gate": 1.2, "hall": 1.4, "shaft": 0.8, "vault": 1.0, "bridge": 0.9, "well": 0.9}
 const KIND_MIN := {"gate": 420.0, "hall": 460.0, "shaft": 280.0, "vault": 380.0, "bridge": 440.0, "well": 400.0}
-const MIDDLE_KINDS := ["shaft", "vault", "gate", "bridge", "hall", "well"]
+# --- The beat sheet ---------------------------------------------------------
+#
+# A floor is not "N random rooms": data/floors.json gives it a BEAT SHEET, the
+# Ashfall equivalent of the concept graph in a hand-authored roguelite. Each
+# beat is a ROLE with a fixed job, and the role decides which kinds of room may
+# fill it and how much of the floor's enemy budget it deserves:
+#
+#   entry     the first room. Always empty: the player has to read the floor
+#             before anything can touch them.
+#   combat    the bread: a fight with a real floor to move on.
+#   climb     a vertical room, light on enemies: the breather between fights.
+#   treasure  a vault-shaped room. The cache on its high route is the reward.
+#   elite     the peak: heavier bodies, and the room that carries a boss floor's
+#             approach.
+#   exit      the last room, where the gate is.
+#
+# This is what makes two seeds of the same floor feel like the same PLACE with a
+# different arrangement, instead of two unrelated corridors.
+const ROLE_KINDS := {
+	"entry": ["gate"],
+	"combat": ["gate", "hall", "bridge"],
+	"climb": ["shaft", "well"],
+	"treasure": ["vault", "bridge"],
+	"elite": ["hall", "vault"],
+	"exit": ["hall"],
+}
+## How much of the enemy budget a room role asks for. 0 means "never".
+const ROLE_ENEMY_WEIGHT := {
+	"entry": 0.0, "combat": 1.0, "climb": 0.45, "treasure": 0.7, "elite": 1.45, "exit": 1.0,
+}
+## Bodies this heavy count double: a room should not receive two of them just
+## because the budget allowed it.
+const HEAVY_KINDS := ["bulwark", "charger", "warden"]
 
 
 ## A layout that failed its own verification is not a warning, it is a dead
@@ -96,7 +132,9 @@ static func _generate_once(floor_index: int, seed_value: int) -> Dictionary:
 	var boss := str(cfg.get("boss", ""))
 	assert(room_count >= 1, "a floor needs at least one room")
 
-	var kinds := _pick_kinds(room_count, rng)
+	var beat := _pick_kinds(room_count, rng, floor_index)
+	var roles: Array = beat["roles"]
+	var kinds: Array = beat["kinds"]
 
 	# Vertical offsets first, then gaps. A gap is only crossable if the room it
 	# leads to is close enough, so the gap has to be derived FROM the climb.
@@ -108,9 +146,12 @@ static func _generate_once(floor_index: int, seed_value: int) -> Dictionary:
 			offsets.append(0.0)
 			continue
 		var previous: float = offsets[i - 1]
-		# Capped at 96 so the continuous bottom ledge is always a valid way up:
-		# a higher slab would be out of reach if the player fell.
-		offsets.append(clampf(previous + rng.randf_range(-96.0, 96.0), 0.0, 96.0))
+		# Capped at MAX_UP so the continuous bottom ledge is always a valid way up:
+		# a higher slab would be out of reach from the ledge, and a fall would be
+		# final. Vertical depth comes from the room templates (2-5 tiers of decks),
+		# the gallery, the ladders and the annex chambers - not from stacking the
+		# slabs themselves, which is what makes the ledge a guaranteed route.
+		offsets.append(clampf(previous + rng.randf_range(-96.0, 100.0), 0.0, MAX_UP))
 
 	var gaps: Array = []
 	var gap_total := 0.0
@@ -129,17 +170,18 @@ static func _generate_once(floor_index: int, seed_value: int) -> Dictionary:
 		gap_total += gap
 	var widths := _fit_widths(kinds, maxf(1100.0, target - gap_total))
 
-	var plan := _plan_enemies(cfg, room_count, boss)
+	var plan := _plan_enemies(cfg, roles, widths, boss)
 
 	var rooms: Array = []
 	var cursor := 0.0
 	for i in room_count:
 		var w: float = widths[i]
 		assert(w > 0.0, "room width must be positive")
-		# Vertical variety: a room sits 0-96 px above the bottom ledge, so the
-		# floor reads as terraced ground rather than a flat strip.
+		# Vertical variety: a room sits 0-100 px above the bottom ledge, so the
+		# floor reads as terraced ground rather than a flat strip. The slab grows
+		# downward by the same amount, so its face still reaches the ledge.
 		var offset: float = offsets[i]
-		var rect := Rect2(cursor, BASE_Y - offset, w, SLAB_H)
+		var rect := Rect2(cursor, BASE_Y - offset, w, SLAB_H + offset)
 		var built := _build_room(kinds[i], rect, rng)
 		var gap_after: float = gaps[i] if i < gaps.size() else 0.0
 		# Ledge first: the ground array is draw order, deepest face first.
@@ -147,6 +189,8 @@ static func _generate_once(floor_index: int, seed_value: int) -> Dictionary:
 		var room := {
 			"rect": rect,
 			"kind": kinds[i],
+			"role": roles[i],
+			"template": str(built.get("id", kinds[i])),
 			"platforms": built["platforms"],
 			"oneway": built["oneway"],
 			"ground": ground,
@@ -164,16 +208,31 @@ static func _generate_once(floor_index: int, seed_value: int) -> Dictionary:
 	_place_pillars(rooms, rng)
 	_link_gallery(rooms, rng)
 	_stack_ladders(rooms, rng)
+	# Optional chambers above the main route. They carry the biggest cache on the
+	# floor, so the upper route is worth the climb instead of merely possible.
+	_annexes(rooms, rng)
 
 	# WHY after the pillars: _place_pillars adds a step deck and a pillar to the
 	# room it leaves, and a spawn point computed before that does not know they
 	# exist - the enemy is then born inside the step deck. Spawns are derived
 	# from the final surface list, so the last mutation has to come first.
 	for i in room_count:
+		var annex_skip: Array = []
+		if rooms[i].has("annex"):
+			annex_skip = [rooms[i]["annex"], rooms[i]["annex_landing"]] + (rooms[i]["annex_walls"] as Array)
 		rooms[i]["spawns"] = _spawns_for(rooms[i]["rect"], rooms[i]["platforms"],
-			_spawn_half(plan[i]))
+			_spawn_half(plan[i]), annex_skip)
 
-	var caches := _caches(rooms, floor_index)
+	var caches := _caches(rooms, floor_index, rng)
+	# Annex chambers, so the level can draw them as destinations rather than as
+	# two more planks. A parallel list instead of a tag on every surface: there
+	# are at most two per floor.
+	var annex_floors: Array = []
+	for room in rooms:
+		if room.has("annex"):
+			annex_floors.append(room["annex"] as Rect2)
+			if room.has("annex_landing"):
+				annex_floors.append(room["annex_landing"] as Rect2)
 
 	var first: Rect2 = rooms[0]["rect"]
 	var last: Rect2 = rooms[room_count - 1]["rect"]
@@ -194,17 +253,98 @@ static func _generate_once(floor_index: int, seed_value: int) -> Dictionary:
 		"exit": Vector2(last.end.x - 90.0, last.position.y),
 		"boss": boss,
 		"caches": caches,
+		"annex_floors": annex_floors,
 		"reachable": _verify(rooms, Vector2(first.position.x + 70.0, first.position.y - 44.0), floor_index, seed_value),
 	}
 
 
 # --- room construction ------------------------------------------------------
 
-## Returns { "platforms": Array[Rect2], "oneway": Array[bool] }.
+## Returns { "platforms": Array[Rect2], "oneway": Array[bool], "id": String }.
 ## Two parallel arrays instead of a dictionary per surface: the geometry is
 ## what every consumer (collision, BFS, spawn clearance) needs, and a bare
 ## Rect2 cannot disagree with itself about its own rect.
+##
+## The layout itself is authored content (data/rooms.json), not generated: the
+## generator chooses WHICH authored tile a room gets, never what is inside it.
+## That is the whole difference between "six random shapes" and a place the
+## player can learn. _build_builtin() is the fallback for a missing data file
+## and the reference layout each kind was designed around.
 static func _build_room(kind: String, rect: Rect2, rng: RandomNumberGenerator) -> Dictionary:
+	var tpl := _pick_template(kind, rect.size.x, rng)
+	if not tpl.is_empty():
+		var built := _build_template(tpl, rect)
+		built["id"] = str(tpl.get("id", kind))
+		return built
+	var built := _build_builtin(kind, rect)
+	built["id"] = kind
+	return built
+
+
+## One authored tile for this room, filtered by the room's width so a narrow
+## room never receives a layout its budget cannot hold.
+static func _pick_template(kind: String, width: float, rng: RandomNumberGenerator) -> Dictionary:
+	var entry: Dictionary = _rooms_table().get(kind, {})
+	var list: Array = entry.get("templates", [])
+	var fits: Array = []
+	for tpl in list:
+		if float((tpl as Dictionary).get("min_width", 0.0)) <= width:
+			fits.append(tpl)
+	if fits.is_empty():
+		return {}
+	return fits[rng.randi_range(0, fits.size() - 1)]
+
+
+## parts: ["d", x, tier, w, oneway] deck | ["m", x, tier, w, h] solid mass.
+## x and w are fractions of the room width, tier is a multiple of TIER.
+static func _build_template(tpl: Dictionary, rect: Rect2) -> Dictionary:
+	var out: Array = []
+	var flags: Array = []
+	for part in (tpl.get("parts", []) as Array):
+		var spec: Array = part
+		if spec.size() < 5:
+			continue
+		var tag := str(spec[0])
+		var x := rect.position.x + rect.size.x * float(spec[1])
+		var w := rect.size.x * float(spec[3])
+		var y := rect.position.y - float(spec[2]) * TIER
+		if tag == "m":
+			out.append(Rect2(x, y, w, float(spec[4])))
+			flags.append(false)
+		else:
+			var oneway := int(spec[4]) != 0
+			out.append(Rect2(x, y, w, DECK_H if oneway else 26.0))
+			flags.append(oneway)
+	_close_narrow_holes(out, flags)
+	return {"platforms": out, "oneway": flags}
+
+
+## Two pass-through decks at the SAME tier with a narrow crack between them are
+## a trap, not a route: a body can neither land in the crack (too narrow) nor
+## climb past it, so a player standing on the deck above a 40 px hole is
+## unreachable for every melee body - and the gate needs every body dead. Any
+## same-tier gap narrower than a walkable slot is therefore closed by widening
+## the left deck. Authored data stays authored; this is the invariant the
+## generator guarantees about it.
+static func _close_narrow_holes(platforms: Array, flags: Array) -> void:
+	for i in platforms.size():
+		if not bool(flags[i]):
+			continue
+		var a: Rect2 = platforms[i]
+		for j in platforms.size():
+			if i == j or not bool(flags[j]):
+				continue
+			var b: Rect2 = platforms[j]
+			if absf(a.position.y - b.position.y) > 1.0:
+				continue
+			var gap := b.position.x - a.end.x
+			if gap <= 0.0 or gap >= SLOT + 12.0:
+				continue
+			platforms[i] = Rect2(a.position, Vector2(b.position.x - a.position.x, a.size.y))
+			a = platforms[i]
+
+
+static func _build_builtin(kind: String, rect: Rect2) -> Dictionary:
 	var x := rect.position.x
 	var w := rect.size.x
 	var top := rect.position.y
@@ -292,6 +432,12 @@ static func _build_room(kind: String, rect: Rect2, rng: RandomNumberGenerator) -
 			# step-off-the-deck, walk the wall, drop.
 			deck.call(w * 0.18, TIER * 2.0, w * 0.26, true)
 			deck.call(w * 0.66, TIER, w * 0.22, true)
+	# The builtin layouts are the fallback when data/rooms.json is missing, and
+	# they contain the same same-tier cracks the authored templates do (a 17 px
+	# crack at W=420 in gate, ~37 px between hall capitals). The invariant is
+	# about the generator's output, not about one code path, so it is closed here
+	# too - otherwise a missing data file silently restores the trap.
+	_close_narrow_holes(out, flags)
 	return {"platforms": out, "oneway": flags}
 
 
@@ -439,11 +585,103 @@ static func _stack_ladders(rooms: Array, rng: RandomNumberGenerator) -> void:
 		made += 1
 
 
+## Optional chambers above the main route: the reason to climb.
+##
+## The gallery connects rooms at TIER*2, which makes the upper route CONTINUOUS
+## but not DESTINED - it led from one room to the next and nowhere else. An
+## annex is a real destination: a one-way chamber two tiers above the room's own
+## highest deck, reached by one extra rung, holding the floor's biggest cache.
+## Everything is gated by the same predicates the BFS uses, and the rung lands on
+## the room's existing top deck, so the climb continues the route the player is
+## already on instead of adding scaffolding beside it.
+static func _annexes(rooms: Array, rng: RandomNumberGenerator) -> void:
+	var want := 2 if rooms.size() >= 5 else 1
+	var made := 0
+	# Deterministic order: the seeded rng picks which rooms, never the frame.
+	var order: Array = []
+	for i in range(1, rooms.size()):
+		order.append(i)
+	for i in range(order.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var tmp: Variant = order[i]
+		order[i] = order[j]
+		order[j] = tmp
+	for index in order:
+		if made >= want:
+			return
+		if _annex(rooms[index]):
+			made += 1
+
+
+static func _annex(room: Dictionary) -> bool:
+	var rect: Rect2 = room["rect"]
+	var platforms: Array = room["platforms"]
+	var flags: Array = room["oneway"]
+	# The room's own highest surface is the launch pad.
+	var top_y := rect.position.y
+	var top := Rect2()
+	for entry in platforms:
+		var r: Rect2 = entry
+		if r.position.y < top_y:
+			top_y = r.position.y
+			top = r
+	if top.size.x <= 0.0:
+		return false
+	# Two more tiers of climb on top of the room's own: at most TIER*5 above the
+	# slab, which is still inside the camera's 558 px of visible height.
+	if top_y < rect.position.y - TIER * 3.0:
+		return false
+	var landing_y := top_y - TIER
+	var floor_y := top_y - TIER * 2.0
+	var aw := clampf(rect.size.x * 0.38, 150.0, 240.0)
+	var cx := clampf(top.get_center().x, rect.position.x + aw * 0.5 + 16.0, rect.end.x - aw * 0.5 - 16.0)
+	var landing := Rect2(cx - 45.0, landing_y, 90.0, DECK_H)
+	var chamber := Rect2(cx - aw * 0.5, floor_y, aw, DECK_H)
+	# One rung, then the chamber. Both must be inside the jump budget from the
+	# surface below and must leave a body's worth of air around everything the
+	# room already owns - the same rules the gallery connector obeys.
+	if not _reach(top, landing):
+		return false
+	if not _reach(landing, chamber):
+		return false
+	if not _headroom(landing, [room]) or not _headroom(chamber, [room]):
+		return false
+	platforms.append(landing)
+	flags.append(true)
+	platforms.append(chamber)
+	flags.append(true)
+	# Low walls: they make the chamber read as a room rather than a plank, and
+	# they keep a body from walking straight off the far edge.
+	var walls: Array = []
+	for side in [-1.0, 1.0]:
+		var wx: float = cx + float(side) * (aw * 0.5) - 7.0
+		var wall := Rect2(wx, floor_y - 54.0, 14.0, 54.0)
+		walls.append(wall)
+		platforms.append(wall)
+		flags.append(false)
+	room["annex"] = chamber
+	room["annex_landing"] = landing
+	# The short walls are standable too, and a body born on a 14 px cap is the
+	# kind of spawn the audits exist to catch. Spawns skip all three. The SAME
+	# rects are recorded here and appended above: computing them twice put the
+	# skip list 7 px off the drawn wall, so the exclusion silently missed.
+	room["annex_walls"] = walls
+	return true
+
+
 ## Cell caches on the high route. Chosen from the decks the BFS can already
 ## reach at least two tiers above their room's slab, so a cache is always
 ## "optional route, real reward" and never a collectible in a wall.
-static func _caches(rooms: Array, floor_index: int) -> Array:
+##
+## Deterministic per (floor, seed): the trim used to be a global-RNG shuffle, so
+## the same seed placed its caches differently on every load - which contradicts
+## the whole "generated from (floor, seed)" contract and made a seeded replay
+## unreproducible. The slice is now taken from a seeded rng instead.
+static func _caches(rooms: Array, floor_index: int, rng: RandomNumberGenerator) -> Array:
 	var out: Array = []
+	# Annex caches are kept first and unconditionally: the annex exists to reward
+	# the climb, and the trim below used to be able to drop exactly that one.
+	var annex_caches: Array = []
 	var value := 4 + floor_index * 2
 	for room in rooms:
 		var slab: Rect2 = room["rect"]
@@ -456,14 +694,46 @@ static func _caches(rooms: Array, floor_index: int) -> Array:
 				continue
 			if r.position.y < best.position.y or best.size.x <= 0.0:
 				best = r
-		if best.size.x > 0.0:
-			out.append({
-				"pos": Vector2(best.get_center().x, best.position.y - 12.0),
-				"value": value,
-			})
+		if best.size.x <= 0.0:
+			continue
+		# An annex is the floor's real detour, so its cache pays double. Compared
+		# by position: the chamber rect is stored on the room, and Variant equality
+		# on two Rect2s is not something to depend on.
+		var worth := value
+		var in_annex := false
+		if room.has("annex"):
+			var annex: Rect2 = room["annex"]
+			if absf(best.position.y - annex.position.y) < 1.0 and absf(best.position.x - annex.position.x) < 1.0:
+				worth = value * 2
+				in_annex = true
+		var entry_cache := {
+			"pos": Vector2(best.get_center().x, best.position.y - 12.0),
+			"value": worth,
+		}
+		if in_annex:
+			annex_caches.append(entry_cache)
+		else:
+			out.append(entry_cache)
+	# Two annex caches on a 5+ room floor is the ceiling: more than that and the
+	# high route stops being the exception.
+	if annex_caches.size() > 2:
+		annex_caches = annex_caches.slice(0, 2)
+	out = annex_caches + out
 	if out.size() > 3:
-		out.shuffle()
-		out = out.slice(0, 3)
+		var keep: Array = []
+		# Every annex cache is kept; the rest is a seeded pick from the others.
+		var fixed := mini(annex_caches.size(), 3)
+		for i in fixed:
+			keep.append(i)
+		while keep.size() < 3:
+			var pick := rng.randi_range(fixed, out.size() - 1)
+			if not keep.has(pick):
+				keep.append(pick)
+		keep.sort()
+		var trimmed: Array = []
+		for index in keep:
+			trimmed.append(out[index])
+		out = trimmed
 	return out
 
 
@@ -499,6 +769,11 @@ static func _place_pillars(rooms: Array, rng: RandomNumberGenerator) -> void:
 		# player drops into it, and from the ledge the pillar top is out of
 		# reach (apex is 110, the top is 126-176 up) - a guaranteed softlock.
 		var step_w := 120.0
+		# Anchored to the LEDGE, not to the room: this deck exists so a player who
+		# fell to the bottom can get back up, so it has to be within one jump of
+		# BASE_Y. (A room-relative anchor would put it above MAX_UP from the ledge
+		# and the fall would be final.) When it overlaps an authored mass the mass
+		# is drawn over it - see Level._draw().
 		(rooms[i - 1]["platforms"] as Array).append(
 			Rect2(left - step_w, BASE_Y - TIER, step_w, DECK_H))
 		(rooms[i - 1]["oneway"] as Array).append(true)
@@ -509,18 +784,40 @@ static func _place_pillars(rooms: Array, rng: RandomNumberGenerator) -> void:
 
 # --- layout helpers ---------------------------------------------------------
 
-static func _pick_kinds(count: int, rng: RandomNumberGenerator) -> Array:
-	if count == 1:
-		# A single room is the boss arena: wide and open.
-		return ["hall"]
-	var kinds: Array = []
+static func _pick_kinds(count: int, rng: RandomNumberGenerator, floor_index := 0) -> Dictionary:
+	var cfg := _floor_config(floor_index)
+	var beats: Array = cfg.get("beats", [])
+	var roles: Array = []
 	for i in count:
-		kinds.append("gate")
-	kinds[count - 1] = "hall"
-	var start := rng.randi_range(0, MIDDLE_KINDS.size() - 1)
-	for i in range(1, count - 1):
-		kinds[i] = MIDDLE_KINDS[(start + i - 1) % MIDDLE_KINDS.size()]
-	return kinds
+		if i < beats.size():
+			roles.append(str(beats[i]))
+		else:
+			roles.append("combat")
+	if count == 1:
+		# A single room is the boss arena: wide, open, and it owns the gate.
+		roles = ["exit"]
+	# The two ends are fixed whatever the data says: the first room is where the
+	# player lands and the last one holds the gate.
+	roles[0] = "entry"
+	roles[count - 1] = "exit"
+
+	var kinds: Array = []
+	var previous := ""
+	for i in count:
+		var role := str(roles[i])
+		var pool: Array = ROLE_KINDS.get(role, ["gate"])
+		# No two rooms in a row may share a layout kind: a floor that alternates
+		# gate/gate reads as one long corridor however different the tiles are.
+		var fits: Array = []
+		for kind in pool:
+			if kind != previous:
+				fits.append(kind)
+		if fits.is_empty():
+			fits = pool
+		var pick := str(fits[rng.randi_range(0, fits.size() - 1)])
+		kinds.append(pick)
+		previous = pick
+	return {"kinds": kinds, "roles": roles}
 
 
 static func _fit_widths(kinds: Array, span: float) -> Array:
@@ -569,27 +866,62 @@ static func _enemy_table() -> Dictionary:
 	return {}
 
 
+static func _rooms_table() -> Dictionary:
+	var node := Engine.get_main_loop() as SceneTree
+	if node == null:
+		return {}
+	var data := node.root.get_node_or_null("Data")
+	if data != null and "rooms" in data:
+		return data.rooms
+	return {}
+
+
 # --- spawns -----------------------------------------------------------------
 
 ## Spawn points live on every surface, not just the slab, so upper decks are
 ## populated and the player has a reason to climb.
-static func _spawns_for(rect: Rect2, platforms: Array, half: float) -> Array:
+## Spawn points live on every surface, not just the slab, so upper decks are
+## populated and the player has a reason to climb. The annex chamber and its
+## landing are excluded: the annex is the reward for the climb, and a body up
+## there would turn an optional detour into a mandatory one (the gate needs
+## every body dead).
+static func _spawns_for(rect: Rect2, platforms: Array, half: float, skip: Array = []) -> Array:
+	# The skip list is removed from the surface set used to place and settle
+	# bodies, not only from the loop below: _settle() lifts a candidate onto
+	# whatever surface is above it, so a lower point near the annex column was
+	# being re-anchored INTO the chamber and the exclusion was cosmetic.
+	var usable: Array = []
+	for pr in platforms:
+		if not _in_list(pr, skip):
+			usable.append(pr)
 	var out: Array = []
 	var span := maxf(60.0, rect.size.x - 80.0)
 	for i in 4:
 		var t := fposmod(float(i) * MathArt.INV_PHI, 1.0)
 		var x := rect.position.x + 40.0 + span * t
-		_offer(out, x, rect.position.y - SPAWN_LIFT, platforms, half)
-	for pr in platforms:
+		_offer(out, x, rect.position.y - SPAWN_LIFT, usable, half)
+	for pr in usable:
 		var r: Rect2 = pr
-		_offer(out, r.get_center().x, r.position.y - SPAWN_LIFT, platforms, half)
+		_offer(out, r.get_center().x, r.position.y - SPAWN_LIFT, usable, half)
 	# A room with every point rejected (a pillar filled the gap) still needs one
 	# landing pad: the slab centre, lifted, is the widest clear lane there is.
 	if out.is_empty():
-		_offer(out, rect.get_center().x, rect.position.y - SPAWN_LIFT, platforms, half)
+		_offer(out, rect.get_center().x, rect.position.y - SPAWN_LIFT, usable, half)
 	if out.is_empty():
 		out.append(Vector2(rect.get_center().x, rect.position.y - SPAWN_LIFT))
 	return out
+
+
+## What the generator promises about a room it filled with an authored tile:
+## every surface within one jump of the surface it is climbed from, no surface
+## less than a body's worth of air over another, and the annex reserved for the
+## cache.
+static func _in_list(r: Rect2, list: Array) -> bool:
+	for entry in list:
+		var other: Rect2 = entry
+		if absf(other.position.x - r.position.x) < 0.5 and absf(other.position.y - r.position.y) < 0.5:
+			return true
+	return false
 
 
 ## Settle one candidate and only keep it if the body is provably out of stone.
@@ -710,29 +1042,73 @@ static func _clear_y(x: float, y: float, platforms: Array, half: float) -> Vecto
 	return Vector2(x, y)
 
 
-static func _plan_enemies(cfg: Dictionary, room_count: int, boss: String) -> Array:
+static func _plan_enemies(cfg: Dictionary, roles: Array, widths: Array, boss: String) -> Array:
+	var n := roles.size()
 	var plan: Array = []
-	for i in room_count:
+	for i in n:
 		plan.append([])
+	var boss_room := -1
 	if not boss.is_empty():
-		plan[room_count - 1].append([boss, 1])
-		return plan
+		boss_room = n - 1
 
-	var middle: Array = []
-	for i in range(1, room_count - 1):
-		middle.append(i)
-	if middle.is_empty():
-		# Two-room floors have no middle; the exit room carries the fight.
-		middle.append(room_count - 1)
-
+	# The flat list from data/floors.json is the floor's TOTAL; this function only
+	# decides where each body goes. Totals are what the audits assert, so nothing
+	# here may add or drop one.
 	var flat: Array = []
 	for group in cfg.get("enemies", []):
 		for i in int(group[1]):
 			flat.append(str(group[0]))
-	for i in flat.size():
-		plan[middle[i % middle.size()]].append(flat[i])
+	# Heaviest first: the elite rooms fill before the climbing rooms do, so a
+	# bulwark lands where there is floor to fight it on.
+	flat.sort_custom(func(a, b): return _enemy_cost(str(a)) > _enemy_cost(str(b)))
 
-	for i in room_count:
+	# Which rooms may receive enemies. The entry room is always excluded (the
+	# player has to be able to read the floor) and so is the boss room.
+	var slots: Array = []
+	for i in n:
+		if i == boss_room:
+			continue
+		var weight := float(ROLE_ENEMY_WEIGHT.get(str(roles[i]), 1.0))
+		if weight <= 0.0:
+			continue
+		slots.append({"room": i, "w": weight, "count": 0, "cap": 0})
+	if slots.is_empty():
+		# Every room refused the budget (a one-room floor). Fall back to the last.
+		slots.append({"room": maxi(0, n - 1), "w": 1.0, "count": 0, "cap": 0})
+
+	var total := 0.0
+	for slot in slots:
+		total += float(slot["w"]) * float(widths[int(slot["room"])])
+	for slot in slots:
+		var share := float(slot["w"]) * float(widths[int(slot["room"])]) / maxf(total, 1.0)
+		slot["cap"] = maxi(1, int(round(float(flat.size()) * share)))
+
+	for kind in flat:
+		var pick := -1
+		var best := -1.0
+		for si in slots.size():
+			var slot: Dictionary = slots[si]
+			if int(slot["count"]) >= int(slot["cap"]):
+				continue
+			# One heavy body per room: two bulwarks in one room is not a harder
+			# fight, it is an unreadable one.
+			if kind in HEAVY_KINDS and _has_kind(plan[int(slot["room"])], kind):
+				continue
+			var score := float(slot["w"]) / float(int(slot["count"]) + 1)
+			if score > best:
+				best = score
+				pick = si
+		if pick < 0:
+			# Every room is at capacity: the least-overfull room takes it.
+			for si in slots.size():
+				var slot: Dictionary = slots[si]
+				if pick < 0 or int(slot["count"]) - int(slot["cap"]) < int(slots[pick]["count"]) - int(slots[pick]["cap"]):
+					pick = si
+		var room_index := int(slots[pick]["room"])
+		plan[room_index].append(kind)
+		slots[pick]["count"] = int(slots[pick]["count"]) + 1
+
+	for i in n:
 		var merged: Array = []
 		for kind in plan[i]:
 			var found := false
@@ -743,7 +1119,26 @@ static func _plan_enemies(cfg: Dictionary, room_count: int, boss: String) -> Arr
 			if not found:
 				merged.append([kind, 1])
 		plan[i] = merged
+	if boss_room >= 0:
+		plan[boss_room].append([boss, 1])
 	return plan
+
+
+## How much floor a body needs. Used only to decide WHICH room it lands in.
+static func _enemy_cost(kind: String) -> float:
+	if kind in HEAVY_KINDS:
+		return 3.0
+	match kind:
+		"archer", "spitter", "leaper":
+			return 2.0
+	return 1.0
+
+
+static func _has_kind(groups: Array, kind: String) -> bool:
+	for entry in groups:
+		if str(entry) == kind:
+			return true
+	return false
 
 
 # --- reachability -----------------------------------------------------------

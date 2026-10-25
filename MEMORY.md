@@ -96,9 +96,41 @@
 - **Actors are code-built:** `player.tscn` / `enemy.tscn` are root-only;
   collision, hitbox, visual and camera are created in `_ready()`. This keeps
   the prototype free of serialized resource churn. Revisit when real art lands.
-- **Content is data-driven:** `data/weapons.json` and `data/enemies.json`.
-  Player movement stays as `@export` values in `player.gd` because it is tuned
-  in the inspector.
+- **Content is data-driven:** `data/weapons.json`, `data/enemies.json`,
+  `data/floors.json` (including its `beats` role sequence) and
+  `data/rooms.json` (authored room templates). Player movement stays as
+  `@export` values in `player.gd` because it is tuned in the inspector.
+- **The generator picks authored tiles; it never invents a room interior.**
+  `data/rooms.json` holds 2-3 hand-authored templates per room kind and
+  `LevelGen._pick_template()` chooses one whose `min_width` fits. The floor's
+  character comes from `beats` in `data/floors.json`
+  (`entry/combat/climb/treasure/elite/exit`), which decides the kind pool and
+  the enemy weight of each room. This is the hybrid split Dead Cells documents:
+  fixed frame -> hand-made tiles -> per-level graph -> fit. Contract:
+  `docs/design/map-generation.md`.
+- **Two invariants hold for every generated surface:** it is within `MAX_UP`
+  (100 px) of the surface it is climbed from, and every surface TOP is at least
+  `BODY_HEADROOM` (72 px) above any other top it overlaps. `_close_narrow_holes()`
+  additionally widens any same-tier deck pair separated by a crack narrower than
+  a body, because such a crack is a real softlock (nobody can land in it and a
+  player above it is unreachable). Do not add a surface that bypasses
+  `_reach()` / `_headroom()`.
+- **An annex is the reward for the climb and holds no enemies.** The spawn pass
+  removes the annex chamber, its landing and its walls from the candidate
+  surface set; `gen_stats` asserts no spawn point lands there. A body up there
+  would make an optional detour mandatory, because the gate needs every body
+  dead.
+- **A retry is not a run, and a cleared floor is not a lost run.** A death after
+  the gate fired leaves for the hub without `end_run(false)`; cells picked up in
+  that window are banked on the spot (`Game.bank_cells_now`) instead of being
+  wiped by `go_to_hub()`.
+- **A reward can be owed.** Two rooms can clear in the same frame, so the second
+  boon waits in `Main._owed_rewards` and is paid from `_on_reward_chosen`; a
+  picker already on screen cannot take a second request.
+- **The hub door's floor picker is Q/E, never A/D.** Movement is polled with
+  `Input.get_axis`, so consuming an A/D event does not stop the body: the same
+  press walked the player out of the door's `REACH` and the second press did
+  nothing.
 - **Damage has one formula:** `scripts/systems/damage.gd`. Crit condition is
   "target is exposed" (windup/attack/recovery), implemented by
   `Player.is_crit_against` + `Enemy.is_exposed`.
@@ -146,10 +178,10 @@
 # Run
 .\.tools\Godot_v4.7.2-stable_win64.exe --path .
 
-# Verify everything
+# Verify everything (~478 s)
 powershell -ExecutionPolicy Bypass -File tools\check.ps1
 
-# Inner loop: ~77 s, skips the seed sweeps and the end-to-end run
+# Inner loop: ~100 s, skips the seed sweeps and the end-to-end run
 powershell -ExecutionPolicy Bypass -File tools\check.ps1 -Fast
 
 # One step, substring match, no --import
@@ -168,62 +200,57 @@ powershell -ExecutionPolicy Bypass -File tools\check.ps1 -Only audit
 python tools\make_sfx.py
 ```
 
-## Verification Status (2026-10-24)
+## Verification Status (2026-10-25)
 
 `powershell -ExecutionPolicy Bypass -File tools\check.ps1` -> ALL CHECKS
-PASSED, exit 0, 17 steps, 424 s:
+PASSED, exit 0, 17 steps, **478 s**:
 
 | Step | Result |
 |---|---|
 | import / compile | ok |
 | `run_tests.gd` | 118 checks |
-| `combat_probe.tscn` | ok |
-| `reward_probe.tscn` | ok (now also asserts the colour reaches the weapon) |
+| `combat_probe.tscn` | ok (now also proves a roll window longer than the roll) |
+| `reward_probe.tscn` | ok (asserts the colour reaches the weapon) |
 | `soak.tscn` | ok (arena mode, 4 waves + Warden) |
 | `esc_probe.tscn` | 0 failures |
 | `floor_probe.tscn` | ok |
+| `restart_probe.tscn` | ok (paused retry and dead retry) |
+| `gen_stats.tscn` | 100 layouts: width, rooms, decks, gallery links, caches, annexes, no annex spawns |
 | `boss_probe.tscn` | the Warden's slam spawns waves at its feet on 4 floor-5 seeds |
 | `climb_probe.tscn` | grunt / charger / bulwark close a 162 px gap to a high deck |
-| `run_probe.tscn` | 0 failures, 5 floors -> victory; asserts each floor's boon budget and that a cleared room grants one |
-| `audit_a1` combat / weapons | ok |
+| `run_probe.tscn` | 0 failures, 5 floors -> victory; asserts each floor's boon budget |
+| `audit_a1` combat / weapons | ok (dancer EDGE is now an exact 2x assertion) |
 | `audit_a2` save / economy | 123 checks |
 | `audit_a3` floors / spawns | 5 floors x 15 seeds |
 | `audit_a4` UI / input | 226 checks |
 | `audit_v1` vertical traversal | 5 floors x 40 seeds |
-| `audit_v2` enemies / encounters | ok (asserts spitter + leaper spawn from data) |
-| `audit_v3` run flow / progression | 163 checks |
+| `audit_v2` enemies / encounters | ok (spitter + leaper spawn from data) |
+| `audit_v3` run flow / progression | 165 checks (camera limit inequality, Q/E door input) |
 
 Visual harnesses need a display: `capture_scene` (13 shots), `impact_capture`
-(20 frame-by-frame), `meta_capture` (14 hub/floor/archive), `title_capture`,
+(20 frame-by-frame), `meta_capture` (14 hub/floor/archive), `map_capture`
+(whole-floor overview + one shot per room, all five floors), `title_capture`,
 `jump_capture`. Output goes to `output/screenshots/`.
 
 ### Timing and how to make it fast
 
-A plain `check.ps1` run is **~350 s** on this machine, and almost none of it is
-the assertions: every step is a separate Godot process (~1 s boot each), and
-several probes simulate real time on purpose (they walk a player across a
-4200-6400 px floor at 300 px/s, or wait out the hub transitions).
-
-Measured, descending: `audit_a3` 118 s, `audit_v1` 36-58 s, `soak` 39 s,
-`audit_v3` 39 s, `audit_v2` 21 s, `run_probe` 16 s, `audit_a1` 17 s,
-`audit_a4` 11 s, `combat_probe` 8 s, `import` 5-7 s, `floor_probe` 4 s,
-`reward_probe` 2 s, `audit_a2` 1 s, `run_tests` 1 s.
-
-Three levers, cheapest first:
+A plain `check.ps1` run is **~478 s** on this machine (it was ~350 s before the
+floors went from 5-7 rooms to 8-11), and almost none of it is the assertions:
+every step is a separate Godot process (~1 s boot each), and several probes
+simulate real time on purpose (they walk a player across a 5600-8200 px floor at
+300 px/s, or wait out the hub transitions).
 
 | Flag | Wall time | Use it for |
 |---|---|---|
-| `-Only "<substring>"` | 1-20 s | one step, no `--import`; the inner loop |
-| `-Fast` | 77 s | everything except the seed sweeps + end-to-end run |
-| (none) | ~350 s | the commit gate |
-| `-Turbo` | ~120 s | SMOKE ONLY - see the warning below |
+| `-Only "<substring>"` | 1-190 s | one step, no `--import`; the inner loop |
+| `-Fast` | ~100 s | everything except the seed sweeps + end-to-end run |
+| (none) | ~478 s | the commit gate |
+| `-Turbo` | ~120 s | SMOKE ONLY - it can report false failures (see below) |
 
 `-Turbo` adds `--fixed-fps 120`, which runs frames as fast as the CPU allows
-instead of in real time (soak 39 s -> 13 s). **It can report false failures**:
-`audit_v2` failed with "two grunts shared one silhouette" because the crowd
-separation needs real frames to resolve. It never produced a false pass in
-testing, but a false failure wastes a debugging session, so commit on a plain
-run.
+instead of in real time. **It can report false failures**: `audit_v2` failed
+with "two grunts shared one silhouette" because the crowd separation needs real
+frames to resolve. Commit on a plain run.
 
 Do not "fix" a slow step by shortening its wait loops into fixed frame counts:
 `audit_a3` and `run_probe` both used to assume one frame was enough and both
@@ -270,6 +297,16 @@ absolute. `tests/boss_probe.tscn` builds a real `Level` for exactly this.
   platform and a full jump clipped its head.
 - Subagent audits live in `output/agent-reports/` (gitignored). They are
   read-only findings; re-run them rather than trusting stale line numbers.
+- **The generated floors are 8-11 rooms, so a full run is longer than it looks.**
+  `audit_v1` alone is ~185 s because it physically walks every room of 40 seeds
+  x 5 floors. Use `-Only` while iterating; never trim its wait loops.
+- **An authored template is data, not code.** If a room plays badly, edit
+  `data/rooms.json`; do not add a special case to `_build_room()`. Adding a
+  template only requires obeying the two invariants (one jump up, 72 px of
+  clearance between overlapping tops) and `gen_stats` will prove it.
+- **The generator is deterministic per (floor, seed)**, including cache
+  placement. Anything that reaches for the global RNG (`randf`, `shuffle`)
+  inside `LevelGen` breaks a seeded replay and the retry loop's premise.
 
 ## Build Wiring (2026-10-24)
 
@@ -325,5 +362,6 @@ absolute. `tests/boss_probe.tscn` builds a real `Level` for exactly this.
 ## Cold-Start Order
 
 `README.md` → `HANDOVER.md` → `AGENTS.md` → `MEMORY.md` →
-`docs/agent/current-state.md` → `docs/design/math-art.md` →
-`docs/design/impact.md` → `docs/design/combat-feel.md` → target script.
+`docs/agent/current-state.md` → `docs/design/map-generation.md` (if touching
+the generator) → `docs/design/math-art.md` → `docs/design/impact.md` →
+`docs/design/combat-feel.md` → target script.

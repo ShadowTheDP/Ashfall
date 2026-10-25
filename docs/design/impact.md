@@ -66,6 +66,23 @@ tier ≥ 2 時多一圈 `1/φ` 的內環。**圓心是接觸點**，不是角色
 - alpha：`1.0` 到 35%，之後 `0.55 → 0`。
 - 頭部有 2×2 px 白點。
 
+### 2.1 Tier 的數學簽名（`ImpactFx._draw_signature`）
+
+三個 tier 不只在尺寸上不同，在**形狀種類**上就不同 —— 一眼就能分辨這一擊是
+什麼等級，不必比較半徑：
+
+| tier | 曲線 | 讀起來 |
+|---|---|---|
+| 0 LIGHT | 5 瓣玫瑰線，向外綻開 | 清脆的一下 |
+| 1 MEDIUM | 3 葉內擺線（hypotrochoid），斷成三段的掃掠 | 撕開 |
+| 2 HEAVY | 8 折 superformula 齒輪，帶尖 | 硬碰 |
+| 3 FINISHER | 3:2 Lissajous 結，兩層反向旋轉 | 刀刃的函數被釋放 |
+
+全部是 **1–2 px 的細線、alpha ≤ 0.62**，限制在該 tier 環半徑的 1.4 倍以內，
+存活時間不超過環。**不做**任何實心塊：命中瞬間的畫面不能被白色填滿。
+三個新 primitive（`MathArt.superformula` / `hypotrochoid` / `rose` 已有的）
+屬於視覺語言，因此加在 `MathArt`，不在 FX 裡自繪。
+
 ---
 
 ## 3. 全屏層（tier ≥ 2）

@@ -318,6 +318,10 @@ FLOOR CLEARED  或  YOU DIED
 | 2 | 13 | 0.08 | 0.07 | 0.17 | 55% | 190 | 50 ms | 40 | 1 |
 | 3 | 24 | 0.15 | 0.09 | 0.26 | 62% | 430 | 85 ms | 50 | 3 |
 
+> hitstop 由 **tier** 決定（`Combat.TIER_HITSTOP` = 33/67/100/133 ms，見
+> `docs/design/impact.md`）。武器資料中的 `hitstop` 欄位已移除：它沒有任何
+> 讀取者，且數值與 tier 分級矛盾。要調整某一段的凍結感，改它的 `tier`。
+
 - 暴擊倍率 1.7×
 - 第三段額外釋放 `FunctionWave`（正弦行進波，8 傷害，可穿透）
 - 攻擊中可翻滾取消，也可預先排隊下一段
@@ -555,7 +559,8 @@ WHITE      #ffffff   玩家 / 命中高光
 
 | 檔案 | 內容 | 誰讀 |
 |---|---|---|
-| `floors.json` | 5 層：`name / rooms / width / enemies / boss / palette / reward` | `Game.start_floor()`、`LevelGen._floor_config()`、`Hud` |
+| `floors.json` | 5 層：`name / rooms / width / enemies / boss / palette / reward / beats` | `Game.start_floor()`、`LevelGen._floor_config()`、`LevelGen._pick_kinds()`、`Hud` |
+| `rooms.json` | 每種 room kind 的手寫模板（2-3 個變體），`parts` 格式見 `docs/design/map-generation.md` | `LevelGen._pick_template()` |
 | `weapons.json` | 每段攻擊的時序、傷害、hitbox、`tier`、`blade`，加 `attribute` / `crit_multiplier` | `Player._open_hitbox()`、`PlayerVisual._blade_length()` |
 | `enemies.json` | 7 種敵人的數值與行為旗標 | `Enemy.configure()` |
 | `rewards.json` | Boon 的名稱、描述、顏色、`attribute` | `RewardScreen`、`Game.apply_reward()` |
@@ -788,4 +793,5 @@ powershell -ExecutionPolicy Bypass -File tools\fetch_godot.ps1
 | `docs/design/impact.md` | **打擊感完整規格** |
 | `docs/design/combat-feel.md` | 手感調參表與理由 |
 | `docs/design/meta.md` | meta 層（大廳 / 樓層 / 進度）的介面契約 |
+| `docs/design/map-generation.md` | 生成器：beat sheet、模板格式、annex、不變量 |
 | `Changing Description.txt` | 變更紀錄 |

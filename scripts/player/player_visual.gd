@@ -99,10 +99,12 @@ func _draw() -> void:
 
 	if p.state == Player.State.ROLL:
 		_draw_roll(alpha)
+		_draw_iframe_cue(alpha)
 		return
-
 	_draw_body(alpha)
 	_draw_hand_and_blade(alpha)
+	# The window can outlive the roll, so the cue cannot live inside _draw_roll.
+	_draw_iframe_cue(alpha)
 
 
 # --- Body -------------------------------------------------------------------
@@ -360,10 +362,16 @@ func _draw_roll(alpha: float) -> void:
 	MathArt.disc(self, Vector2.ZERO, 2.0, Color(MathArt.WHITE, alpha))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
-	# i-frame cue: only on the first and last frame of the window.
-	if p.roll_t >= p.roll_iframe_start and p.roll_t <= p.roll_iframe_end:
-		var since := p.roll_t - p.roll_iframe_start
-		var until := p.roll_iframe_end - p.roll_t
+
+## i-frame cue: only on the first and last frame of the window. Keyed off
+## roll_iframe_t, not roll_t: the window can outlast the roll (up to 0.43 s
+## against a 0.30 s roll), and while it lasted the body used to render as
+## completely normal while being untouchable. Drawn from _draw() so it works in
+## both the rolling and the post-roll frames.
+func _draw_iframe_cue(alpha: float) -> void:
+	if p.roll_iframe_t >= p.roll_iframe_start and p.roll_iframe_t <= p.roll_iframe_end:
+		var since := p.roll_iframe_t - p.roll_iframe_start
+		var until := p.roll_iframe_end - p.roll_iframe_t
 		if since < 0.030 or until < 0.030:
 			MathArt.ring(self, Vector2.ZERO, 19.0, Color(MathArt.WHITE, alpha * 0.95), 2.0)
 

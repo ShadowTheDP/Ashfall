@@ -10,6 +10,9 @@ output/*
 *.tmp
 *.log
 
+# Session exports (pi writes these into the project root)
+pi-session-*.html
+
 # OS noise
 Thumbs.db
 desktop.ini

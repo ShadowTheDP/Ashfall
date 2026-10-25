@@ -46,6 +46,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			_pressed_t = 0.12
 			Sfx.play("reward", -7)
 			get_viewport().set_input_as_handled()
+		elif event.physical_keycode == KEY_Q:
+			# The screen advertises Q QUIT. It has to work here: the HUD swallows
+			# Esc/R/Q while the title is up (it is a modal), so nothing else owns it.
+			get_tree().quit()
 
 
 func _draw() -> void:
@@ -78,7 +82,7 @@ func _draw() -> void:
 		"A/D MOVE    SPACE JUMP    J SINE EDGE    K KUNAI    L AEGIS    SHIFT ROLL",
 		HORIZONTAL_ALIGNMENT_CENTER, 520.0, 9, Color(0.685, 0.685, 0.685, 0.95))
 	draw_string(font, Vector2(center.x - 240.0, roundf(size.y * 0.85)),
-		"ESC PAUSE      R RESTART      Q QUIT      EVERYTHING IS KEYBOARD",
+		"Q QUIT      EVERYTHING IS KEYBOARD",
 		HORIZONTAL_ALIGNMENT_CENTER, 520.0, 8, Color(0.545, 0.545, 0.545, 0.85))
 
 

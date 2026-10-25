@@ -1,5 +1,11 @@
 # Handover — quality pass, not yet started
 
+> **ARCHIVED 2026-10-25.** That quality pass has since been done (two sessions
+> of bug hunts, the map rewrite and the feedback tiers). This file is kept only
+> for its notes on the extension setup and the process lessons; for the current
+> state read `HANDOVER.md` §0 and `docs/agent/current-state.md` instead.
+
+
 Written at the end of a session that could not load the newly installed
 extensions. **No code was changed in this session.** The tree is clean at
 `f2fbda7`.

@@ -98,6 +98,35 @@ func _ready() -> void:
 	if player.hp >= hp_after_roll:
 		_fail("damage did not land after roll i-frames ended")
 
+	# A roll window LONGER than the roll itself. Armour + GHOST + GLASS can reach
+	# 0.43 s against a 0.30 s roll; before this was fixed the gate required
+	# `state == ROLL`, so the last 0.13 s of a purchased upgrade simply did not
+	# exist and a hit landed while the player was told they were untouchable.
+	await get_tree().create_timer(0.8).timeout
+	player.roll_iframe_end = 0.40
+	player.invuln = 0.0
+	var dodges_before := Game.perfect_dodges
+	player._start_roll(1.0)
+	await get_tree().create_timer(0.34).timeout
+	if player.state == Player.State.ROLL:
+		_fail("the roll was still running at 0.34 s; the probe tests the tail")
+	var hp_before_tail := player.hp
+	player.take_hit({"damage": 10, "knockback": 200.0, "source_pos": player.global_position - Vector2(40, 0)})
+	if player.hp != hp_before_tail:
+		_fail("a hit landed inside the roll window's tail (0.34 s of 0.40 s)")
+	if Game.perfect_dodges != dodges_before + 1:
+		_fail("the tail of the window did not pay a perfect dodge")
+	# And it must NOT pay once the window is over.
+	player.roll_iframe_end = Player.BASE_ROLL_IFRAME_END
+	await get_tree().create_timer(0.4).timeout
+	player.invuln = 0.0
+	player._start_roll(1.0)
+	await get_tree().create_timer(0.40).timeout
+	var dodges_after := Game.perfect_dodges
+	player.take_hit({"damage": 10, "knockback": 200.0, "source_pos": player.global_position - Vector2(40, 0)})
+	if Game.perfect_dodges != dodges_after:
+		_fail("a hit outside the roll window still counted as a perfect dodge")
+
 	_finish()
 
 

@@ -7,6 +7,40 @@
 
 ---
 
+## 0. Pick up here (2026-10-25)
+
+**State:** `tools/check.ps1` green, 17 steps, `ALL CHECKS PASSED` in 478 s
+(`-Fast` 100 s). Everything below is committed. Nothing is half-finished and
+nothing is known-broken; the open items are judgement calls, not bugs.
+
+**Read before touching anything:**
+1. `docs/design/map-generation.md` — the generator contract. `data/rooms.json`
+   is authored content; `LevelGen` only chooses and verifies. Two invariants
+   (`MAX_UP` 100 px climb, `BODY_HEADROOM` 72 px between overlapping tops) are
+   enforced and asserted by `gen_stats` + `climb_probe`.
+2. `docs/design/impact.md` §2.1 — the four tier signatures.
+3. `MEMORY.md` → "Stable Decisions" and "Verification Status".
+
+**Three highest-value next tasks** (in order):
+1. **Playtest the templates.** `tests/map_capture.tscn` renders a whole-floor
+   overview plus one in-game shot per room for all five floors into
+   `output/screenshots/map/`. Judge: is `well_double` fun, is the annex worth
+   the climb, is 8-11 rooms per floor the right density. Then tune
+   `data/rooms.json` / `data/floors.json` `beats` — not the generator.
+2. **Give the beat sheet a branch.** It is still a 1-D sequence. A beat that
+   forks and rejoins is the honest next step toward Dead Cells' concept graph;
+   `_verify()`'s BFS already tolerates any topology, so the work is in
+   `_pick_kinds()` / `_generate_once()` and in `Level`'s room-entry spawn.
+3. **Annex enemies** — only after a spawn filter that provably keeps them
+   killable. The annex is empty today on purpose (see §2.0).
+
+**Commands.** `tools\check.ps1 -Fast` for the inner loop (~100 s),
+`-Only "<step>"` for one step, a plain run before any commit. Visual:
+`tests\map_capture.tscn`, `tests\meta_capture.tscn`,
+`tests\impact_capture.tscn` (all need a display).
+
+---
+
 ## 1. Where the game is
 
 Ashfall is a **run-based roguelite with a persistent hub**, built from
@@ -32,12 +66,12 @@ Title → Enter
 
 | | count | notes |
 |---|---:|---|
-| Floors | 5 | 5600 / 6800 / 7000 / 8200 / 2600 px |
-| Rooms per floor | 5 / 6 / 6 / 7 / 2 | 6 room archetypes, two-tier |
-| Surfaces per floor | ~29 / 36 / 35 / 42 / 10 | slabs + decks + gallery + ladders |
+| Floors | 5 | 5600 / 6800 / 7000 / 8200 / 3400 px |
+| Rooms per floor | 8 / 9 / 10 / 11 / 3 | beat sheet per floor, 6 kinds x 2-3 authored templates |
+| Surfaces per floor | ~59 / 66 / 73 / 80 / 22 | slabs + decks + gallery + ladders + annexes |
 | Enemies | 6 + boss | grunt, archer, charger, bulwark, spitter, leaper, warden |
 | Enemies per floor | 9 / 11 / 13 / 17 / 5 | spitter + leaper spawn on 2-4 |
-| Caches per floor | 3 / 3 / 3 / 3 / 2 | cells on the high route |
+| Caches per floor | 3 / 3 / 3 / 3 / 2 | 1-2 of them are annex caches at 2x value |
 | Playable bodies | 6 | square, octa, star, torus, helix, gyro |
 | Weapons | 6 | edge, curve, lens, fractal, chain, orbit |
 | Armour | 5 | none, plate, lattice, mantle, aegis shell |
@@ -49,6 +83,58 @@ Title → Enter
 ---
 
 ## 2. What this session built
+
+### 2.0 Session 5 — hand-authored room chunks, beat sheets, annexes
+
+See `docs/design/map-generation.md` for the full contract. In short:
+
+- **`data/rooms.json` (new).** 18 hand-authored room templates, 2-3 per kind,
+  in the same data-driven style as every other content table. The generator no
+  longer invents room interiors; it picks an authored tile for a room whose
+  role and width fit, exactly the hybrid split Dead Cells' lead designer
+  describes (fixed frame → hand-made tiles → per-level concept graph → fit).
+- **`beats` in `data/floors.json` (new).** Each floor carries a role sequence
+  (`entry / combat / climb / treasure / elite / exit`). The role decides which
+  kinds may fill the room and how much of the enemy budget it asks for. Two
+  seeds of one floor now read as the same place rearranged, not two unrelated
+  corridors.
+- **`_plan_enemies()` is a distribution, not a spray.** The total from
+  `data/floors.json` is unchanged (the audits assert it); the heaviest bodies
+  pick their rooms first, one per room, and the entry room is always empty.
+  Boss floors' extra enemies finally spawn (floor 5's 3 grunts + 2 archers were
+  dead data because `_plan_enemies` returned early).
+- **Annex chambers (`_annexes`).** One or two rooms per floor grow a real
+  destination two tiers above their own top deck, holding the floor's biggest
+  cache (2x value). The upper route used to be continuous but pointless.
+- **`_close_narrow_holes()`.** Two same-tier decks with a 40 px crack between
+  them are a softlock trap (no body can land in the crack, and a player on the
+  deck above is unreachable). The generator now closes any such crack.
+- **Floors are longer and more compact.** 8 / 9 / 10 / 11 rooms instead of
+  5 / 6 / 6 / 7 at the same widths (~700 px per room, ~59-80 surfaces), so a
+  floor reads as a chain of compact vertical rooms rather than a row of wide
+  halls. Cost: a plain `check.ps1` run went from ~350 s to ~470 s.
+- **Floor 5 is three rooms** (3400 px): entry, elite, throne. Its declared
+  enemy table now actually spawns in the approach room.
+- **Annexes hold no enemies.** They are the reward, and a body up there would
+  make an optional detour mandatory (the gate needs every body dead).
+  `gen_stats` asserts it.
+- **Cells picked up after the gate fires are banked on the spot**
+  (`Game.bank_cells_now`). The bodies killed on the way to the gate drop cells
+  into the 1.6 s transition, and the hub used to wipe that pile.
+- **`tests/map_capture.tscn` (new).** Whole-floor overview plus one in-game
+  shot per room, every floor — the visual witness for all of the above.
+| Perfect dodge paid for a hit stopped by post-hit invulnerability | the reward was gated on `is_invulnerable()`, which is also true for the 0.55 s hurt tail | gated on `is_roll_invulnerable()` (the roll window only) |
+| Dancer's EDGE buff was multiplied twice | `Game.perfect_dodge()` already scales by `perfect_dodge_scale`, and `take_hit` scaled again | 4x became the intended 2x; audit_a1 now asserts the exact value |
+| A bulwark killed by a 1-damage shield chip popped at the last swing's tier | the shield branch never touched `last_tier` | chip sets `last_tier = 0` |
+| Enemies spawned inside annex chambers | the spawn pass ran after `_annexes()` and offered a point above every platform | annex chamber, landing and walls are removed from the settle/surface set |
+| A pillar's step deck could be drawn through an authored mass | one in-order draw pass put the late-appended deck over the earlier solid | `Level._draw()` paints every pass-through deck first, then every solid |
+| The camera's top limit was a hardcoded -820 | a promise that goes stale the first time a template or annex grows | computed in `start_floor()` from the floor's own highest surface; audit_v3 checks the inequality |
+| The builtin fallback layouts skipped the narrow-crack invariant | `_close_narrow_holes()` was only called from the template path | called on both paths, so a missing `data/rooms.json` cannot restore the trap |
+| HUD cells plate froze at 0 in the arena fixture | it printed `run_cells`, which only exists on a floor | three-way rule (bank / run / run total) |
+| End-of-floor overlay advertised a hub return that never happens in arena mode | the line was unconditional | printed only while `Game.hub_return_in > 0` |
+| Pausing during the scene-change fade froze an opaque black screen | the veil sits above the HUD and Main's `_process` stops when paused | pause is refused while a hub return is pending |
+
+Session 4 (previous) follows.
 
 ### 2.1 Persistent profile (`scripts/autoload/profile.gd`)
 Single owner of the save file. Gameplay reads progression **only** through
@@ -88,6 +174,34 @@ scaling everything; `Combat.gather()` is the inward counterpart.
 ---
 
 ## 3. Bugs fixed this session (with causes)
+
+### Session 5 — the map, the feedback and the flow
+
+| Area | Cause | Fix |
+|---|---|---|
+| Floor picker at the hub door did nothing on the second press | A/D are also the movement keys, and movement is polled (`Input.get_axis`), so consuming the key did not stop the body: the same press walked the player out of the door's REACH | picker moved to **Q / E**, which are unbound; audit_v3 now drives both |
+| Roll i-frames past 0.30 s did not exist | the gate was `state == ROLL and roll_t <= roll_iframe_end` while the ROLL state ends at `roll_time` 0.30, so armour + GHOST + GLASS (up to 0.43) were clipped - a purchased upgrade that provably did nothing | `roll_iframe_t` counts from the roll's start and is independent of the state; `is_invulnerable()` uses it |
+| Every melee hit's sparks/ring/flash spawned inside the PLAYER | `Hitbox` sent `"point": global_position` - the attacker's own centre - while the damage number popped on the enemy | the point is `body.global_position`; the player's own hurt spark moved to the contact edge |
+| Kill feedback ignored the hit that killed | `_die()` always used tier 1 (2 for a boss) | the killing hit's tier is stored in `last_tier` and used, so a finisher kill is the loudest thing in a fight |
+| Being hit felt identical for 6 damage and 18 | one fixed 0.09 s freeze / 0.6 shake for every source | scales with damage; only a heavy hit adds the screen punch |
+| Per-weapon `hitstop` in `data/weapons.json` was dead data | nothing read `info["hitstop"]`; only `tier` did | field removed from the data and the two doc tables, with a note pointing at the tier table |
+| Finisher wave spawned 1 px inside the floor | the 88x68 box bottom sat at origin+24 while the player's feet are at origin+23 | raised to origin-18 |
+| Roll cancelled into an attack skipped its own cooldown | `_tick_roll` exited into `_start_attack` without setting `roll_cd` | set before the cancel |
+| Archer / spitter retreat walked off ledges | `hold = -facing * speed` bypassed `_gate()` | goes through the ledge gate like every other intent |
+| Two rooms clearing in one frame paid one boon | the second deferred call bailed on `reward_open` and never decremented | the owed boon waits in `_owed_rewards` and is paid from `_on_reward_chosen` |
+| A spitter's pool followed the player into the hub | `enter_hub()` never purged the world's hazard pools (only `start_floor()` did) | `_purge_world_fx()` runs on the way into the hub |
+| A death after the gate banked the floor was recorded as a loss | `finish_floor()` leaves the level running for 1.6 s | `Main._cleared_floor` makes that death a plain exit instead of `end_run(false)` |
+| `Profile.total_kills` recorded only the last floor | `start_floor()` zeroed `run_kills`, which `end_run()` persists | reset lives only in `reset_run()` |
+| Cache placement was not reproducible per seed | `_caches()` trimmed with a global-RNG `shuffle()` | seeded index pick; annex caches are kept first and unconditionally |
+| HUD read `CELLS 0` in the hub | the plate printed `Game.cells`, a run counter, while the hub header printed `Profile.cells` | hub shows the bank, a floor shows what the run has earned (what a death forfeits) |
+| Hub station never refreshed the body | a purchase writes Profile only | `Hub._on_panel_closed()` re-runs `_apply_loadout()` |
+| Title screen advertised Q QUIT / R / Esc that did nothing | the title is a modal the HUD deliberately ignores | Q quits, the dead hints are gone |
+| HUD hint strip contradicted an open panel | `_draw_hints` was unconditional | hidden while a modal is open; the hub line is contextual |
+| Skill tree said "NEED n CELLS" when the blocker was a prerequisite | cost was tested before parents | parents first |
+| "LEFT/RIGHT PAGE" printed on a single-page list | hint was unconditional | only printed when `pages > 1` |
+| End-of-floor overlay offered R while a timer took the player to the hub | no countdown anywhere | `Game.hub_return_in` is printed under the headline and in the overlay |
+
+Session 4 (previous) follows.
 
 These are worth reading before touching the same code.
 
@@ -185,7 +299,7 @@ AUDIT A3 OK                          floor x seed reachability, spawns, gate
 AUDIT A4 OK (226 checks)             key ownership, text fit
 AUDIT V1 OK (0 failures)             vertical traversal, one-way, softlocks
 AUDIT V2 OK                          decks, spitter, leaper from data, cells
-AUDIT V3 OK (163 checks)             run flow, floor picker, state leaks
+AUDIT V3 OK (165 checks)             run flow, floor picker (Q/E), camera limits
 ALL CHECKS PASSED
 ```
 
@@ -195,21 +309,24 @@ Visual harnesses (need a display):
 tests/capture_scene.tscn    13 gameplay shots
 tests/impact_capture.tscn   20 frame-by-frame impact shots
 tests/meta_capture.tscn     14 hub/floor/archive shots
+tests/map_capture.tscn      whole-floor overview + one shot per room, every floor
 tests/title_capture.tscn    title
 tests/jump_capture.tscn     tumble frames
 ```
 
 Output goes to `output/screenshots/` (gitignored).
 
-**Timing.** A plain run is **~350 s**, and almost none of it is assertions:
-each step is its own Godot process (~1 s boot x 14) and several probes simulate
-real time on purpose (walking a player across a 4200-6400 px floor at 300 px/s,
-or waiting out the hub transitions).
+**Timing.** A plain run is **~478 s** (it was ~350 s before the floors went from
+5-7 rooms to 8-11; `audit_v1` alone is ~185 s because it walks every room of 40
+seeds x 5 floors), and almost none of it is assertions: each step is its own
+Godot process (~1 s boot x 17) and several probes simulate real time on purpose
+(walking a player across a 5600-8200 px floor at 300 px/s, or waiting out the
+hub transitions).
 
 ```powershell
 # Inner loop, one step, no --import
 powershell -ExecutionPolicy Bypass -File tools\check.ps1 -Only audit_a3
-# Everything except the seed sweeps + end-to-end run: ~77 s
+# Everything except the seed sweeps + end-to-end run: ~100 s
 powershell -ExecutionPolicy Bypass -File tools\check.ps1 -Fast
 # Smoke only (fixed-fps 120, ~120 s). Can report FALSE FAILURES (audit_v2
 # crowd separation). Never a commit gate.
@@ -280,14 +397,13 @@ Never shorten a wait loop into a fixed frame count to save time: `audit_a3` and
 
 ## 7. Next steps (highest value first)
 
-1. **Playtest the two-tier maps.** The generator proves reachability (75 seeds
-   in audit_a3, 200 in audit_v1, 100 in gen_stats) and a physical walk per
-   floor, but nobody has judged whether the upper route is *legible* or whether
-   the caches are worth the detour.
-2. **The far plane of a floor is still too dark** — the ambience pass ran out
-   of budget. `_draw_vault()` is the place.
-3. **Boon cadence at the new size.** A 7-room floor pays 3 boons; with 5-7
-   rooms that is one reward every other room. Judge it before changing it.
+1. **Playtest the templates.** `gen_stats` proves shape and reachability across
+   100 layouts; nobody has judged whether `well_double` is fun or whether the
+   annex is worth the climb. `map_capture` is the tool for that judgement.
+2. **Annex enemies.** The annex is empty on purpose (an unreachable body would
+   block the gate). With a proven spawn filter it could hold one ranged body.
+3. **A branch in the beat sheet.** Beats are still a 1-D sequence; the honest
+   next step toward Dead Cells' graph is a beat that forks and rejoins.
 4. **Give souls a longer runway** (10 souls exists today) and a second boss.
 5. **Export preset** if a distributable build is wanted.
 
@@ -313,20 +429,24 @@ scripts/fx/         impact_fx.gd  screen_punch.gd  slash_fx.gd  ring_fx.gd
 data/               weapons.json  enemies.json  rewards.json
                     characters.json  armor.json  upgrades.json
                     floors.json  skill_nodes.json
+                    rooms.json                    (authored room templates)
 tests/              run_tests.gd  combat_probe  reward_probe  soak
                     esc_probe  floor_probe  run_probe
                     audit_a1..a4  audit_v1..v3
                     capture_scene  impact_capture  meta_capture
-                    title_capture  jump_capture
+                    map_capture   title_capture  jump_capture
 tools/              check.ps1  fetch_godot.ps1  make_sfx.py  make_music.py
-docs/               PRODUCT.md  agent/  design/
+docs/               PRODUCT.md  agent/  design/  (design/map-generation.md
+                    is the generator contract)
 ```
 
 ## 9. Reading order for the next person
 
 1. `docs/PRODUCT.md` — the whole picture
-2. `docs/design/meta.md` — hub / floors / progression contract + every
-   load-bearing detail discovered this session
-3. `docs/design/math-art.md` — visual language
-4. `docs/design/impact.md` — combat feel, especially §7 (the trail) and §8
-5. `AGENTS.md` → `MEMORY.md` → `docs/agent/current-state.md`
+2. `docs/design/map-generation.md` — the generator contract (beat sheets,
+   authored templates, annexes, the two invariants) **before touching level_gen**
+3. `docs/design/meta.md` — hub / floors / progression contract
+4. `docs/design/math-art.md` — visual language
+5. `docs/design/impact.md` — combat feel, especially §2.1 (tier signatures),
+   §7 (the trail) and §8
+6. `AGENTS.md` → `MEMORY.md` → `docs/agent/current-state.md`

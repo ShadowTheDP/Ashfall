@@ -2,11 +2,26 @@
 
 ## Current Objective
 
-Milestone 3 is complete: **768x480 monochrome**, motion-first rendering with
-float transforms and 120 Hz physics interpolation. The player is a square that
-tumbles 90 degrees per jump and lands on a new face; enemies are plain polygons
-with no limbs; all particles come from Godot's `CPUParticles2D`. Next is human
-playtest tuning, then breadth.
+**Playtest the generated floors.** The map is now a hybrid: `data/rooms.json`
+holds 18 hand-authored room templates, `data/floors.json` carries a per-floor
+`beats` role sequence (8-11 rooms per floor), and the generator only chooses,
+connects and verifies. Reachability is proven (600-layout sweep, `gen_stats`,
+`audit_v1`); what is NOT judged is whether the templates are *fun*, whether the
+annex is worth the climb, and whether 8-11 rooms is the right density.
+
+The next agent should: run `tests/map_capture.tscn` (needs a display), look at
+`output/screenshots/map/`, and tune `data/rooms.json` / `beats` rather than the
+generator. Contract: `docs/design/map-generation.md`.
+
+## Open items (not bugs)
+
+| Item | Why it is open |
+|---|---|
+| Template fun / density | needs a human, not a probe |
+| Beat sheet is still 1-D | a forking beat is the next structural step |
+| Annex has no enemies | deliberate: a body up there makes an optional detour mandatory until a killability filter exists |
+| Souls runway (10 total) | economy design, second boss not built |
+| Export preset | no Godot export templates installed (~1.28 GB) |
 
 ## What Exists
 
@@ -74,7 +89,8 @@ playtest tuning, then breadth.
 - Weapons and enemy telegraphs express their actual math (ballistic preview,
   sine wave, radial field).
 - Keyboard-only is a hard requirement; gamepad is additive.
-- Feel-first order; rooms/builds/meta are deliberately deferred.
+- Feel-first order, then breadth: the fight loop was tuned before the map
+  layer, and the map layer before content breadth. Both are now in.
 - Actor scenes are root-only; children are built in code.
 - Damage formula lives only in `Damage`; crits require an exposed enemy or a
   backstab.
@@ -87,22 +103,24 @@ playtest tuning, then breadth.
 - `scripts/autoload/` = cross-scene services.
 - `scripts/systems/` = pure logic, constants, and the `MathArt` visual language.
 - `scripts/player|enemies|world|ui|fx|combat/` = feature code.
-- `data/` = content numbers.
+- `data/` = content: numbers (`weapons/enemies/rewards/characters/armor/
+  upgrades/skill_nodes`), floor shape (`floors.json` incl. `beats`), and
+  authored room interiors (`rooms.json`).
 - `tests/` = headless checks and capture harnesses.
 - `output/` = screenshots/builds (ignored).
 
 ## Next Likely Improvements
 
-1. Real playtest tuning pass on impact: is a light hit distinct enough from a
-   finisher; does the crescent smear read as a blade trail; is the zoom punch
-   too strong; do the scanlines feel like a glitch rather than damage.
-2. A second weapon function with a different curve (e.g. a Lissajous flail or
-   a rose-petal area attack) to prove the weapon schema generalizes.
-3. A second handcrafted arena and a doorway transition before any generator
-   work (pillar 2 first slice).
-4. Room-template data format + a hand-authored 3-room chain, no randomness yet.
-5. Replace the 7 generic boons with the three-attribute (red/purple/green)
-   scroll system once there are enough weapons to scale.
+1. **Playtest the room templates** (`tests/map_capture.tscn`), then tune
+   `data/rooms.json` and `beats`. This is the top item; everything else waits
+   on the answer.
+2. **A forking beat.** `beats` is a 1-D sequence; a beat that splits and
+   rejoins is the next structural step toward a real concept graph.
+3. **Annex enemies**, behind a spawn filter that proves they stay killable.
+4. Real playtest tuning pass on impact: is a light hit distinct enough from a
+   finisher (the four tier signatures are now in), is the zoom punch too
+   strong, do the scanlines read as damage rather than a glitch.
+5. Give souls a longer runway (10 exist today) and add a second boss.
 6. Export presets and a Windows build once templates are installed.
 
 ## Latest
@@ -173,6 +191,26 @@ Immediate follow-ups:
    time there.
 3. Combo / EDGE / boss HUD plates are verified statically only - the capture
    harness never has a combo or a boss in frame.
+
+## Session (map templates, feedback tiers, flow bugs)
+
+State: `tools/check.ps1` green (17 steps, ~470 s; ~100 s with `-Fast`). The
+generator no longer invents room interiors: `data/rooms.json` holds 18
+hand-authored templates, `data/floors.json` carries a per-floor `beats` role
+sequence and 8-11 rooms per floor, and each floor grows 1-2 **annex** chambers
+above its own top deck holding the biggest cache (and deliberately no enemies).
+Every generated surface obeys two invariants, both checked by `gen_stats` and
+`climb_probe`: one jump between the surface and the surface it is climbed from,
+and 72 px between overlapping surface tops. `tests/map_capture.tscn` renders a
+whole-floor overview plus one shot per room for all five floors.
+
+Feedback: being hit now scales its freeze/shake with damage; a kill pops at the
+tier that landed it; combo milestones announce; the hurt spark is at the contact
+edge instead of the player's centre. Flow: the hub door picker moved to Q/E
+(A/D also move the body), the hub refreshes the body after any purchase, the HUD
+shows the right wallet per scene, and a floor-clear overlay counts down to the hub.
+
+Read `docs/design/map-generation.md` before touching the generator.
 
 ## Session (bug hunt on combat + generator, art readability)
 

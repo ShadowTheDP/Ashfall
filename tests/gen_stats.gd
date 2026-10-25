@@ -21,6 +21,8 @@ func _ready() -> void:
 		var decks_avg := 0.0
 		var links_avg := 0.0
 		var caches_min := 99
+		var annex_avg := 0.0
+		var annex_seeds := 0
 		var unreachable := 0
 		var lost_decks := 0
 		var gallery_seeds := 0
@@ -33,6 +35,18 @@ func _ready() -> void:
 			gallery_seeds += 1 if _links(data) > 0 else 0
 			var caches: Array = data.get("caches", [])
 			caches_min = mini(caches_min, caches.size())
+			var annexes := _annexes(data)
+			annex_avg += float(annexes)
+			if annexes > 0:
+				annex_seeds += 1
+				# The annex cache is the floor's biggest reward and it is kept
+				# unconditionally; the trim used to be able to drop exactly it.
+				var paid := false
+				for entry in caches:
+					if int((entry as Dictionary)["value"]) > 4 + floor_index * 2:
+						paid = true
+				if not paid:
+					_fail("floor %d seed %d: annex carries no double cache" % [floor_index, seed_value])
 			var reach: Dictionary = data.get("reachable", {})
 			if not bool(reach.get("ok", false)):
 				unreachable += 1
@@ -40,11 +54,19 @@ func _ready() -> void:
 			for entry in caches:
 				if not _cache_on_surface(data, (entry as Dictionary)["pos"]):
 					_fail("floor %d seed %d: cache off any surface" % [floor_index, seed_value])
+			# The annex is the reward for the climb: an enemy up there would make
+			# an optional detour mandatory (the gate needs every body dead).
+			for room in (data["rooms"] as Array):
+				if not room.has("annex"):
+					continue
+				for spot in (room["spawns"] as Array):
+					if (spot as Vector2).y < (room["annex"] as Rect2).position.y + 30.0:
+						_fail("floor %d seed %d: spawn y=%.0f sits in the annex at y=%.0f" % [floor_index, seed_value, (spot as Vector2).y, (room["annex"] as Rect2).position.y])
 		var n := float(SEEDS)
 		widths.sort()
-		print("floor %d: width %.0f-%.0f rooms %.1f decks/floor %.1f gallery-links %.1f (in %d/%d seeds) caches min %d" % [
+		print("floor %d: width %.0f-%.0f rooms %.1f decks/floor %.1f gallery-links %.1f (in %d/%d seeds) caches min %d annexes %.1f (in %d/%d)" % [
 			floor_index, widths[0], widths[widths.size() - 1], rooms_avg / n, decks_avg / n,
-			links_avg / n, gallery_seeds, SEEDS, caches_min])
+			links_avg / n, gallery_seeds, SEEDS, caches_min, annex_avg / n, annex_seeds, SEEDS])
 
 		if unreachable > 0:
 			_fail("floor %d has %d/%d unreachable layouts" % [floor_index, unreachable, SEEDS])
@@ -63,6 +85,9 @@ func _ready() -> void:
 				_fail("floor %d minimum width %.0f, expected 5200+" % [floor_index, widths[0]])
 			if gallery_seeds < SEEDS / 2:
 				_fail("floor %d only %d/%d seeds have an upper route" % [floor_index, gallery_seeds, SEEDS])
+			# The upper route needs a DESTINATION, not only a connection.
+			if annex_seeds < SEEDS / 2:
+				_fail("floor %d only %d/%d seeds have an annex to climb to" % [floor_index, annex_seeds, SEEDS])
 
 	print("")
 	if _fails == 0:
@@ -77,6 +102,14 @@ func _decks(data: Dictionary) -> float:
 	var n := 0.0
 	for room in (data["rooms"] as Array):
 		n += (room["platforms"] as Array).size()
+	return n
+
+
+func _annexes(data: Dictionary) -> int:
+	var n := 0
+	for room in (data["rooms"] as Array):
+		if room.has("annex"):
+			n += 1
 	return n
 
 

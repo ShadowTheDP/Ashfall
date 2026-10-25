@@ -8,6 +8,9 @@ var characters: Dictionary = {}
 var armor: Dictionary = {}
 var upgrades: Dictionary = {}
 var floors: Dictionary = {}
+## Hand-authored room chunks (data/rooms.json), keyed by room kind. The
+## generator picks one per room; see level_gen._build_room().
+var rooms: Dictionary = {}
 var skill_nodes: Dictionary = {}
 var loaded := false
 
@@ -24,6 +27,7 @@ func load_all() -> void:
 	armor = _read_json("res://data/armor.json")
 	upgrades = _read_json("res://data/upgrades.json")
 	floors = _read_json("res://data/floors.json")
+	rooms = _read_json("res://data/rooms.json")
 	skill_nodes = _read_json("res://data/skill_nodes.json")
 	loaded = not weapons.is_empty() and not enemies.is_empty()
 

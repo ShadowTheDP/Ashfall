@@ -278,14 +278,19 @@ func _test_characters() -> void:
 	_check(float(stats["helix"]["dodge"]) > 1.0, "dancer: perfect_dodge_scale not set")
 	_check(int(stats["gyro"]["echo"]) > 0, "echo: echo_every not set")
 
-	# Dancer: the scale has to reach the actual perfect-dodge window.
+	# Dancer: the scale has to reach the actual perfect-dodge window - EXACTLY,
+	# because scaling it twice (Game.perfect_dodge() already multiplies by
+	# perfect_dodge_scale, and player.take_hit used to multiply again) produced
+	# 10 s from a 5 s promise and this assertion's old `> 1.5x` bound passed it.
 	Profile.select("character", "helix")
 	await _spawn_player()
+	Game.edge_timer = 0.0
 	_player._start_roll(1.0)
 	await _frames(8)
 	_player.take_hit({"damage": 10.0, "source_pos": _player.global_position - Vector2(40.0, 0.0)})
-	_check(Game.edge_timer > Game.PERFECT_DODGE_TIME * 1.5,
-		"dancer: perfect dodge lasted %.2fs, expected > %.2fs" % [Game.edge_timer, Game.PERFECT_DODGE_TIME * 1.5])
+	var dancer := Game.PERFECT_DODGE_TIME * 2.0
+	_check(is_equal_approx(Game.edge_timer, dancer),
+		"dancer: perfect dodge lasted %.2fs, expected %.2fs" % [Game.edge_timer, dancer])
 	Combat.cancel_hitstop()
 
 	# Echo: the third swing must repeat for 60% damage.

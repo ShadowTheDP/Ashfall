@@ -205,15 +205,17 @@ func _first_available() -> int:
 
 
 func _blocked_reason(id: String) -> String:
-	if Profile.cells < _cost(id):
-		return "NEED %d CELLS" % _cost(id)
+	# Prerequisites FIRST: a player who cannot learn a node for a structural
+	# reason must not be told to grind cells for it.
 	var missing: Array[String] = []
 	for parent in _requires(id):
 		if not Profile.has_skill(str(parent)):
 			missing.append(_name_of(str(parent)))
-	if missing.is_empty():
-		return "CANNOT LEARN"
-	return "REQUIRES " + ", ".join(missing)
+	if not missing.is_empty():
+		return "REQUIRES " + ", ".join(missing)
+	if Profile.cells < _cost(id):
+		return "NEED %d CELLS" % _cost(id)
+	return "CANNOT LEARN"
 
 
 # -------------------------------------------------------------------- painting

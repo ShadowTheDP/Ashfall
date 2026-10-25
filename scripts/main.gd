@@ -33,6 +33,14 @@ var archive: Node = null
 var skill_tree: Node = null
 var _terrain: Node = null
 var _transition := 0.0
+var _fade_rect: ColorRect = null
+var _fade_tween: Tween = null
+var _fade_armed := false
+## Boons owed by rooms that cleared while a picker was already on screen.
+var _owed_rewards := 0
+## This floor's gate has fired and its cells are banked. A death after that is
+## not a lost run.
+var _cleared_floor := false
 
 
 func _ready() -> void:
@@ -91,6 +99,7 @@ func _ready() -> void:
 	_add_fullscreen_shader_layer(-10, BACKGROUND_SHADER)
 	_add_fullscreen_shader_layer(15, BLOOM_SHADER)
 	_add_fullscreen_shader_layer(20, VIGNETTE_SHADER)
+	_build_fade()
 
 	if start_mode == "arena":
 		encounter.start()
@@ -143,6 +152,11 @@ func enter_hub() -> void:
 	_clear_terrain()
 	if is_instance_valid(previous):
 		previous.queue_free()
+	# A spitter's glob pool outlives its floor (it is parented to the world, not
+	# to the level). A pool that landed in the last second of a floor sat at a
+	# floor y that is inside the hub's walkable band and kept ticking 6 damage
+	# on the new body with nothing on screen to explain it.
+	_purge_world_fx()
 	Game.go_to_hub()
 	Game.reset_run()
 	var hub_script: Script = _script("res://scripts/meta/hub.gd")
@@ -166,6 +180,7 @@ func enter_hub() -> void:
 	_build_meta_screens()
 	hud.visible = true
 	Game.announce("ASHFALL", 1.2)
+	_fade_in()
 
 
 func _build_meta_screens() -> void:
@@ -264,6 +279,8 @@ func start_floor(floor_index: int) -> void:
 	Game.floor_name = str(Data.floors.get(str(floor_index), {}).get("name", "FLOOR %d" % floor_index))
 	Game.start_floor(floor_index)
 	level.build(floor_index, randi())
+	_owed_rewards = 0
+	_cleared_floor = false
 	if level.has_signal("cleared"):
 		level.cleared.connect(_on_floor_cleared)
 	if level.has_signal("player_died"):
@@ -284,25 +301,61 @@ func start_floor(floor_index: int) -> void:
 	# viewport (240) below the deepest floor or the player renders off-screen.
 	player.camera.limit_left = -120
 	player.camera.limit_right = int(width) + 120
-	player.camera.limit_top = -600
+	# The top limit is COMPUTED from the floor's own highest surface. Annex
+	# chambers reach five tiers above a slab, and the camera clamps its CENTRE,
+	# so a hardcoded number is a promise that goes stale the first time a template
+	# or an annex grows: -820 had 131 px of slack and nothing checked it. Half a
+	# viewport is 240/0.86 = 279 px.
+	var highest := 0.0
+	var rooms: Variant = data.get("rooms", []) if typeof(data) == TYPE_DICTIONARY else []
+	for room in (rooms as Array):
+		for entry in ((room as Dictionary).get("platforms", []) as Array):
+			highest = minf(highest, (entry as Rect2).position.y)
+	player.camera.limit_top = int(minf(-600.0, highest - 279.0 - 40.0))
 	player.camera.limit_bottom = 400
 
 	hud.visible = true
 	Game.announce(Game.floor_name, 1.4)
+	_fade_in()
 
 
 func _on_rooms_cleared_reward() -> void:
 	# Deferred by _on_room_cleared: this pauses the tree, and the room clears
 	# inside a physics signal flush.
-	if Game.run_over or Game.reward_open:
+	if Game.run_over:
 		return
 	# Headless probes drive the whole run without a UI; the flag they already
 	# set for the arena path has to mean the same thing here.
 	if Game.floor_rewards_left <= 0:
 		return
+	# A picker already on screen cannot take a second request, so the owed boon
+	# waits in _owed_rewards and is paid from _on_reward_chosen. Bailing out
+	# here instead dropped it: two rooms cleared by one finisher wave paid one
+	# boon and left floor_rewards_left stuck with no room left to clear.
+	if Game.reward_open:
+		_owed_rewards += 1
+		return
 	Game.floor_rewards_left -= 1
 	if auto_rewards or Game.auto_choose_rewards:
 		Game.grant_random_reward()
+		_pay_owed_rewards()
+		return
+	Game.request_rewards(3)
+
+
+## Pays boons that arrived while a picker was up. Called after every pick and
+## every auto-grant, so the debt can never outlive the floor.
+func _pay_owed_rewards() -> void:
+	if _owed_rewards <= 0 or Game.run_over:
+		return
+	if Game.floor_rewards_left <= 0:
+		_owed_rewards = 0
+		return
+	_owed_rewards -= 1
+	Game.floor_rewards_left -= 1
+	if auto_rewards or Game.auto_choose_rewards:
+		Game.grant_random_reward()
+		_pay_owed_rewards()
 		return
 	Game.request_rewards(3)
 
@@ -310,11 +363,16 @@ func _on_room_cleared(_index: int) -> void:
 	# Two rooms can clear in the same frame, and both deferred calls land before
 	# either picker sets reward_open. Spending the budget here would then pay one
 	# boon for two rooms; the decrement therefore lives in the deferred call.
-	if Game.floor_rewards_left <= 0 or Game.run_over or Game.reward_open:
+	if Game.floor_rewards_left <= 0 or Game.run_over:
 		return
 	call_deferred("_on_rooms_cleared_reward")
 
 func _on_floor_cleared() -> void:
+	_cleared_floor = true
+	# Anything picked up from here on is safe: bank it as it lands rather than
+	# letting the hub wipe an unbanked pile (the bodies killed on the way to the
+	# gate drop cells right into this window).
+	Game.bank_cells_now = true
 	Game.finish_floor()
 	if Game.floor_index >= Game.max_floor():
 		Game.end_run(true)
@@ -325,16 +383,68 @@ func _on_floor_cleared() -> void:
 
 
 func _on_player_died() -> void:
+	# A death AFTER the gate already banked this floor is not a lost run: the
+	# cells are in the hub and best_floor is written. Recording it as a death put
+	# a loss on a floor that was cleared and played the death sting over the
+	# FLOOR CLEARED headline. Just leave.
+	if _cleared_floor:
+		_transition = 1.2
+		return
 	Game.end_run(false)
 	_transition = 2.2
 
 
 func _process(delta: float) -> void:
 	if _transition <= 0.0:
+		Game.hub_return_in = 0.0
 		return
 	_transition -= delta
+	Game.hub_return_in = maxf(0.0, _transition)
+	# Fall to black over the last fifth of a second instead of cutting: the
+	# floor is torn down between frames and the swap used to read as a dropped
+	# frame rather than as leaving a place.
+	if not _fade_armed and _transition <= 0.2:
+		_fade_armed = true
+		_fade_out(0.2)
 	if _transition <= 0.0 and start_mode == "hub":
 		enter_hub()
+
+
+## Scene-change veil. It never pauses the tree and the tween ignores
+## time_scale, so a hitstop cannot freeze the screen half-faded.
+func _build_fade() -> void:
+	var layer := CanvasLayer.new()
+	layer.name = "FadeLayer"
+	layer.layer = 45
+	add_child(layer)
+	_fade_rect = ColorRect.new()
+	_fade_rect.color = Color(0.02, 0.02, 0.02, 0.0)
+	_fade_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(_fade_rect)
+	_fade_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+
+func _fade_in(duration := 0.24) -> void:
+	_fade_armed = false
+	if _fade_rect == null:
+		return
+	# Snap to black, then open: a new floor is revealed, never cut to.
+	_fade_rect.color.a = 1.0
+	_fade_to(0.0, duration)
+
+
+func _fade_out(duration := 0.2) -> void:
+	_fade_to(1.0, duration)
+
+
+func _fade_to(alpha: float, duration: float) -> void:
+	if _fade_rect == null:
+		return
+	if _fade_tween != null and _fade_tween.is_valid():
+		_fade_tween.kill()
+	_fade_tween = create_tween()
+	_fade_tween.set_ignore_time_scale(true)
+	_fade_tween.tween_property(_fade_rect, "color:a", alpha, duration)
 
 
 ## Anything still flying belongs to the floor being left. Hub._build_player()
@@ -404,6 +514,7 @@ func _on_reward_chosen(_id: String) -> void:
 	# encounter here is what would have crashed the first cleared room.
 	if encounter != null and is_instance_valid(encounter):
 		encounter.resume_after_reward()
+	_pay_owed_rewards()
 
 
 func _add_fullscreen_shader_layer(layer_index: int, shader: Shader) -> void:

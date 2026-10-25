@@ -222,6 +222,13 @@ func enemies_remaining() -> int:
 	return _alive.size() + _pending_total
 
 
+## Read-only snapshot of the room states, for the HUD's route strip. The strip
+## is the only thing that tells a player on an 8200 px floor how far the gate
+## is and which rooms are already behind them.
+func room_flags() -> Array:
+	return _room_cleared.duplicate()
+
+
 ## Reward for taking the high route. The generator places these on decks at
 ## least two tiers above a room slab and the BFS has already proven those decks
 ## reachable, so a cache is always a real detour and never bait in a wall.
@@ -275,6 +282,9 @@ func _physics_process(_delta: float) -> void:
 	var player := _player()
 	if player == null:
 		return
+	# A death is always reported. What must NOT happen after the gate has fired
+	# is the run being recorded as lost - that is Main's call, because only Main
+	# knows the floor's cells are already banked.
 	if not _dead and player.hp <= 0.0:
 		_dead = true
 		player_died.emit()
@@ -599,14 +609,29 @@ func _draw() -> void:
 		# In the same pass, so a later (raised) slab paints over the ledge's
 		# detailing exactly where it stands on it.
 		_draw_strata(i)
+	# Two passes, not one: every pass-through deck first, then every solid mass.
+	# The macro layer appends a pillar's step deck to the PREVIOUS room after that
+	# room's authored tile is already in the list, so a single in-order pass drew
+	# a bright plank on top of an authored mass it overlaps. Solids are what the
+	# player reads as "you cannot pass", so they own the last word.
 	for room in _rooms:
 		var platforms: Array = room["platforms"]
 		var oneway: Array = room["oneway"]
 		for i in platforms.size():
+			if not bool(oneway[i]):
+				continue
 			var pr: Rect2 = platforms[i]
+			_draw_deck(pr)
+			if _is_annex(pr):
+				_draw_annex_floor(pr)
+	for room in _rooms:
+		var platforms: Array = room["platforms"]
+		var oneway: Array = room["oneway"]
+		for i in platforms.size():
 			if bool(oneway[i]):
-				_draw_deck(pr)
-			elif pr.size.y > 40.0:
+				continue
+			var pr: Rect2 = platforms[i]
+			if pr.size.y > 40.0:
 				_draw_mass(pr)
 			else:
 				_draw_platform(pr)
@@ -813,6 +838,12 @@ func _draw_monoliths() -> void:
 	for column in _columns:
 		var x: float = column["x"]
 		var width: float = column["w"]
+		# A monolith runs from the vault down to its room's slab, so it cuts
+		# straight through an annex chamber hanging above that slab. Skip any
+		# column that would stand in one: the annex is the floor's destination and
+		# a 30 px dark bar through it reads as unfinished geometry.
+		if _in_annex_span(x, width):
+			continue
 		var top: float = column["top"]
 		var bottom: float = column["bottom"]
 		var height := bottom - top
@@ -916,6 +947,41 @@ func _draw_mass(rect: Rect2) -> void:
 			x += 36.0
 		y += 16.0
 		row += 1
+
+
+## Is this surface one of the floor's annex chambers (or the landing below one)?
+## The annex is the reward for the climb, so it has to look like a place: an
+## ordinary 13 px deck made it read as one more rung of scaffolding.
+func _is_annex(rect: Rect2) -> bool:
+	for entry in (data.get("annex_floors", []) as Array):
+		var r: Rect2 = entry
+		if absf(r.position.x - rect.position.x) < 0.5 and absf(r.position.y - rect.position.y) < 0.5:
+			return true
+	return false
+
+
+func _in_annex_span(x: float, width: float) -> bool:
+	for entry in (data.get("annex_floors", []) as Array):
+		var r: Rect2 = entry
+		if r.size.y > 40.0:
+			continue
+		if x + width > r.position.x - 12.0 and x < r.end.x + 12.0:
+			return true
+	return false
+
+
+func _draw_annex_floor(rect: Rect2) -> void:
+	# A lit band, a bright front lip and two braced brackets: the same value
+	# language as a station plinth in the hub, so "this is somewhere" is already
+	# learned before the player reaches one.
+	MathArt.px_rect(self, Rect2(rect.position.x, rect.position.y + rect.size.y - 1.0,
+		rect.size.x, 4.0), Color(MathArt.STONE_HI, 0.85))
+	MathArt.px_rect(self, Rect2(rect.position.x, rect.position.y + 2.0, rect.size.x, 1.0),
+		Color(MathArt.WHITE, 0.55))
+	for side in 2:
+		var bx := rect.position.x + 3.0 if side == 0 else rect.end.x - 5.0
+		MathArt.px_rect(self, Rect2(bx, rect.position.y + rect.size.y, 2.0, 8.0),
+			Color(MathArt.STONE_HI, 0.7))
 
 
 func _draw_platform(rect: Rect2) -> void:
