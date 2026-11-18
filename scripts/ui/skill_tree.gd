@@ -7,30 +7,35 @@ extends CanvasLayer
 
 signal closed
 
-const TREE_RECT := Rect2(40.0, 56.0, 688.0, 312.0)
-const CARD_RECT := Rect2(40.0, 380.0, 688.0, 66.0)
-const NODE_R := 14.0
+const TREE_RECT := Rect2(52, 112, 410, 264)
+const NODE_R := 12.0
 const PAD := 26.0
-
-const BG := Color(0.024, 0.024, 0.024, 0.97)
-const PANEL := Color(0.047, 0.047, 0.047, 0.94)
 
 var _canvas: Control
 var _ids: Array[String] = []
 var _pos: Dictionary = {}
 var _index := 0
 var _open := false
+var _open_frame := -1
 var _t := 0.0
 var _flash_t := 0.0
 var _note := ""
 var _note_t := 0.0
+var _locale := ""
 
 
 func _ready() -> void:
 	layer = 60
 	visible = false
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_locale = TranslationServer.get_locale()
+	if not Interface.presentation_changed.is_connected(_on_presentation_changed):
+		Interface.presentation_changed.connect(_on_presentation_changed)
 	_ensure_canvas()
+
+
+func _on_presentation_changed() -> void:
+	_canvas.queue_redraw()
 
 
 func _ensure_canvas() -> void:
@@ -56,7 +61,9 @@ func open() -> void:
 	_layout()
 	_index = _first_available()
 	_open = true
+	_open_frame = Engine.get_process_frames()
 	visible = true
+	MathArt.ui_reveal(_canvas)
 	_note = ""
 	_note_t = 0.0
 	_flash_t = 0.0
@@ -85,36 +92,46 @@ func _process(delta: float) -> void:
 	_t += delta
 	_flash_t = maxf(0.0, _flash_t - delta)
 	_note_t = maxf(0.0, _note_t - delta)
+	if TranslationServer.get_locale() != _locale:
+		_locale = TranslationServer.get_locale()
+		_canvas.queue_redraw()
 	_canvas.queue_redraw()
 
 
 ## _input, not _unhandled_input: the HUD also listens for Esc and it is
 ## later in the tree, so unhandled input reaches it first. A modal panel
-## has to claim the key before the HUD can pause the game under it.
+## has to claim the event before the HUD can pause the game under it.
 func _input(event: InputEvent) -> void:
 	if not _open:
 		return
-	if not (event is InputEventKey) or not event.pressed:
+	if not _is_menu_event(event):
 		return
-	# A modal owns every key while it is up. A key it does not use would
-	# otherwise reach the hub's proximity handler and raise a second panel
+	# A modal owns every menu event while it is up. An event it does not use
+	# would otherwise reach the hub's proximity handler and raise a second panel
 	# (J) or start a floor (Enter) underneath this one.
 	get_viewport().set_input_as_handled()
-	if event.echo:
+	# Hub may open this page during the same input dispatch that selected the
+	# station; do not let that press also learn a node.
+	if Engine.get_process_frames() == _open_frame:
 		return
-	match event.physical_keycode:
-		KEY_ESCAPE:
-			close()
-		KEY_LEFT, KEY_A:
-			_move(Vector2.LEFT)
-		KEY_RIGHT, KEY_D:
-			_move(Vector2.RIGHT)
-		KEY_UP, KEY_W:
-			_move(Vector2.UP)
-		KEY_DOWN, KEY_S:
-			_move(Vector2.DOWN)
-		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
-			_buy()
+	if Interface.pressed(event, &"ui_back"):
+		close()
+		return
+	if Interface.pressed(event, &"ui_accept"):
+		_buy()
+		return
+	if Interface.pressed(event, &"ui_nav_up"):
+		_move(Vector2.UP)
+	elif Interface.pressed(event, &"ui_nav_down"):
+		_move(Vector2.DOWN)
+	elif Interface.pressed(event, &"ui_nav_left"):
+		_move(Vector2.LEFT)
+	elif Interface.pressed(event, &"ui_nav_right"):
+		_move(Vector2.RIGHT)
+
+
+func _is_menu_event(event: InputEvent) -> bool:
+	return event is InputEventKey or event is InputEventJoypadButton or event is InputEventJoypadMotion or event is InputEventAction
 
 
 func _move(direction: Vector2) -> void:
@@ -138,6 +155,7 @@ func _move(direction: Vector2) -> void:
 			best = i
 	if best >= 0:
 		_index = best
+		MathArt.ui_select(_canvas)
 		Sfx.play("ui", -14)
 		_canvas.queue_redraw()
 
@@ -152,13 +170,13 @@ func _buy() -> void:
 		_canvas.queue_redraw()
 		return
 	if Profile.buy_skill(id):
-		_note = "LEARNED " + _name_of(id)
+		_note = "LEARNED: " + id
 		_note_t = 1.6
 		Sfx.play("reward", -8)
 		_canvas.queue_redraw()
 		return
 	_flash_t = 0.45
-	_note = _blocked_reason(id)
+	_note = "SAVE FAILED: " + Profile.last_save_error if not Profile.last_save_error.is_empty() else "BLOCKED: " + id
 	_note_t = 1.8
 	Sfx.play("block", -10)
 	_canvas.queue_redraw()
@@ -184,8 +202,18 @@ func _node(id: String) -> Dictionary:
 	return out if typeof(out) == TYPE_DICTIONARY else {}
 
 
+## Raw data-name accessor; drawing uses _name_display() so zh_TW never shows an
+## ID-derived English label.
 func _name_of(id: String) -> String:
 	return str(_node(id).get("name", id))
+
+
+func _name_display(id: String) -> String:
+	return ContentText.name("skill", id, _name_of(id))
+
+
+func _text_display(id: String) -> String:
+	return ContentText.text("skill", id, str(_node(id).get("text", "")))
 
 
 func _requires(id: String) -> Array:
@@ -204,204 +232,85 @@ func _first_available() -> int:
 	return 0
 
 
-func _blocked_reason(id: String) -> String:
+## Display-side reason; the raw machine form never reaches the screen.
+func _blocked_display(id: String) -> String:
 	# Prerequisites FIRST: a player who cannot learn a node for a structural
 	# reason must not be told to grind cells for it.
 	var missing: Array[String] = []
 	for parent in _requires(id):
 		if not Profile.has_skill(str(parent)):
-			missing.append(_name_of(str(parent)))
+			missing.append(_name_display(str(parent)))
 	if not missing.is_empty():
-		return "REQUIRES " + ", ".join(missing)
+		return ContentText.of("UI_TREE_REQUIRES", "REQUIRES {names}").format({"names": ", ".join(missing)})
 	if Profile.cells < _cost(id):
-		return "NEED %d CELLS" % _cost(id)
-	return "CANNOT LEARN"
+		return ContentText.of("UI_TREE_NEED_CELLS", "NEED {cost} CELLS").format({"cost": _cost(id)})
+	return ContentText.of("UI_TREE_CANNOT_LEARN", "CANNOT LEARN")
+
+
+func _note_display() -> String:
+	if _note.begins_with("SAVE FAILED: "):
+		return Hud.save_failed_display(_note.substr(13))
+	if _note.begins_with("LEARNED: "):
+		return ContentText.of("UI_TREE_LEARNED", "LEARNED {name}").format({"name": _name_display(_note.substr(9))})
+	if _note.begins_with("BLOCKED: "):
+		return _blocked_display(_note.substr(9))
+	if _note == "ALREADY OWNED":
+		return ContentText.of("UI_TREE_ALREADY_OWNED", "ALREADY OWNED")
+	return _note
 
 
 # -------------------------------------------------------------------- painting
 
 func _paint(canvas: Control) -> void:
-	var font := ThemeDB.fallback_font
-	if font == null:
-		return
-	var size := canvas.get_viewport_rect().size
-	MathArt.px_rect(canvas, Rect2(Vector2.ZERO, size), BG)
-	# Header band, then the two framed panels. Order matters: the panels cast
-	# the shadow, the band lights the top of the screen.
-	MathArt.px_rect(canvas, Rect2(40.0, 20.0, size.x - 80.0, 34.0), Color(MathArt.BG_1, 0.95))
-	MathArt.px_rect(canvas, Rect2(40.0, 54.0, size.x - 80.0, 1.0), Color(MathArt.STONE, 0.85))
-	_panel(canvas, TREE_RECT)
-	canvas.draw_string(font, Vector2(40.0, 40.0), "SKILL TREE", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, MathArt.PALE)
-	MathArt.px_rect(canvas, Rect2(40.0, 42.0, 76.0, 1.0), MathArt.PALE_DIM)
-
-	var owned := 0
+	MathArt.px_rect(canvas, Rect2(0, 0, 768, 480), MathArt.INK)
+	MathArt.ui_panel(canvas, MathArt.UI_PAGE)
+	MathArt.ui_heading(canvas,
+		ContentText.of("UI_TREE_TITLE", "Skill tree"),
+		ContentText.of("UI_TREE_CONTEXT", "Permanent upgrades / effects apply to Arena only"),
+		ContentText.of("UI_TREE_WALLET", "{cells} banked Cells").format({"cells": Profile.cells}))
 	for id in _ids:
-		if Profile.has_skill(id):
-			owned += 1
-	_text(canvas, font, Vector2(40.0, 52.0), "%d / %d OWNED" % [owned, _ids.size()], 8, MathArt.STONE_HI)
-	_text(canvas, font, Vector2(size.x - 208.0, 40.0), "CELLS %d" % Profile.cells, 11,
-		MathArt.PALE, 168.0, HORIZONTAL_ALIGNMENT_RIGHT)
-
-	if _ids.is_empty():
-		_text(canvas, font, Vector2(0.0, 220.0), "NO SKILLS RECORDED", 12, MathArt.MID,
-			size.x, HORIZONTAL_ALIGNMENT_CENTER)
-	else:
-		_draw_edges(canvas)
-		_draw_nodes(canvas, font)
-	_draw_card(canvas, font)
-	_draw_footer(canvas, font, size)
-
-
-## Drop shadow, fill, lit top edge, dark bottom edge. One value step below the
-## tree, so the graph reads as laid on top of a plate.
-func _panel(canvas: CanvasItem, rect: Rect2) -> void:
-	MathArt.px_rect(canvas, Rect2(rect.position + Vector2(3.0, 4.0), rect.size), Color(MathArt.BLACK, 0.55))
-	MathArt.px_rect(canvas, rect, PANEL)
-	MathArt.px_rect(canvas, Rect2(rect.position, Vector2(rect.size.x, 1.0)), Color(MathArt.PALE, 0.8))
-	MathArt.px_rect(canvas, Rect2(rect.position + Vector2(0.0, rect.size.y - 2.0), Vector2(rect.size.x, 2.0)),
-		Color(MathArt.BLACK, 0.9))
-	MathArt.px_rect(canvas, Rect2(rect.position + Vector2(0.0, 1.0), Vector2(1.0, rect.size.y - 3.0)),
-		Color(MathArt.STONE, 0.8))
-	MathArt.px_rect(canvas, Rect2(rect.position + Vector2(rect.size.x - 1.0, 1.0), Vector2(1.0, rect.size.y - 3.0)),
-		Color(MathArt.STONE, 0.8))
-
-
-## Branches are tapered quads: thick at the parent, thin at the child, so a
-## bought path reads as a spine rather than a hairline.
-func _draw_edges(canvas: CanvasItem) -> void:
-	for id in _ids:
-		if not _pos.has(id):
-			continue
-		var child: Vector2 = _pos[id]
-		var owned := Profile.has_skill(id)
-		var available := Profile.skill_available(id)
-		var tint := MathArt.WHITE if owned else (MathArt.PALE_DIM if available else MathArt.STONE)
-		var alpha := 0.75 if owned else (0.45 if available else 0.30)
-		var root_half := 2.6 if owned else (2.0 if available else 1.4)
 		for parent in _requires(id):
-			var parent_id := str(parent)
-			if not _pos.has(parent_id):
-				continue
-			var from: Vector2 = _pos[parent_id]
-			var direction := (child - from).normalized()
-			var side := direction.orthogonal()
-			var a := from + direction * NODE_R
-			var b := child - direction * NODE_R
-			MathArt.px_poly(canvas, PackedVector2Array([
-				a + side * root_half, b + side * 0.8, b - side * 0.8, a - side * root_half,
-			]), Color(tint, alpha))
-
-
-func _draw_nodes(canvas: CanvasItem, font: Font) -> void:
+			if _pos.has(str(parent)):
+				MathArt.line(canvas, _pos[str(parent)], _pos[id], MathArt.PALE if Profile.has_skill(id) else MathArt.STONE, 2 if Profile.has_skill(id) else 1)
 	for i in _ids.size():
 		var id := _ids[i]
-		if not _pos.has(id):
-			continue
-		var center: Vector2 = _pos[id]
+		var at: Vector2 = _pos[id]
 		var owned := Profile.has_skill(id)
 		var available := Profile.skill_available(id)
-		var selected := i == _index
-
-		# Three states, three silhouettes: bought is a solid white plate with a
-		# cut core, available is a filled cog with a lit rim, locked is a hollow
-		# shell. Nothing here leans on hue.
-		var fill := MathArt.INK
-		var line := MathArt.STONE_HI
-		var width := 1.0
-		if owned:
-			fill = MathArt.WHITE
-			line = MathArt.BLACK
-			width = 2.0
-		elif available:
-			fill = MathArt.BG_2
-			line = MathArt.PALE
-			width = 2.0
-		if i == _index and _flash_t > 0.0:
-			line = MathArt.WHITE
-			width = 3.0
-
-		if selected:
-			# Halo under the plate, so the cursor node lifts off the tree.
-			MathArt.glow(canvas, center, NODE_R + 10.0, Color(MathArt.WHITE, 0.6), 3)
-		MathArt.px_poly(canvas, MathArt.ngon(6, NODE_R, PI / 6.0, center), fill, line, width)
-		if owned:
-			# A small hollow core keeps the solid white node from reading as a
-			# filled blob and matches the player's "square inside a square".
-			MathArt.px_poly(canvas, MathArt.ngon(6, NODE_R * 0.34, PI / 6.0, center), MathArt.INK)
-		elif available:
-			MathArt.disc(canvas, center, 3.4, MathArt.WHITE)
-			MathArt.ring(canvas, center, 5.6, Color(MathArt.PALE_DIM, 0.7), 1.0, 6)
-		else:
-			MathArt.disc(canvas, center, 2.2, MathArt.STONE_HI)
-
-		if selected:
-			var pulse := 0.45 + 0.35 * sin(_t * 5.0)
-			MathArt.ring(canvas, center, NODE_R + 6.0, Color(MathArt.WHITE, pulse), 2.0, 6)
-
-		_text(canvas, font, Vector2(center.x - 60.0, center.y + NODE_R + 14.0), _name_of(id), 8,
-			MathArt.WHITE if selected else (MathArt.PALE if owned or available else MathArt.STONE_HI),
-			120.0, HORIZONTAL_ALIGNMENT_CENTER)
+		var tone := MathArt.PALE if owned or i == _index else (MathArt.PALE if available else MathArt.LIGHT_DIM)
+		MathArt.poly(canvas, MathArt.ngon(6, NODE_R, PI / 6, at), MathArt.HEAL if owned else MathArt.BG_2 if available else MathArt.INK, MathArt.ACCENT if i == _index else tone, 2 if available or owned else 1)
+		if owned: MathArt.disc(canvas, at, 3, MathArt.INK)
+		if i == _index: MathArt.ring(canvas, at, NODE_R * MathArt.PHI, MathArt.ACCENT, 2, 6)
+		var central := absf(at.x - TREE_RECT.get_center().x) < NODE_R
+		MathArt.ui_text(canvas, at + (Vector2(NODE_R + 14, 4) if central else Vector2(-55, 28)), _name_display(id), 11, tone, 110, HORIZONTAL_ALIGNMENT_LEFT if central else HORIZONTAL_ALIGNMENT_CENTER)
+	MathArt.line(canvas, Vector2(474, 112), Vector2(474, 398), MathArt.STONE, 1)
+	if not _ids.is_empty():
+		var id := _ids[_index]
+		var emblem := "brutality" if "edge" in id or "crit" in id else "tactics" if "swift" in id or "armory" in id else "survival"
+		MathArt.ui_axis_emblem(canvas, Vector2(520, 142), emblem, 24)
+		var names := MathArt.ui_wrap(_name_display(id), 156, 16)
+		for i in mini(2, names.size()): MathArt.ui_text(canvas, Vector2(560, 140 + i * MathArt.ui_line_height(16)), names[i], 16, MathArt.WHITE)
+		var owned := Profile.has_skill(id)
+		MathArt.ui_text(canvas, Vector2(494, 198), ContentText.of("UI_TREE_OWNED", "Owned") if owned else ContentText.of("UI_TREE_PRICE", "{cells} Cells").format({"cells": _cost(id)}), 16, MathArt.HEAL if owned else MathArt.CELL)
+		var detail := _text_display(id) + "\n\n" + (ContentText.of("UI_TREE_ALREADY_LEARNED", "Already learned.") if owned else _blocked_display(id) if not Profile.skill_available(id) or Profile.cells < _cost(id) else ContentText.of("UI_TREE_AVAILABLE", "Available to learn."))
+		var lines := MathArt.ui_wrap(detail, 220, 13)
+		for i in mini(7, lines.size()): MathArt.ui_text(canvas, Vector2(494, 232 + i * MathArt.ui_line_height(13)), lines[i], 13)
+		var notes := MathArt.ui_wrap(_note_display(), 220, 11)
+		for i in mini(3, notes.size()): MathArt.ui_text(canvas, Vector2(494, 371 + i * MathArt.ui_line_height(11)), notes[i], 11, MathArt.WHITE)
+	MathArt.ui_text(canvas, Vector2(52, 399), ContentText.of("UI_TREE_LEGEND", "Filled: owned · Hollow: available · Dim: locked"), 11)
+	var x := 52.0
+	x += MathArt.ui_key(canvas, Vector2(x, 428), _nearest_prompt(), ContentText.of("UI_TREE_KEY_NEAREST", "Nearest skill"))
+	x += MathArt.ui_key(canvas, Vector2(x, 428), Interface.prompt(&"ui_accept"), ContentText.of("UI_TREE_KEY_LEARN", "Learn"))
+	MathArt.ui_key(canvas, Vector2(636, 428), Interface.prompt(&"ui_back"), ContentText.of("UI_TREE_KEY_BACK", "Back"))
 
 
-func _draw_card(canvas: CanvasItem, font: Font) -> void:
-	var rect := CARD_RECT
-	_panel(canvas, rect)
-	if _ids.is_empty():
-		_text(canvas, font, Vector2(rect.position.x, rect.position.y + 34.0), "NO SKILLS RECORDED",
-			9, MathArt.STONE_HI, rect.size.x, HORIZONTAL_ALIGNMENT_CENTER)
-		return
-	var id := _ids[_index]
-	var node := _node(id)
-	var owned := Profile.has_skill(id)
-	var available := Profile.skill_available(id)
-
-	var name_color := MathArt.WHITE if available or owned else MathArt.MID
-	_text(canvas, font, Vector2(rect.position.x + 16.0, rect.position.y + 22.0), _name_of(id), 14,
-		name_color)
-	# Rule under the name, as wide as the name: the title block reads as a ledger.
-	var name_w := font.get_string_size(_name_of(id), HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
-	MathArt.px_rect(canvas, Rect2(rect.position.x + 16.0, rect.position.y + 28.0, name_w, 1.0),
-		Color(name_color, 0.7))
-	_text(canvas, font, Vector2(rect.position.x + 16.0, rect.position.y + 40.0),
-		str(node.get("text", "")), 10, MathArt.PALE if available or owned else MathArt.STONE_HI)
-	_text(canvas, font, Vector2(rect.position.x + 16.0, rect.position.y + 56.0),
-		"COST %d CELLS" % _cost(id), 9, MathArt.MID)
-
-	# The status column is a separate cell, split off by its own hairline.
-	var gate_x := rect.position.x + rect.size.x - 176.0
-	MathArt.px_rect(canvas, Rect2(gate_x - 10.0, rect.position.y + 8.0, 1.0, rect.size.y - 20.0),
-		Color(MathArt.STONE_DIM, 0.5))
-	var status := "ENTER TO BUY"
-	var tint := MathArt.WHITE
-	if owned:
-		status = "OWNED"
-		tint = MathArt.PALE_DIM
-	elif not available:
-		status = _blocked_reason(id)
-		tint = MathArt.STONE_HI
-	elif Profile.cells < _cost(id):
-		status = "NEED %d CELLS" % _cost(id)
-		tint = MathArt.MID
-	_text(canvas, font, Vector2(gate_x, rect.position.y + 22.0), status, 10, tint, 160.0,
-		HORIZONTAL_ALIGNMENT_RIGHT)
-	if available and not owned:
-		MathArt.px_poly(canvas, MathArt.ngon(3, 4.0, 0.0, Vector2(gate_x + 168.0, rect.position.y + 18.0)),
-			MathArt.WHITE)
-
-	if _note_t > 0.0:
-		_text(canvas, font, Vector2(gate_x, rect.position.y + 40.0),
-			_note, 9, Color(MathArt.WHITE, clampf(_note_t * 2.0, 0.0, 1.0)), 160.0,
-			HORIZONTAL_ALIGNMENT_RIGHT)
-
-
-func _draw_footer(canvas: CanvasItem, font: Font, size: Vector2) -> void:
-	MathArt.px_rect(canvas, Rect2(40.0, 450.0, size.x - 80.0, 30.0), Color(MathArt.BG_1, 0.9))
-	MathArt.px_rect(canvas, Rect2(40.0, 450.0, size.x - 80.0, 1.0), Color(MathArt.STONE, 0.85))
-	_text(canvas, font, Vector2(0.0, 462.0),
-		"ARROWS NEAREST NODE      ENTER BUY      ESC CLOSE", 8, MathArt.LIGHT,
-		size.x, HORIZONTAL_ALIGNMENT_CENTER)
-
-
-func _text(canvas: CanvasItem, font: Font, at: Vector2, text: String, size_px: int, color: Color,
-		width := -1.0, align := HORIZONTAL_ALIGNMENT_LEFT) -> void:
-	canvas.draw_string(font, at, text, align, width, size_px, color)
+## The nearest-node control is directional, so show each direction once. On a
+## gamepad every direction is the same D-pad/stick prompt and repeating it four
+## times would only crowd the key band.
+func _nearest_prompt() -> String:
+	var parts: Array[String] = []
+	for action: StringName in [&"ui_nav_up", &"ui_nav_left", &"ui_nav_down", &"ui_nav_right"]:
+		var text := Interface.prompt(action)
+		if not parts.has(text):
+			parts.append(text)
+	return "/".join(parts)

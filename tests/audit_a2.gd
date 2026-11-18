@@ -51,6 +51,7 @@ func _t1_round_trip() -> void:
 	Profile.seen_enemies = ["grunt", "archer"]
 	Profile.seen_weapons = ["rusty_sword", "arc_saber"]
 	Profile.seen_armor = ["none", "plate"]
+	Profile.seen_biomes = ["ash_gate", "hanging_gallery"]
 	Profile.unlocked_characters = ["square", "octa"]
 	Profile.unlocked_weapons = ["rusty_sword", "arc_saber"]
 	Profile.unlocked_armor = ["none", "plate"]
@@ -62,6 +63,9 @@ func _t1_round_trip() -> void:
 	Profile.deaths = 5
 	Profile.runs = 9
 	Profile.victories = 1
+	Profile.unlocked_runes = ["vine_rune", "spider_rune"]
+	Profile.boss_cells_unlocked = 2
+	Profile.active_bsc = 1
 	Profile.save()
 
 	# Wipe every field in memory, then load from disk.
@@ -72,6 +76,7 @@ func _t1_round_trip() -> void:
 	Profile.seen_enemies = []
 	Profile.seen_weapons = []
 	Profile.seen_armor = []
+	Profile.seen_biomes = []
 	Profile.unlocked_characters = []
 	Profile.unlocked_weapons = []
 	Profile.unlocked_armor = []
@@ -83,6 +88,9 @@ func _t1_round_trip() -> void:
 	Profile.deaths = -1
 	Profile.runs = -1
 	Profile.victories = -1
+	Profile.unlocked_runes = []
+	Profile.boss_cells_unlocked = -1
+	Profile.active_bsc = -1
 	Profile.load_profile(true)
 
 	_eq(Profile.cells, 137, "cells round trip")
@@ -98,6 +106,7 @@ func _t1_round_trip() -> void:
 	_eq(Profile.seen_enemies, ["grunt", "archer"], "seen_enemies round trip")
 	_eq(Profile.seen_weapons, ["rusty_sword", "arc_saber"], "seen_weapons round trip")
 	_eq(Profile.seen_armor, ["none", "plate"], "seen_armor round trip")
+	_eq(Profile.seen_biomes, ["ash_gate", "hanging_gallery"], "seen_biomes round trip")
 	_eq(Profile.unlocked_characters, ["square", "octa"], "unlocked_characters round trip")
 	_eq(Profile.unlocked_weapons, ["rusty_sword", "arc_saber"], "unlocked_weapons round trip")
 	_eq(Profile.unlocked_armor, ["none", "plate"], "unlocked_armor round trip")
@@ -111,10 +120,14 @@ func _t1_round_trip() -> void:
 	_eq(Profile.deaths, 5, "deaths round trip")
 	_eq(Profile.runs, 9, "runs round trip")
 	_eq(Profile.victories, 1, "victories round trip")
+	_eq(Profile.unlocked_runes, ["vine_rune", "spider_rune"], "unlocked_runes round trip")
+	_eq(Profile.boss_cells_unlocked, 2, "boss_cells_unlocked round trip")
+	_eq(Profile.active_bsc, 1, "active_bsc round trip")
+	_is_int(Profile.boss_cells_unlocked, "boss_cells_unlocked type")
 
 	# Typed-array identity matters: gameplay code calls .has() and appends.
 	for pair in [["skill_nodes", Profile.skill_nodes], ["seen_enemies", Profile.seen_enemies],
-			["unlocked_weapons", Profile.unlocked_weapons]]:
+			["unlocked_weapons", Profile.unlocked_weapons], ["unlocked_runes", Profile.unlocked_runes]]:
 		var arr: Variant = pair[1]
 		_check(typeof(arr) == TYPE_ARRAY, "%s is an array" % pair[0])
 		if typeof(arr) == TYPE_ARRAY and not (arr as Array).is_empty():
@@ -199,12 +212,14 @@ func _t2_economy() -> void:
 	_check(not Profile.unlock("bogus", "square"), "unlock unknown kind refused")
 	_eq(Profile.unlocked_characters, ["square"], "failed unlocks changed nothing")
 
-	# A real unlock charges the documented price once.
+	# New blueprint gear cannot bypass world/Collector; legacy non-target purchases remain.
 	Profile.cells = 500
-	var price := int(Data.weapons["arc_saber"].get("unlock_cost", 0))
-	_check(Profile.unlock("weapon", "arc_saber"), "unlock arc_saber")
+	_check(not Profile.unlock("weapon", "arc_saber"), "blueprint bypass refused")
+	_eq(Profile.cells, 500, "blueprint bypass spends nothing")
+	var price := int(Data.weapons["kiss_precision"].get("unlock_cost", 0))
+	_check(Profile.unlock("weapon", "kiss_precision"), "unlock legacy non-blueprint weapon")
 	_eq(Profile.cells, 500 - price, "unlock charged unlock_cost")
-	_check(not Profile.unlock("weapon", "arc_saber"), "second unlock refused")
+	_check(not Profile.unlock("weapon", "kiss_precision"), "second unlock refused")
 	_eq(Profile.cells, 500 - price, "second unlock spent nothing")
 
 
@@ -212,13 +227,32 @@ func _t2_economy() -> void:
 
 func _t3_selection() -> void:
 	Profile.reset_profile()
+	_write_save({
+		"version": 1,
+		"cells": 137,
+		"souls": 4,
+		"upgrades": {"vitality": 2},
+		"skill_nodes": ["root_edge"],
+		"best_floor": 4,
+	})
+	Profile.load_profile(true)
+	_eq(Profile.cells, 137, "v1 migration preserves cells")
+	_eq(Profile.souls, 4, "v1 migration preserves souls")
+	_eq(Profile.upgrade_level("vitality"), 2, "v1 migration preserves upgrades")
+	_eq(Profile.skill_nodes, ["root_edge"], "v1 migration preserves skill nodes")
+	_eq(Profile.best_floor, 4, "v1 migration preserves best_floor")
+	_eq(Profile.unlocked_runes, [], "v1 migration defaults runes")
+	_eq(Profile.boss_cells_unlocked, 0, "v1 migration defaults BSC unlocks")
+	_eq(Profile.active_bsc, 0, "v1 migration defaults active BSC")
+
+	Profile.reset_profile()
 	Profile.cells = 5000
-	Profile.select("character", "octa")
+	_check(not Profile.select("character", "octa"), "locked character selection refused")
 	_eq(Profile.selected_character, "square", "locked character cannot be selected")
-	Profile.select("weapon", "nope")
+	_check(not Profile.select("weapon", "nope"), "unknown weapon selection refused")
 	_eq(Profile.selected_weapon, "rusty_sword", "unknown weapon cannot be selected")
 	Profile.unlock("character", "octa")
-	Profile.select("character", "octa")
+	_check(Profile.select("character", "octa"), "unlocked character selection saved")
 	_eq(Profile.selected_character, "octa", "unlocked character can be selected")
 
 	# A save whose selection no longer exists must sanitise.

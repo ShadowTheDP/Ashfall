@@ -1,5 +1,12 @@
 # 戰鬥手感調參表
 
+## L1 新增：藥瓶（原創測試值）
+
+`data/route_profiles.json` 的 flask 容量為 2，每次治療最大生命的 50%；F/H 生效，空瓶、滿血、死亡、受傷硬直或 modal 中不消耗。0 BSC Passage 的 Fountain 補滿 HP 與 charges，沒有更改既有移動／攻擊參數。
+
+選擇兩次半血回復，因為 L1 要能實際驗證消耗、空瓶和跨 biome 補給；這是 Ashfall 原創原型值。
+放棄本階段複製 Dead Cells 治療數值或完整吟唱動畫；後續依真實遭遇與人工試玩再調整。
+
 這份文件記錄**目前數值**與**為什麼是這個值**。改數字前先讀這裡；改完後把
 新數值、測試方式、主觀結果補回來。
 
@@ -142,7 +149,7 @@
 3. **記錄**：把舊值、新值、主觀感受（太重/太輕/太長/太短）寫回本文件。
 4. **看截圖**：改視覺或相機後跑 `tests/capture_scene.tscn`，比對
    `output/screenshots/`。
-5. **跑檢查**：`tools/check.ps1`，至少 `combat_probe` 與 `soak` 要過。
+5. **跑檢查**：`python tools/check.py`，至少 `combat_probe` 與 `soak` 要過。
 6. **不要同時改資料表與公式**：傷害異常時會分不清是資料還是公式。
 
 ## 7.5 波次與 boon

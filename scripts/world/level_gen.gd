@@ -212,6 +212,19 @@ static func _generate_once(floor_index: int, seed_value: int) -> Dictionary:
 	# floor, so the upper route is worth the climb instead of merely possible.
 	_annexes(rooms, rng)
 
+	# Macro connectors can reopen cross-room cracks after template sealing.
+	var platforms: Array = []
+	var flags: Array = []
+	for room in rooms:
+		platforms.append_array(room["platforms"])
+		flags.append_array(room["oneway"])
+	_close_narrow_holes(platforms, flags)
+	var platform_index := 0
+	for room in rooms:
+		var count: int = room["platforms"].size()
+		room["platforms"] = platforms.slice(platform_index, platform_index + count)
+		platform_index += count
+
 	# WHY after the pillars: _place_pillars adds a step deck and a pillar to the
 	# room it leaves, and a spawn point computed before that does not know they
 	# exist - the enemy is then born inside the step deck. Spawns are derived
@@ -319,29 +332,27 @@ static func _build_template(tpl: Dictionary, rect: Rect2) -> Dictionary:
 	return {"platforms": out, "oneway": flags}
 
 
-## Two pass-through decks at the SAME tier with a narrow crack between them are
-## a trap, not a route: a body can neither land in the crack (too narrow) nor
-## climb past it, so a player standing on the deck above a 40 px hole is
-## unreachable for every melee body - and the gate needs every body dead. Any
-## same-tier gap narrower than a walkable slot is therefore closed by widening
-## the left deck. Authored data stays authored; this is the invariant the
-## generator guarantees about it.
+## Same-height cracks wedge a capsule between two wall normals, with no floor
+## contact to jump from. Extend only one-way decks; solid walls keep their footprint.
 static func _close_narrow_holes(platforms: Array, flags: Array) -> void:
 	for i in platforms.size():
 		if not bool(flags[i]):
 			continue
 		var a: Rect2 = platforms[i]
 		for j in platforms.size():
-			if i == j or not bool(flags[j]):
+			if i == j:
 				continue
 			var b: Rect2 = platforms[j]
 			if absf(a.position.y - b.position.y) > 1.0:
 				continue
-			var gap := b.position.x - a.end.x
-			if gap <= 0.0 or gap >= SLOT + 12.0:
-				continue
-			platforms[i] = Rect2(a.position, Vector2(b.position.x - a.position.x, a.size.y))
-			a = platforms[i]
+			var right_gap := b.position.x - a.end.x
+			var left_gap := a.position.x - b.end.x
+			if right_gap > 0.0 and right_gap < SLOT + 12.0:
+				a.size.x += right_gap
+			elif left_gap > 0.0 and left_gap < SLOT + 12.0:
+				a.position.x -= left_gap
+				a.size.x += left_gap
+			platforms[i] = a
 
 
 static func _build_builtin(kind: String, rect: Rect2) -> Dictionary:

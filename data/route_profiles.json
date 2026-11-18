@@ -1,0 +1,15 @@
+{
+  "flask": {"capacity": 2, "heal_fraction": 0.5},
+  "nodes": {
+    "ash_gate": {"floor_profile": 1},
+    "hanging_gallery": {"floor_profile": 3},
+    "silt_cistern": {"floor_profile": 4},
+    "stone_ramparts": {"floor_profile": 1},
+    "bridge_sentinel": {"floor_profile": 5},
+    "stilt_foundry": {"floor_profile": 4},
+    "clock_spire": {"floor_profile": 3},
+    "clock_warden": {"floor_profile": 5},
+    "high_keep": {"floor_profile": 4},
+    "silent_regent": {"floor_profile": 5}
+  }
+}

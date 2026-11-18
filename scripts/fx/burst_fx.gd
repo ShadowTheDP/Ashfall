@@ -1,10 +1,10 @@
 class_name BurstFx
 extends Node2D
 ## Short, hard-edged pixel bursts. One node covers the three defensive reads:
-##   "dodge"  — perfect dodge: 8 white->cyan rays, 3 frames
+##   "dodge"  — perfect dodge: 8 white rays fading over 3 frames
 ##   "block"  — Aegis: solid sector + ring, 5 frames, particles away from shield
 ##   "hurt"   — taking a hit: 4 red rays at the contact edge, 4 frames
-## All geometry is snapped to whole pixels.
+## Rays and rings are sub-pixel geometry; only the small core uses whole pixels.
 
 var mode := "dodge"
 var tint := MathArt.WHITE
@@ -55,11 +55,11 @@ func _draw() -> void:
 
 
 func _draw_dodge(k: float) -> void:
-	# Frame 1 is pure white, then it fades to cyan: 100% / 70% / 0%.
+	# White rays use 100% / 70% / 0% alpha over 3 frames.
 	var alpha := 1.0 if k < 0.34 else (0.7 if k < 0.67 else 0.0)
 	if alpha <= 0.0:
 		return
-	var color := MathArt.WHITE if k < 0.34 else MathArt.WHITE
+	var color := MathArt.WHITE
 	var radius := lerpf(4.0, 9.0, k)
 	for ray in _rays:
 		var angle: float = ray["angle"]
@@ -74,7 +74,8 @@ func _draw_block(k: float) -> void:
 	var alpha := 1.0 if k < 0.2 else (0.85 if k < 0.4 else (0.55 if k < 0.6 else (0.2 if k < 0.8 else 0.0)))
 	if alpha <= 0.0:
 		return
-	var base := -PI * 0.5
+	# Horizontal facing: a shield is held to the left or right of the body, never up.
+	var base := 0.0 if facing > 0 else PI
 	if k < 0.24:
 		# Solid sector facing the block direction.
 		var points := PackedVector2Array([Vector2.ZERO])

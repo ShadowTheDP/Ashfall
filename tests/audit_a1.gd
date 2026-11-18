@@ -174,7 +174,7 @@ func _test_weapons() -> void:
 	print("%-16s %-6s %-24s %s" % ["weapon", "result", "step damage", "hitbox reach / blade tip"])
 	for id in WEAPONS:
 		Profile.unlock_free("weapon", id)
-		Profile.select("weapon", id)
+		_check(Profile.select("weapon", id), "weapon selection saved: " + id)
 		await _spawn_player()
 		var cfg: Dictionary = Data.weapons.get(id, {})
 		var combo: Array = cfg.get("combo", [])
@@ -246,7 +246,7 @@ func _test_characters() -> void:
 	var stats := {}
 	for id in CHARACTERS:
 		Profile.unlock_free("character", id)
-		Profile.select("character", id)
+		_check(Profile.select("character", id), "character selection saved: " + id)
 		await _spawn_player()
 		stats[id] = {
 			"hp": _player.max_hp,
@@ -282,7 +282,7 @@ func _test_characters() -> void:
 	# because scaling it twice (Game.perfect_dodge() already multiplies by
 	# perfect_dodge_scale, and player.take_hit used to multiply again) produced
 	# 10 s from a 5 s promise and this assertion's old `> 1.5x` bound passed it.
-	Profile.select("character", "helix")
+	_check(Profile.select("character", "helix"), "dancer selection saved")
 	await _spawn_player()
 	Game.edge_timer = 0.0
 	_player._start_roll(1.0)
@@ -294,8 +294,8 @@ func _test_characters() -> void:
 	Combat.cancel_hitstop()
 
 	# Echo: the third swing must repeat for 60% damage.
-	Profile.select("character", "gyro")
-	Profile.select("weapon", "rusty_sword")
+	_check(Profile.select("character", "gyro"), "echo selection saved")
+	_check(Profile.select("weapon", "rusty_sword"), "echo weapon selection saved")
 	await _spawn_player()
 	var damage := await _drive_combo()
 	var third := float(Data.weapons["rusty_sword"]["combo"][2]["damage"])
@@ -303,15 +303,15 @@ func _test_characters() -> void:
 		"echo: third swing dealt %.1f, expected the %.1f repeat on top of %.1f" % [
 			float(damage[2]), third * 0.6, third])
 	print("  echo third swing damage=%.1f (base %.1f + wave 8)" % [float(damage[2]), third])
-	Profile.select("character", "square")
+	_check(Profile.select("character", "square"), "reset character selection saved")
 
 
 # --- 3. Armour --------------------------------------------------------------
 
 func _test_armor() -> void:
 	print("\n--- 3. ARMOUR ---")
-	Profile.select("character", "square")
-	Profile.select("armor", "none")
+	_check(Profile.select("character", "square"), "armor character selection saved")
+	_check(Profile.select("armor", "none"), "base armor selection saved")
 	await _spawn_player()
 	var base := {
 		"hp": _player.max_hp,
@@ -322,7 +322,7 @@ func _test_armor() -> void:
 	var loss := {}
 	for id in Data.armor.keys():
 		Profile.unlock_free("armor", str(id))
-		Profile.select("armor", str(id))
+		_check(Profile.select("armor", str(id)), "armor selection saved: " + str(id))
 		await _spawn_player()
 		var cfg: Dictionary = Data.armor[id]
 		var ok := true
@@ -348,7 +348,7 @@ func _test_armor() -> void:
 			id, "PASS" if ok else "FAIL", float(cfg.get("hp", 0.0)), float(cfg.get("speed", 0.0)),
 			float(cfg.get("iframe", 0.0)), int(cfg.get("knives", 0)), float(loss[id])])
 	_check(float(loss["aegis"]) < float(loss["none"]), "armour: 0.85 damage_taken did not reduce the hit")
-	Profile.select("armor", "none")
+	_check(Profile.select("armor", "none"), "reset armor selection saved")
 
 
 # --- 4. Death and perfect dodge --------------------------------------------
@@ -384,8 +384,8 @@ func _test_death_and_dodge() -> void:
 func _test_weapon_visual() -> void:
 	print("
 --- 5. WEAPON VISUAL POSE ---")
-	Profile.select("character", "square")
-	Profile.select("weapon", "rusty_sword")
+	_check(Profile.select("character", "square"), "pose character selection saved")
+	_check(Profile.select("weapon", "rusty_sword"), "pose weapon selection saved")
 	await _spawn_player()
 	var vis: Node = _player.visual.weapon_visual
 	if not _check(vis != null, "player has no weapon visual"):

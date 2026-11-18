@@ -1,0 +1,3210 @@
+{
+	"biome_entry": {
+		"build": {
+			"attributes": {
+				"brutality": 0,
+				"survival": 0,
+				"tactics": 0
+			},
+			"gold": 0,
+			"mutation_capacity": 0,
+			"mutation_resets": 0,
+			"mutations": [],
+			"serial": 8,
+			"slots": [
+				{
+					"affix": "none",
+					"charges": 1,
+					"cooldown": 0.0,
+					"id": "rusty_sword",
+					"quality": "plain",
+					"uid": 1
+				},
+				{
+					"affix": "none",
+					"charges": 1,
+					"cooldown": 0.0,
+					"id": "fold_shield",
+					"quality": "plain",
+					"uid": 2
+				},
+				{
+					"affix": "none",
+					"charges": 2,
+					"cooldown": 0.0,
+					"id": "kunai",
+					"quality": "plain",
+					"uid": 3
+				},
+				{
+					"affix": "none",
+					"charges": 1,
+					"cooldown": 0.0,
+					"id": "aegis",
+					"quality": "plain",
+					"uid": 4
+				},
+				{
+					"affix": "none",
+					"charges": 1,
+					"cooldown": 0.0,
+					"id": "ash_charm",
+					"quality": "plain",
+					"uid": 5
+				}
+			]
+		},
+		"content": "6e650d44b82df4dffbc159894f441eab687f38594d6b01852a67ade3953b15e0",
+		"hp": 132.0,
+		"kind": "biome_entry",
+		"seed": 3469824762,
+		"state": {
+			"best_kill_streak": 0,
+			"boss_damage": 0.0,
+			"boss_defeated": false,
+			"carried_blueprints": [],
+			"cells": 0,
+			"defeated_bosses": [],
+			"exit_selected": false,
+			"flask_capacity": 2,
+			"flask_charges": 2,
+			"floor_index": 1,
+			"floor_name": "ASH GATE",
+			"kill_streak": 0,
+			"kills": 0,
+			"max_combo": 0,
+			"node_time": 0.0,
+			"passage_claims": {},
+			"passage_snapshot": {},
+			"pending_destination": "",
+			"perfect_dodges": 0,
+			"route_history": [
+				"ash_gate"
+			],
+			"run_bsc": 0,
+			"run_cells": 0,
+			"run_keys": [],
+			"run_node_id": "ash_gate",
+			"run_time": 0.0
+		},
+		"version": 1,
+		"weapon_slot": 0
+	},
+	"content_stamp": "6e650d44b82df4dffbc159894f441eab687f38594d6b01852a67ade3953b15e0",
+	"entry_layout": {
+		"biome": "ash_gate",
+		"boss": "",
+		"boss_at": null,
+		"bounds": [
+			0.0,
+			-586.0,
+			3200.0,
+			1012.0
+		],
+		"caches": [
+			{
+				"pos": [
+					1600.0,
+					-426.0
+				],
+				"room": "canopy_vault",
+				"value": 12
+			},
+			{
+				"pos": [
+					960.0,
+					402.0
+				],
+				"room": "ground_vault",
+				"value": 12
+			},
+			{
+				"pos": [
+					320.0,
+					-150.0
+				],
+				"room": "wall_vault",
+				"value": 12
+			}
+		],
+		"exit": [
+			3040.0,
+			150.0
+		],
+		"exits": [
+			{
+				"from": "ash_gate",
+				"pos": [
+					3040.0,
+					126.0
+				],
+				"room": "exit_main",
+				"to": "hanging_gallery"
+			},
+			{
+				"from": "ash_gate",
+				"pos": [
+					2656.0,
+					-150.0
+				],
+				"requires_runes": [
+					"canopy_rune"
+				],
+				"room": "exit_alt",
+				"to": "silt_cistern"
+			}
+		],
+		"gates": [
+			{
+				"id": "ground_seal",
+				"kind": "break",
+				"rect": [
+					908.7999877929688,
+					150.0,
+					102.4000015258789,
+					26.0
+				],
+				"room": "split",
+				"rune": "ground_rune"
+			}
+		],
+		"graph": [
+			{
+				"from": "entry",
+				"from_socket": "east",
+				"mode": "walk",
+				"source": [
+					606.0,
+					126.0
+				],
+				"target": [
+					674.0,
+					126.0
+				],
+				"to": "split",
+				"to_socket": "west"
+			},
+			{
+				"from": "split",
+				"from_socket": "east",
+				"mode": "walk",
+				"source": [
+					1246.0,
+					126.0
+				],
+				"target": [
+					1314.0,
+					126.0
+				],
+				"to": "lower",
+				"to_socket": "west"
+			},
+			{
+				"from": "split",
+				"from_socket": "east_high",
+				"mode": "walk",
+				"source": [
+					1246.0,
+					-150.0
+				],
+				"target": [
+					1314.0,
+					-150.0
+				],
+				"to": "upper",
+				"to_socket": "west"
+			},
+			{
+				"from": "lower",
+				"from_socket": "east",
+				"mode": "walk",
+				"source": [
+					1886.0,
+					126.0
+				],
+				"target": [
+					1954.0,
+					126.0
+				],
+				"to": "merge",
+				"to_socket": "west"
+			},
+			{
+				"from": "upper",
+				"from_socket": "east",
+				"mode": "walk",
+				"source": [
+					1886.0,
+					-150.0
+				],
+				"target": [
+					1954.0,
+					-150.0
+				],
+				"to": "merge",
+				"to_socket": "west_high"
+			},
+			{
+				"from": "merge",
+				"from_socket": "east",
+				"mode": "walk",
+				"source": [
+					2526.0,
+					126.0
+				],
+				"target": [
+					2594.0,
+					126.0
+				],
+				"to": "exit_main",
+				"to_socket": "west"
+			},
+			{
+				"from": "merge",
+				"from_socket": "east_high",
+				"mode": "walk",
+				"source": [
+					2526.0,
+					-150.0
+				],
+				"target": [
+					2594.0,
+					-150.0
+				],
+				"to": "exit_alt",
+				"to_socket": "west"
+			},
+			{
+				"from": "upper",
+				"from_socket": "north",
+				"mode": "vine",
+				"rune": "canopy_rune",
+				"source": [
+					1600.0,
+					-150.0
+				],
+				"target": [
+					1600.0,
+					-426.0
+				],
+				"to": "canopy_vault",
+				"to_socket": "south"
+			},
+			{
+				"from": "split",
+				"from_socket": "south",
+				"mode": "break",
+				"rune": "ground_rune",
+				"source": [
+					960.0,
+					126.0
+				],
+				"target": [
+					960.0,
+					402.0
+				],
+				"to": "ground_vault",
+				"to_socket": "north"
+			},
+			{
+				"from": "entry",
+				"from_socket": "north",
+				"mode": "wall",
+				"rune": "climb_rune",
+				"source": [
+					24.0,
+					126.0
+				],
+				"target": [
+					24.0,
+					-150.0
+				],
+				"to": "wall_vault",
+				"to_socket": "south"
+			}
+		],
+		"key": {},
+		"keys": [],
+		"name": "ASH GATE",
+		"oneways": [
+			[
+				150.0,
+				58.0,
+				244.0,
+				13.0
+			],
+			[
+				672.0,
+				58.0,
+				160.0,
+				13.0
+			],
+			[
+				820.0,
+				-34.0,
+				160.0,
+				13.0
+			],
+			[
+				960.0,
+				-126.0,
+				320.0,
+				13.0
+			],
+			[
+				1556.0,
+				58.0,
+				244.0,
+				13.0
+			],
+			[
+				1920.0,
+				-126.0,
+				640.0,
+				13.0
+			],
+			[
+				2220.0,
+				-34.0,
+				180.0,
+				13.0
+			],
+			[
+				2380.0,
+				58.0,
+				180.0,
+				13.0
+			],
+			[
+				1280.0,
+				-402.0,
+				640.0,
+				13.0
+			],
+			[
+				0.0,
+				-126.0,
+				640.0,
+				13.0
+			]
+		],
+		"pads": [
+			{
+				"id": "entry",
+				"kind": "checkpoint",
+				"pos": [
+					96.0,
+					126.0
+				],
+				"room": "entry"
+			},
+			{
+				"id": "merge",
+				"kind": "checkpoint",
+				"pos": [
+					2016.0,
+					126.0
+				],
+				"room": "merge"
+			},
+			{
+				"id": "ground_vault",
+				"kind": "checkpoint",
+				"pos": [
+					736.0,
+					402.0
+				],
+				"room": "ground_vault"
+			}
+		],
+		"palette": 0.0,
+		"room_ids": {
+			"canopy_vault": 7,
+			"entry": 0,
+			"exit_alt": 6,
+			"exit_main": 5,
+			"ground_vault": 8,
+			"lower": 2,
+			"merge": 4,
+			"split": 1,
+			"upper": 3,
+			"wall_vault": 9
+		},
+		"rooms": [
+			{
+				"bounds": [
+					0.0,
+					-126.0,
+					640.0,
+					276.0
+				],
+				"enemies": [],
+				"ground": [
+					[
+						0.0,
+						150.0,
+						640.0,
+						32.0
+					]
+				],
+				"id": "entry",
+				"kind": "hall",
+				"oneway": [
+					true
+				],
+				"platforms": [
+					[
+						150.0,
+						58.0,
+						244.0,
+						13.0
+					]
+				],
+				"rect": [
+					0.0,
+					150.0,
+					640.0,
+					32.0
+				],
+				"requires_runes": [],
+				"role": "entry",
+				"sockets": {
+					"east": {
+						"normal": [
+							1.0,
+							0.0
+						],
+						"point": [
+							640.0,
+							150.0
+						],
+						"stand": [
+							606.0,
+							126.0
+						]
+					},
+					"north": {
+						"normal": [
+							0.0,
+							-1.0
+						],
+						"point": [
+							24.0,
+							-126.0
+						],
+						"stand": [
+							24.0,
+							126.0
+						]
+					},
+					"west": {
+						"normal": [
+							-1.0,
+							0.0
+						],
+						"point": [
+							0.0,
+							150.0
+						],
+						"stand": [
+							34.0,
+							126.0
+						]
+					}
+				},
+				"spawns": [
+					[
+						200.0,
+						112.0
+					],
+					[
+						440.0,
+						112.0
+					]
+				],
+				"template": "entry"
+			},
+			{
+				"bounds": [
+					640.0,
+					-402.0,
+					640.0,
+					552.0
+				],
+				"enemies": [],
+				"ground": [
+					[
+						640.0,
+						150.0,
+						268.79998779296875,
+						32.0
+					],
+					[
+						1011.2000122070313,
+						150.0,
+						268.79998779296875,
+						32.0
+					]
+				],
+				"id": "split",
+				"kind": "hall",
+				"oneway": [
+					true,
+					true,
+					true
+				],
+				"platforms": [
+					[
+						672.0,
+						58.0,
+						160.0,
+						13.0
+					],
+					[
+						820.0,
+						-34.0,
+						160.0,
+						13.0
+					],
+					[
+						960.0,
+						-126.0,
+						320.0,
+						13.0
+					]
+				],
+				"rect": [
+					640.0,
+					150.0,
+					640.0,
+					32.0
+				],
+				"requires_runes": [],
+				"role": "split",
+				"sockets": {
+					"east": {
+						"normal": [
+							1.0,
+							0.0
+						],
+						"point": [
+							1280.0,
+							150.0
+						],
+						"stand": [
+							1246.0,
+							126.0
+						]
+					},
+					"east_high": {
+						"normal": [
+							1.0,
+							0.0
+						],
+						"point": [
+							1280.0,
+							-126.0
+						],
+						"stand": [
+							1246.0,
+							-150.0
+						]
+					},
+					"south": {
+						"normal": [
+							0.0,
+							1.0
+						],
+						"point": [
+							960.0,
+							150.0
+						],
+						"stand": [
+							960.0,
+							126.0
+						]
+					},
+					"west": {
+						"normal": [
+							-1.0,
+							0.0
+						],
+						"point": [
+							640.0,
+							150.0
+						],
+						"stand": [
+							674.0,
+							126.0
+						]
+					}
+				},
+				"spawns": [
+					[
+						840.0,
+						112.0
+					],
+					[
+						1080.0,
+						112.0
+					]
+				],
+				"template": "split"
+			},
+			{
+				"bounds": [
+					1280.0,
+					-126.0,
+					640.0,
+					276.0
+				],
+				"enemies": [
+					[
+						"archer",
+						1
+					],
+					[
+						"grunt",
+						1
+					]
+				],
+				"ground": [
+					[
+						1280.0,
+						150.0,
+						640.0,
+						32.0
+					]
+				],
+				"id": "lower",
+				"kind": "hall",
+				"oneway": [
+					true
+				],
+				"platforms": [
+					[
+						1556.0,
+						58.0,
+						244.0,
+						13.0
+					]
+				],
+				"rect": [
+					1280.0,
+					150.0,
+					640.0,
+					32.0
+				],
+				"requires_runes": [],
+				"role": "combat",
+				"sockets": {
+					"east": {
+						"normal": [
+							1.0,
+							0.0
+						],
+						"point": [
+							1920.0,
+							150.0
+						],
+						"stand": [
+							1886.0,
+							126.0
+						]
+					},
+					"west": {
+						"normal": [
+							-1.0,
+							0.0
+						],
+						"point": [
+							1280.0,
+							150.0
+						],
+						"stand": [
+							1314.0,
+							126.0
+						]
+					}
+				},
+				"spawns": [
+					[
+						1480.0,
+						112.0
+					],
+					[
+						1720.0,
+						112.0
+					]
+				],
+				"template": "hall_arch"
+			},
+			{
+				"bounds": [
+					1280.0,
+					-402.0,
+					640.0,
+					276.0
+				],
+				"enemies": [
+					[
+						"grunt",
+						1
+					]
+				],
+				"ground": [
+					[
+						1280.0,
+						-126.0,
+						640.0,
+						32.0
+					]
+				],
+				"id": "upper",
+				"kind": "hall",
+				"oneway": [],
+				"platforms": [],
+				"rect": [
+					1280.0,
+					-126.0,
+					640.0,
+					32.0
+				],
+				"requires_runes": [],
+				"role": "guard",
+				"sockets": {
+					"east": {
+						"normal": [
+							1.0,
+							0.0
+						],
+						"point": [
+							1920.0,
+							-126.0
+						],
+						"stand": [
+							1886.0,
+							-150.0
+						]
+					},
+					"north": {
+						"normal": [
+							0.0,
+							-1.0
+						],
+						"point": [
+							1600.0,
+							-402.0
+						],
+						"stand": [
+							1600.0,
+							-150.0
+						]
+					},
+					"phase": {
+						"normal": [
+							0.0,
+							0.0
+						],
+						"point": [
+							1800.0,
+							-126.0
+						],
+						"stand": [
+							1800.0,
+							-150.0
+						]
+					},
+					"west": {
+						"normal": [
+							-1.0,
+							0.0
+						],
+						"point": [
+							1280.0,
+							-126.0
+						],
+						"stand": [
+							1314.0,
+							-150.0
+						]
+					}
+				},
+				"spawns": [
+					[
+						1480.0,
+						-164.0
+					],
+					[
+						1720.0,
+						-164.0
+					]
+				],
+				"template": "guard"
+			},
+			{
+				"bounds": [
+					1920.0,
+					-402.0,
+					640.0,
+					552.0
+				],
+				"enemies": [
+					[
+						"grunt",
+						1
+					]
+				],
+				"ground": [
+					[
+						1920.0,
+						150.0,
+						640.0,
+						32.0
+					]
+				],
+				"id": "merge",
+				"kind": "hall",
+				"oneway": [
+					true,
+					true,
+					true
+				],
+				"platforms": [
+					[
+						1920.0,
+						-126.0,
+						640.0,
+						13.0
+					],
+					[
+						2220.0,
+						-34.0,
+						180.0,
+						13.0
+					],
+					[
+						2380.0,
+						58.0,
+						180.0,
+						13.0
+					]
+				],
+				"rect": [
+					1920.0,
+					150.0,
+					640.0,
+					32.0
+				],
+				"requires_runes": [],
+				"role": "merge",
+				"sockets": {
+					"east": {
+						"normal": [
+							1.0,
+							0.0
+						],
+						"point": [
+							2560.0,
+							150.0
+						],
+						"stand": [
+							2526.0,
+							126.0
+						]
+					},
+					"east_high": {
+						"normal": [
+							1.0,
+							0.0
+						],
+						"point": [
+							2560.0,
+							-126.0
+						],
+						"stand": [
+							2526.0,
+							-150.0
+						]
+					},
+					"west": {
+						"normal": [
+							-1.0,
+							0.0
+						],
+						"point": [
+							1920.0,
+							150.0
+						],
+						"stand": [
+							1954.0,
+							126.0
+						]
+					},
+					"west_high": {
+						"normal": [
+							-1.0,
+							0.0
+						],
+						"point": [
+							1920.0,
+							-126.0
+						],
+						"stand": [
+							1954.0,
+							-150.0
+						]
+					}
+				},
+				"spawns": [
+					[
+						2120.0,
+						112.0
+					],
+					[
+						2360.0,
+						112.0
+					]
+				],
+				"template": "merge"
+			},
+			{
+				"bounds": [
+					2560.0,
+					-126.0,
+					640.0,
+					276.0
+				],
+				"enemies": [],
+				"ground": [
+					[
+						2560.0,
+						150.0,
+						640.0,
+						32.0
+					]
+				],
+				"id": "exit_main",
+				"kind": "hall",
+				"oneway": [],
+				"platforms": [],
+				"rect": [
+					2560.0,
+					150.0,
+					640.0,
+					32.0
+				],
+				"requires_runes": [],
+				"role": "exit",
+				"sockets": {
+					"east": {
+						"normal": [
+							1.0,
+							0.0
+						],
+						"point": [
+							3200.0,
+							150.0
+						],
+						"stand": [
+							3166.0,
+							126.0
+						]
+					},
+					"west": {
+						"normal": [
+							-1.0,
+							0.0
+						],
+						"point": [
+							2560.0,
+							150.0
+						],
+						"stand": [
+							2594.0,
+							126.0
+						]
+					}
+				},
+				"spawns": [
+					[
+						2760.0,
+						112.0
+					],
+					[
+						3000.0,
+						112.0
+					]
+				],
+				"template": "exit"
+			},
+			{
+				"bounds": [
+					2560.0,
+					-402.0,
+					640.0,
+					276.0
+				],
+				"enemies": [],
+				"ground": [
+					[
+						2560.0,
+						-126.0,
+						640.0,
+						32.0
+					]
+				],
+				"id": "exit_alt",
+				"kind": "hall",
+				"oneway": [],
+				"platforms": [],
+				"rect": [
+					2560.0,
+					-126.0,
+					640.0,
+					32.0
+				],
+				"requires_runes": [],
+				"role": "exit",
+				"sockets": {
+					"east": {
+						"normal": [
+							1.0,
+							0.0
+						],
+						"point": [
+							3200.0,
+							-126.0
+						],
+						"stand": [
+							3166.0,
+							-150.0
+						]
+					},
+					"west": {
+						"normal": [
+							-1.0,
+							0.0
+						],
+						"point": [
+							2560.0,
+							-126.0
+						],
+						"stand": [
+							2594.0,
+							-150.0
+						]
+					}
+				},
+				"spawns": [
+					[
+						2760.0,
+						-164.0
+					],
+					[
+						3000.0,
+						-164.0
+					]
+				],
+				"template": "exit"
+			},
+			{
+				"bounds": [
+					1280.0,
+					-586.0,
+					640.0,
+					184.0
+				],
+				"enemies": [],
+				"ground": [],
+				"id": "canopy_vault",
+				"kind": "hall",
+				"oneway": [
+					true
+				],
+				"platforms": [
+					[
+						1280.0,
+						-402.0,
+						640.0,
+						13.0
+					]
+				],
+				"rect": [
+					1280.0,
+					-402.0,
+					640.0,
+					32.0
+				],
+				"requires_runes": [
+					"canopy_rune"
+				],
+				"role": "canopy_vault",
+				"sockets": {
+					"south": {
+						"normal": [
+							0.0,
+							1.0
+						],
+						"point": [
+							1600.0,
+							-402.0
+						],
+						"stand": [
+							1600.0,
+							-426.0
+						]
+					}
+				},
+				"spawns": [
+					[
+						1480.0,
+						-440.0
+					],
+					[
+						1720.0,
+						-440.0
+					]
+				],
+				"template": "canopy_vault"
+			},
+			{
+				"bounds": [
+					640.0,
+					150.0,
+					640.0,
+					276.0
+				],
+				"enemies": [],
+				"ground": [
+					[
+						640.0,
+						426.0,
+						640.0,
+						32.0
+					],
+					[
+						640.0,
+						150.0,
+						24.0,
+						276.0
+					],
+					[
+						1256.0,
+						150.0,
+						24.0,
+						276.0
+					]
+				],
+				"id": "ground_vault",
+				"kind": "hall",
+				"oneway": [],
+				"platforms": [],
+				"rect": [
+					640.0,
+					426.0,
+					640.0,
+					32.0
+				],
+				"requires_runes": [
+					"ground_rune"
+				],
+				"role": "ground_vault",
+				"sockets": {
+					"north": {
+						"normal": [
+							0.0,
+							-1.0
+						],
+						"point": [
+							960.0,
+							150.0
+						],
+						"stand": [
+							960.0,
+							402.0
+						]
+					}
+				},
+				"spawns": [
+					[
+						840.0,
+						388.0
+					],
+					[
+						1080.0,
+						388.0
+					]
+				],
+				"template": "ground_vault"
+			},
+			{
+				"bounds": [
+					0.0,
+					-310.0,
+					640.0,
+					184.0
+				],
+				"enemies": [],
+				"ground": [],
+				"id": "wall_vault",
+				"kind": "hall",
+				"oneway": [
+					true
+				],
+				"platforms": [
+					[
+						0.0,
+						-126.0,
+						640.0,
+						13.0
+					]
+				],
+				"rect": [
+					0.0,
+					-126.0,
+					640.0,
+					32.0
+				],
+				"requires_runes": [
+					"climb_rune"
+				],
+				"role": "wall_vault",
+				"sockets": {
+					"south": {
+						"normal": [
+							0.0,
+							1.0
+						],
+						"point": [
+							24.0,
+							-126.0
+						],
+						"stand": [
+							24.0,
+							-150.0
+						]
+					}
+				},
+				"spawns": [
+					[
+						200.0,
+						-164.0
+					],
+					[
+						440.0,
+						-164.0
+					]
+				],
+				"template": "wall_vault"
+			}
+		],
+		"rune": "",
+		"rune_room": -1,
+		"seed": 3469824762,
+		"socket_errors": [],
+		"solids": [
+			[
+				0.0,
+				150.0,
+				640.0,
+				32.0
+			],
+			[
+				640.0,
+				150.0,
+				268.79998779296875,
+				32.0
+			],
+			[
+				1011.2000122070313,
+				150.0,
+				268.79998779296875,
+				32.0
+			],
+			[
+				1280.0,
+				150.0,
+				640.0,
+				32.0
+			],
+			[
+				1280.0,
+				-126.0,
+				640.0,
+				32.0
+			],
+			[
+				1920.0,
+				150.0,
+				640.0,
+				32.0
+			],
+			[
+				2560.0,
+				150.0,
+				640.0,
+				32.0
+			],
+			[
+				2560.0,
+				-126.0,
+				640.0,
+				32.0
+			],
+			[
+				640.0,
+				426.0,
+				640.0,
+				32.0
+			],
+			[
+				640.0,
+				150.0,
+				24.0,
+				276.0
+			],
+			[
+				1256.0,
+				150.0,
+				24.0,
+				276.0
+			]
+		],
+		"start": [
+			96.0,
+			126.0
+		],
+		"surfaces": [
+			{
+				"oneway": false,
+				"rect": [
+					0.0,
+					150.0,
+					640.0,
+					32.0
+				],
+				"room": "entry"
+			},
+			{
+				"oneway": true,
+				"rect": [
+					150.0,
+					58.0,
+					244.0,
+					13.0
+				],
+				"room": "entry"
+			},
+			{
+				"oneway": false,
+				"rect": [
+					640.0,
+					150.0,
+					268.79998779296875,
+					32.0
+				],
+				"room": "split"
+			},
+			{
+				"oneway": false,
+				"rect": [
+					1011.2000122070313,
+					150.0,
+					268.79998779296875,
+					32.0
+				],
+				"room": "split"
+			},
+			{
+				"oneway": true,
+				"rect": [
+					672.0,
+					58.0,
+					160.0,
+					13.0
+				],
+				"room": "split"
+			},
+			{
+				"oneway": true,
+				"rect": [
+					820.0,
+					-34.0,
+					160.0,
+					13.0
+				],
+				"room": "split"
+			},
+			{
+				"oneway": true,
+				"rect": [
+					960.0,
+					-126.0,
+					320.0,
+					13.0
+				],
+				"room": "split"
+			},
+			{
+				"oneway": false,
+				"rect": [
+					1280.0,
+					150.0,
+					640.0,
+					32.0
+				],
+				"room": "lower"
+			},
+			{
+				"oneway": true,
+				"rect": [
+					1556.0,
+					58.0,
+					244.0,
+					13.0
+				],
+				"room": "lower"
+			},
+			{
+				"oneway": false,
+				"rect": [
+					1280.0,
+					-126.0,
+					640.0,
+					32.0
+				],
+				"room": "upper"
+			},
+			{
+				"oneway": false,
+				"rect": [
+					1920.0,
+					150.0,
+					640.0,
+					32.0
+				],
+				"room": "merge"
+			},
+			{
+				"oneway": true,
+				"rect": [
+					1920.0,
+					-126.0,
+					640.0,
+					13.0
+				],
+				"room": "merge"
+			},
+			{
+				"oneway": true,
+				"rect": [
+					2220.0,
+					-34.0,
+					180.0,
+					13.0
+				],
+				"room": "merge"
+			},
+			{
+				"oneway": true,
+				"rect": [
+					2380.0,
+					58.0,
+					180.0,
+					13.0
+				],
+				"room": "merge"
+			},
+			{
+				"oneway": false,
+				"rect": [
+					2560.0,
+					150.0,
+					640.0,
+					32.0
+				],
+				"room": "exit_main"
+			},
+			{
+				"oneway": false,
+				"rect": [
+					2560.0,
+					-126.0,
+					640.0,
+					32.0
+				],
+				"room": "exit_alt"
+			},
+			{
+				"oneway": true,
+				"rect": [
+					1280.0,
+					-402.0,
+					640.0,
+					13.0
+				],
+				"room": "canopy_vault"
+			},
+			{
+				"oneway": false,
+				"rect": [
+					640.0,
+					426.0,
+					640.0,
+					32.0
+				],
+				"room": "ground_vault"
+			},
+			{
+				"oneway": true,
+				"rect": [
+					0.0,
+					-126.0,
+					640.0,
+					13.0
+				],
+				"room": "wall_vault"
+			}
+		],
+		"vines": [
+			{
+				"rect": [
+					1582.0,
+					-450.0,
+					36.0,
+					324.0
+				],
+				"room": "upper"
+			}
+		],
+		"width": 3200.0
+	},
+	"next_layout": {
+		"biome": "hanging_gallery",
+		"boss": "",
+		"boss_at": null,
+		"bounds": [
+			0.0,
+			-586.0,
+			3200.0,
+			1012.0
+		],
+		"caches": [
+			{
+				"pos": [
+					1600.0,
+					-426.0
+				],
+				"room": "canopy_vault",
+				"value": 12
+			},
+			{
+				"pos": [
+					960.0,
+					402.0
+				],
+				"room": "ground_vault",
+				"value": 12
+			},
+			{
+				"pos": [
+					320.0,
+					-150.0
+				],
+				"room": "wall_vault",
+				"value": 12
+			}
+		],
+		"exit": [
+			3040.0,
+			150.0
+		],
+		"exits": [
+			{
+				"from": "hanging_gallery",
+				"pos": [
+					3040.0,
+					126.0
+				],
+				"room": "exit_main",
+				"to": "stone_ramparts"
+			},
+			{
+				"from": "hanging_gallery",
+				"pos": [
+					2656.0,
+					-150.0
+				],
+				"requires_runes": [
+					"climb_rune"
+				],
+				"room": "exit_alt",
+				"to": "sealed_depths"
+			},
+			{
+				"from": "hanging_gallery",
+				"pos": [
+					2840.0,
+					-150.0
+				],
+				"requires_runes": [
+					"phase_rune"
+				],
+				"room": "exit_alt",
+				"to": "bone_ossuary"
+			},
+			{
+				"from": "hanging_gallery",
+				"pos": [
+					3024.0,
+					-150.0
+				],
+				"requires_runes": [
+					"ground_rune"
+				],
+				"room": "exit_alt",
+				"to": "gear_sewers"
+			}
+		],
+		"gates": [
+			{
+				"id": "ground_seal",
+				"kind": "break",
+				"rect": [
+					908.7999877929688,
+					150.0,
+					102.4000015258789,
+					26.0
+				],
+				"room": "split",
+				"rune": "ground_rune"
+			}
+		],
+		"graph": [
+			{
+				"from": "entry",
+				"from_socket": "east",
+				"mode": "walk",
+				"source": [
+					606.0,
+					126.0
+				],
+				"target": [
+					674.0,
+					126.0
+				],
+				"to": "split",
+				"to_socket": "west"
+			},
+			{
+				"from": "split",
+				"from_socket": "east",
+				"mode": "walk",
+				"source": [
+					1246.0,
+					126.0
+				],
+				"target": [
+					1314.0,
+					126.0
+				],
+				"to": "lower",
+				"to_socket": "west"
+			},
+			{
+				"from": "split",
+				"from_socket": "east_high",
+				"mode": "walk",
+				"source": [
+					1246.0,
+					-150.0
+				],
+				"target": [
+					1314.0,
+					-150.0
+				],
+				"to": "upper",
+				"to_socket": "west"
+			},
+			{
+				"from": "lower",
+				"from_socket": "east",
+				"mode": "walk",
+				"source": [
+					1886.0,
+					126.0
+				],
+				"target": [
+					1954.0,
+					126.0
+				],
+				"to": "merge",
+				"to_socket": "west"
+			},
+			{
+				"from": "upper",
+				"from_socket": "east",
+				"mode": "walk",
+				"source": [
+					1886.0,
+					-150.0
+				],
+				"target": [
+					1954.0,
+					-150.0
+				],
+				"to": "merge",
+				"to_socket": "west_high"
+			},
+			{
+				"from": "merge",
+				"from_socket": "east",
+				"mode": "walk",
+				"source": [
+					2526.0,
+					126.0
+				],
+				"target": [
+					2594.0,
+					126.0
+				],
+				"to": "exit_main",
+				"to_socket": "west"
+			},
+			{
+				"from": "merge",
+				"from_socket": "east_high",
+				"mode": "walk",
+				"source": [
+					2526.0,
+					-150.0
+				],
+				"target": [
+					2594.0,
+					-150.0
+				],
+				"to": "exit_alt",
+				"to_socket": "west"
+			},
+			{
+				"from": "upper",
+				"from_socket": "north",
+				"mode": "vine",
+				"rune": "canopy_rune",
+				"source": [
+					1600.0,
+					-150.0
+				],
+				"target": [
+					1600.0,
+					-426.0
+				],
+				"to": "canopy_vault",
+				"to_socket": "south"
+			},
+			{
+				"from": "split",
+				"from_socket": "south",
+				"mode": "break",
+				"rune": "ground_rune",
+				"source": [
+					960.0,
+					126.0
+				],
+				"target": [
+					960.0,
+					402.0
+				],
+				"to": "ground_vault",
+				"to_socket": "north"
+			},
+			{
+				"from": "entry",
+				"from_socket": "north",
+				"mode": "wall",
+				"rune": "climb_rune",
+				"source": [
+					24.0,
+					126.0
+				],
+				"target": [
+					24.0,
+					-150.0
+				],
+				"to": "wall_vault",
+				"to_socket": "south"
+			}
+		],
+		"key": {},
+		"keys": [],
+		"name": "HANGING GALLERY",
+		"oneways": [
+			[
+				150.0,
+				58.0,
+				244.0,
+				13.0
+			],
+			[
+				672.0,
+				58.0,
+				160.0,
+				13.0
+			],
+			[
+				820.0,
+				-34.0,
+				160.0,
+				13.0
+			],
+			[
+				960.0,
+				-126.0,
+				320.0,
+				13.0
+			],
+			[
+				1400.0,
+				58.0,
+				244.0,
+				13.0
+			],
+			[
+				1920.0,
+				-126.0,
+				640.0,
+				13.0
+			],
+			[
+				2220.0,
+				-34.0,
+				180.0,
+				13.0
+			],
+			[
+				2380.0,
+				58.0,
+				180.0,
+				13.0
+			],
+			[
+				1280.0,
+				-402.0,
+				640.0,
+				13.0
+			],
+			[
+				0.0,
+				-126.0,
+				640.0,
+				13.0
+			]
+		],
+		"pads": [
+			{
+				"id": "entry",
+				"kind": "checkpoint",
+				"pos": [
+					96.0,
+					126.0
+				],
+				"room": "entry"
+			},
+			{
+				"id": "merge",
+				"kind": "checkpoint",
+				"pos": [
+					2016.0,
+					126.0
+				],
+				"room": "merge"
+			},
+			{
+				"id": "ground_vault",
+				"kind": "checkpoint",
+				"pos": [
+					736.0,
+					402.0
+				],
+				"room": "ground_vault"
+			}
+		],
+		"palette": 2.0,
+		"room_ids": {
+			"canopy_vault": 7,
+			"entry": 0,
+			"exit_alt": 6,
+			"exit_main": 5,
+			"ground_vault": 8,
+			"lower": 2,
+			"merge": 4,
+			"split": 1,
+			"upper": 3,
+			"wall_vault": 9
+		},
+		"rooms": [
+			{
+				"bounds": [
+					0.0,
+					-126.0,
+					640.0,
+					276.0
+				],
+				"enemies": [],
+				"ground": [
+					[
+						0.0,
+						150.0,
+						640.0,
+						32.0
+					]
+				],
+				"id": "entry",
+				"kind": "hall",
+				"oneway": [
+					true
+				],
+				"platforms": [
+					[
+						150.0,
+						58.0,
+						244.0,
+						13.0
+					]
+				],
+				"rect": [
+					0.0,
+					150.0,
+					640.0,
+					32.0
+				],
+				"requires_runes": [],
+				"role": "entry",
+				"sockets": {
+					"east": {
+						"normal": [
+							1.0,
+							0.0
+						],
+						"point": [
+							640.0,
+							150.0
+						],
+						"stand": [
+							606.0,
+							126.0
+						]
+					},
+					"north": {
+						"normal": [
+							0.0,
+							-1.0
+						],
+						"point": [
+							24.0,
+							-126.0
+						],
+						"stand": [
+							24.0,
+							126.0
+						]
+					},
+					"west": {
+						"normal": [
+							-1.0,
+							0.0
+						],
+						"point": [
+							0.0,
+							150.0
+						],
+						"stand": [
+							34.0,
+							126.0
+						]
+					}
+				},
+				"spawns": [
+					[
+						200.0,
+						112.0
+					],
+					[
+						440.0,
+						112.0
+					]
+				],
+				"template": "entry"
+			},
+			{
+				"bounds": [
+					640.0,
+					-402.0,
+					640.0,
+					552.0
+				],
+				"enemies": [],
+				"ground": [
+					[
+						640.0,
+						150.0,
+						268.79998779296875,
+						32.0
+					],
+					[
+						1011.2000122070313,
+						150.0,
+						268.79998779296875,
+						32.0
+					]
+				],
+				"id": "split",
+				"kind": "hall",
+				"oneway": [
+					true,
+					true,
+					true
+				],
+				"platforms": [
+					[
+						672.0,
+						58.0,
+						160.0,
+						13.0
+					],
+					[
+						820.0,
+						-34.0,
+						160.0,
+						13.0
+					],
+					[
+						960.0,
+						-126.0,
+						320.0,
+						13.0
+					]
+				],
+				"rect": [
+					640.0,
+					150.0,
+					640.0,
+					32.0
+				],
+				"requires_runes": [],
+				"role": "split",
+				"sockets": {
+					"east": {
+						"normal": [
+							1.0,
+							0.0
+						],
+						"point": [
+							1280.0,
+							150.0
+						],
+						"stand": [
+							1246.0,
+							126.0
+						]
+					},
+					"east_high": {
+						"normal": [
+							1.0,
+							0.0
+						],
+						"point": [
+							1280.0,
+							-126.0
+						],
+						"stand": [
+							1246.0,
+							-150.0
+						]
+					},
+					"south": {
+						"normal": [
+							0.0,
+							1.0
+						],
+						"point": [
+							960.0,
+							150.0
+						],
+						"stand": [
+							960.0,
+							126.0
+						]
+					},
+					"west": {
+						"normal": [
+							-1.0,
+							0.0
+						],
+						"point": [
+							640.0,
+							150.0
+						],
+						"stand": [
+							674.0,
+							126.0
+						]
+					}
+				},
+				"spawns": [
+					[
+						840.0,
+						112.0
+					],
+					[
+						1080.0,
+						112.0
+					]
+				],
+				"template": "split"
+			},
+			{
+				"bounds": [
+					1280.0,
+					-126.0,
+					640.0,
+					276.0
+				],
+				"enemies": [
+					[
+						"grunt",
+						1
+					],
+					[
+						"grunt",
+						1
+					]
+				],
+				"ground": [
+					[
+						1280.0,
+						150.0,
+						640.0,
+						32.0
+					]
+				],
+				"id": "lower",
+				"kind": "hall",
+				"oneway": [
+					true
+				],
+				"platforms": [
+					[
+						1400.0,
+						58.0,
+						244.0,
+						13.0
+					]
+				],
+				"rect": [
+					1280.0,
+					150.0,
+					640.0,
+					32.0
+				],
+				"requires_runes": [],
+				"role": "combat",
+				"sockets": {
+					"east": {
+						"normal": [
+							1.0,
+							0.0
+						],
+						"point": [
+							1920.0,
+							150.0
+						],
+						"stand": [
+							1886.0,
+							126.0
+						]
+					},
+					"west": {
+						"normal": [
+							-1.0,
+							0.0
+						],
+						"point": [
+							1280.0,
+							150.0
+						],
+						"stand": [
+							1314.0,
+							126.0
+						]
+					}
+				},
+				"spawns": [
+					[
+						1480.0,
+						112.0
+					],
+					[
+						1720.0,
+						112.0
+					]
+				],
+				"template": "hall"
+			},
+			{
+				"bounds": [
+					1280.0,
+					-402.0,
+					640.0,
+					276.0
+				],
+				"enemies": [
+					[
+						"grunt",
+						1
+					]
+				],
+				"ground": [
+					[
+						1280.0,
+						-126.0,
+						640.0,
+						32.0
+					]
+				],
+				"id": "upper",
+				"kind": "hall",
+				"oneway": [],
+				"platforms": [],
+				"rect": [
+					1280.0,
+					-126.0,
+					640.0,
+					32.0
+				],
+				"requires_runes": [],
+				"role": "guard",
+				"sockets": {
+					"east": {
+						"normal": [
+							1.0,
+							0.0
+						],
+						"point": [
+							1920.0,
+							-126.0
+						],
+						"stand": [
+							1886.0,
+							-150.0
+						]
+					},
+					"north": {
+						"normal": [
+							0.0,
+							-1.0
+						],
+						"point": [
+							1600.0,
+							-402.0
+						],
+						"stand": [
+							1600.0,
+							-150.0
+						]
+					},
+					"phase": {
+						"normal": [
+							0.0,
+							0.0
+						],
+						"point": [
+							1800.0,
+							-126.0
+						],
+						"stand": [
+							1800.0,
+							-150.0
+						]
+					},
+					"west": {
+						"normal": [
+							-1.0,
+							0.0
+						],
+						"point": [
+							1280.0,
+							-126.0
+						],
+						"stand": [
+							1314.0,
+							-150.0
+						]
+					}
+				},
+				"spawns": [
+					[
+						1480.0,
+						-164.0
+					],
+					[
+						1720.0,
+						-164.0
+					]
+				],
+				"template": "guard"
+			},
+			{
+				"bounds": [
+					1920.0,
+					-402.0,
+					640.0,
+					552.0
+				],
+				"enemies": [
+					[
+						"leaper",
+						1
+					]
+				],
+				"ground": [
+					[
+						1920.0,
+						150.0,
+						640.0,
+						32.0
+					]
+				],
+				"id": "merge",
+				"kind": "hall",
+				"oneway": [
+					true,
+					true,
+					true
+				],
+				"platforms": [
+					[
+						1920.0,
+						-126.0,
+						640.0,
+						13.0
+					],
+					[
+						2220.0,
+						-34.0,
+						180.0,
+						13.0
+					],
+					[
+						2380.0,
+						58.0,
+						180.0,
+						13.0
+					]
+				],
+				"rect": [
+					1920.0,
+					150.0,
+					640.0,
+					32.0
+				],
+				"requires_runes": [],
+				"role": "merge",
+				"sockets": {
+					"east": {
+						"normal": [
+							1.0,
+							0.0
+						],
+						"point": [
+							2560.0,
+							150.0
+						],
+						"stand": [
+							2526.0,
+							126.0
+						]
+					},
+					"east_high": {
+						"normal": [
+							1.0,
+							0.0
+						],
+						"point": [
+							2560.0,
+							-126.0
+						],
+						"stand": [
+							2526.0,
+							-150.0
+						]
+					},
+					"west": {
+						"normal": [
+							-1.0,
+							0.0
+						],
+						"point": [
+							1920.0,
+							150.0
+						],
+						"stand": [
+							1954.0,
+							126.0
+						]
+					},
+					"west_high": {
+						"normal": [
+							-1.0,
+							0.0
+						],
+						"point": [
+							1920.0,
+							-126.0
+						],
+						"stand": [
+							1954.0,
+							-150.0
+						]
+					}
+				},
+				"spawns": [
+					[
+						2120.0,
+						112.0
+					],
+					[
+						2360.0,
+						112.0
+					]
+				],
+				"template": "merge"
+			},
+			{
+				"bounds": [
+					2560.0,
+					-126.0,
+					640.0,
+					276.0
+				],
+				"enemies": [],
+				"ground": [
+					[
+						2560.0,
+						150.0,
+						640.0,
+						32.0
+					]
+				],
+				"id": "exit_main",
+				"kind": "hall",
+				"oneway": [],
+				"platforms": [],
+				"rect": [
+					2560.0,
+					150.0,
+					640.0,
+					32.0
+				],
+				"requires_runes": [],
+				"role": "exit",
+				"sockets": {
+					"east": {
+						"normal": [
+							1.0,
+							0.0
+						],
+						"point": [
+							3200.0,
+							150.0
+						],
+						"stand": [
+							3166.0,
+							126.0
+						]
+					},
+					"west": {
+						"normal": [
+							-1.0,
+							0.0
+						],
+						"point": [
+							2560.0,
+							150.0
+						],
+						"stand": [
+							2594.0,
+							126.0
+						]
+					}
+				},
+				"spawns": [
+					[
+						2760.0,
+						112.0
+					],
+					[
+						3000.0,
+						112.0
+					]
+				],
+				"template": "exit"
+			},
+			{
+				"bounds": [
+					2560.0,
+					-402.0,
+					640.0,
+					276.0
+				],
+				"enemies": [],
+				"ground": [
+					[
+						2560.0,
+						-126.0,
+						640.0,
+						32.0
+					]
+				],
+				"id": "exit_alt",
+				"kind": "hall",
+				"oneway": [],
+				"platforms": [],
+				"rect": [
+					2560.0,
+					-126.0,
+					640.0,
+					32.0
+				],
+				"requires_runes": [],
+				"role": "exit",
+				"sockets": {
+					"east": {
+						"normal": [
+							1.0,
+							0.0
+						],
+						"point": [
+							3200.0,
+							-126.0
+						],
+						"stand": [
+							3166.0,
+							-150.0
+						]
+					},
+					"west": {
+						"normal": [
+							-1.0,
+							0.0
+						],
+						"point": [
+							2560.0,
+							-126.0
+						],
+						"stand": [
+							2594.0,
+							-150.0
+						]
+					}
+				},
+				"spawns": [
+					[
+						2760.0,
+						-164.0
+					],
+					[
+						3000.0,
+						-164.0
+					]
+				],
+				"template": "exit"
+			},
+			{
+				"bounds": [
+					1280.0,
+					-586.0,
+					640.0,
+					184.0
+				],
+				"enemies": [],
+				"ground": [],
+				"id": "canopy_vault",
+				"kind": "hall",
+				"oneway": [
+					true
+				],
+				"platforms": [
+					[
+						1280.0,
+						-402.0,
+						640.0,
+						13.0
+					]
+				],
+				"rect": [
+					1280.0,
+					-402.0,
+					640.0,
+					32.0
+				],
+				"requires_runes": [
+					"canopy_rune"
+				],
+				"role": "canopy_vault",
+				"sockets": {
+					"south": {
+						"normal": [
+							0.0,
+							1.0
+						],
+						"point": [
+							1600.0,
+							-402.0
+						],
+						"stand": [
+							1600.0,
+							-426.0
+						]
+					}
+				},
+				"spawns": [
+					[
+						1480.0,
+						-440.0
+					],
+					[
+						1720.0,
+						-440.0
+					]
+				],
+				"template": "canopy_vault"
+			},
+			{
+				"bounds": [
+					640.0,
+					150.0,
+					640.0,
+					276.0
+				],
+				"enemies": [],
+				"ground": [
+					[
+						640.0,
+						426.0,
+						640.0,
+						32.0
+					],
+					[
+						640.0,
+						150.0,
+						24.0,
+						276.0
+					],
+					[
+						1256.0,
+						150.0,
+						24.0,
+						276.0
+					]
+				],
+				"id": "ground_vault",
+				"kind": "hall",
+				"oneway": [],
+				"platforms": [],
+				"rect": [
+					640.0,
+					426.0,
+					640.0,
+					32.0
+				],
+				"requires_runes": [
+					"ground_rune"
+				],
+				"role": "ground_vault",
+				"sockets": {
+					"north": {
+						"normal": [
+							0.0,
+							-1.0
+						],
+						"point": [
+							960.0,
+							150.0
+						],
+						"stand": [
+							960.0,
+							402.0
+						]
+					}
+				},
+				"spawns": [
+					[
+						840.0,
+						388.0
+					],
+					[
+						1080.0,
+						388.0
+					]
+				],
+				"template": "ground_vault"
+			},
+			{
+				"bounds": [
+					0.0,
+					-310.0,
+					640.0,
+					184.0
+				],
+				"enemies": [],
+				"ground": [],
+				"id": "wall_vault",
+				"kind": "hall",
+				"oneway": [
+					true
+				],
+				"platforms": [
+					[
+						0.0,
+						-126.0,
+						640.0,
+						13.0
+					]
+				],
+				"rect": [
+					0.0,
+					-126.0,
+					640.0,
+					32.0
+				],
+				"requires_runes": [
+					"climb_rune"
+				],
+				"role": "wall_vault",
+				"sockets": {
+					"south": {
+						"normal": [
+							0.0,
+							1.0
+						],
+						"point": [
+							24.0,
+							-126.0
+						],
+						"stand": [
+							24.0,
+							-150.0
+						]
+					}
+				},
+				"spawns": [
+					[
+						200.0,
+						-164.0
+					],
+					[
+						440.0,
+						-164.0
+					]
+				],
+				"template": "wall_vault"
+			}
+		],
+		"rune": "canopy_rune",
+		"rune_room": 3,
+		"seed": 17,
+		"socket_errors": [],
+		"solids": [
+			[
+				0.0,
+				150.0,
+				640.0,
+				32.0
+			],
+			[
+				640.0,
+				150.0,
+				268.79998779296875,
+				32.0
+			],
+			[
+				1011.2000122070313,
+				150.0,
+				268.79998779296875,
+				32.0
+			],
+			[
+				1280.0,
+				150.0,
+				640.0,
+				32.0
+			],
+			[
+				1280.0,
+				-126.0,
+				640.0,
+				32.0
+			],
+			[
+				1920.0,
+				150.0,
+				640.0,
+				32.0
+			],
+			[
+				2560.0,
+				150.0,
+				640.0,
+				32.0
+			],
+			[
+				2560.0,
+				-126.0,
+				640.0,
+				32.0
+			],
+			[
+				640.0,
+				426.0,
+				640.0,
+				32.0
+			],
+			[
+				640.0,
+				150.0,
+				24.0,
+				276.0
+			],
+			[
+				1256.0,
+				150.0,
+				24.0,
+				276.0
+			]
+		],
+		"start": [
+			96.0,
+			126.0
+		],
+		"surfaces": [
+			{
+				"oneway": false,
+				"rect": [
+					0.0,
+					150.0,
+					640.0,
+					32.0
+				],
+				"room": "entry"
+			},
+			{
+				"oneway": true,
+				"rect": [
+					150.0,
+					58.0,
+					244.0,
+					13.0
+				],
+				"room": "entry"
+			},
+			{
+				"oneway": false,
+				"rect": [
+					640.0,
+					150.0,
+					268.79998779296875,
+					32.0
+				],
+				"room": "split"
+			},
+			{
+				"oneway": false,
+				"rect": [
+					1011.2000122070313,
+					150.0,
+					268.79998779296875,
+					32.0
+				],
+				"room": "split"
+			},
+			{
+				"oneway": true,
+				"rect": [
+					672.0,
+					58.0,
+					160.0,
+					13.0
+				],
+				"room": "split"
+			},
+			{
+				"oneway": true,
+				"rect": [
+					820.0,
+					-34.0,
+					160.0,
+					13.0
+				],
+				"room": "split"
+			},
+			{
+				"oneway": true,
+				"rect": [
+					960.0,
+					-126.0,
+					320.0,
+					13.0
+				],
+				"room": "split"
+			},
+			{
+				"oneway": false,
+				"rect": [
+					1280.0,
+					150.0,
+					640.0,
+					32.0
+				],
+				"room": "lower"
+			},
+			{
+				"oneway": true,
+				"rect": [
+					1400.0,
+					58.0,
+					244.0,
+					13.0
+				],
+				"room": "lower"
+			},
+			{
+				"oneway": false,
+				"rect": [
+					1280.0,
+					-126.0,
+					640.0,
+					32.0
+				],
+				"room": "upper"
+			},
+			{
+				"oneway": false,
+				"rect": [
+					1920.0,
+					150.0,
+					640.0,
+					32.0
+				],
+				"room": "merge"
+			},
+			{
+				"oneway": true,
+				"rect": [
+					1920.0,
+					-126.0,
+					640.0,
+					13.0
+				],
+				"room": "merge"
+			},
+			{
+				"oneway": true,
+				"rect": [
+					2220.0,
+					-34.0,
+					180.0,
+					13.0
+				],
+				"room": "merge"
+			},
+			{
+				"oneway": true,
+				"rect": [
+					2380.0,
+					58.0,
+					180.0,
+					13.0
+				],
+				"room": "merge"
+			},
+			{
+				"oneway": false,
+				"rect": [
+					2560.0,
+					150.0,
+					640.0,
+					32.0
+				],
+				"room": "exit_main"
+			},
+			{
+				"oneway": false,
+				"rect": [
+					2560.0,
+					-126.0,
+					640.0,
+					32.0
+				],
+				"room": "exit_alt"
+			},
+			{
+				"oneway": true,
+				"rect": [
+					1280.0,
+					-402.0,
+					640.0,
+					13.0
+				],
+				"room": "canopy_vault"
+			},
+			{
+				"oneway": false,
+				"rect": [
+					640.0,
+					426.0,
+					640.0,
+					32.0
+				],
+				"room": "ground_vault"
+			},
+			{
+				"oneway": true,
+				"rect": [
+					0.0,
+					-126.0,
+					640.0,
+					13.0
+				],
+				"room": "wall_vault"
+			}
+		],
+		"vines": [
+			{
+				"rect": [
+					1582.0,
+					-450.0,
+					36.0,
+					324.0
+				],
+				"room": "upper"
+			}
+		],
+		"width": 3200.0
+	},
+	"next_seed": 17,
+	"passage": {
+		"build": {
+			"attributes": {
+				"brutality": 0.0,
+				"survival": 0.0,
+				"tactics": 0.0
+			},
+			"gold": 0.0,
+			"mutation_capacity": 1.0,
+			"mutation_resets": 0.0,
+			"mutations": [],
+			"serial": 8.0,
+			"slots": [
+				{
+					"affix": "none",
+					"charges": 1.0,
+					"cooldown": 0.0,
+					"id": "rusty_sword",
+					"quality": "plain",
+					"uid": 1.0
+				},
+				{
+					"affix": "none",
+					"charges": 1.0,
+					"cooldown": 0.0,
+					"id": "fold_shield",
+					"quality": "plain",
+					"uid": 2.0
+				},
+				{
+					"affix": "none",
+					"charges": 2.0,
+					"cooldown": 0.0,
+					"id": "kunai",
+					"quality": "plain",
+					"uid": 3.0
+				},
+				{
+					"affix": "none",
+					"charges": 1.0,
+					"cooldown": 0.0,
+					"id": "aegis",
+					"quality": "plain",
+					"uid": 4.0
+				},
+				{
+					"affix": "none",
+					"charges": 1.0,
+					"cooldown": 0.0,
+					"id": "ash_charm",
+					"quality": "plain",
+					"uid": 5.0
+				}
+			]
+		},
+		"content": "6e650d44b82df4dffbc159894f441eab687f38594d6b01852a67ade3953b15e0",
+		"hp": 132.0,
+		"kind": "passage",
+		"seed": 0.0,
+		"state": {
+			"best_kill_streak": 0.0,
+			"boss_damage": 0.0,
+			"boss_defeated": false,
+			"carried_blueprints": [],
+			"cells": 0.0,
+			"defeated_bosses": [],
+			"exit_selected": true,
+			"flask_capacity": 2.0,
+			"flask_charges": 2.0,
+			"floor_index": 1.0,
+			"floor_name": "ASH GATE",
+			"kill_streak": 0.0,
+			"kills": 0.0,
+			"max_combo": 0.0,
+			"node_time": 0.0724043333333335,
+			"passage_claims": {},
+			"passage_snapshot": {
+				"flawless": false,
+				"streak": 0.0,
+				"time": 0.0724043333333335
+			},
+			"pending_destination": "hanging_gallery",
+			"perfect_dodges": 0.0,
+			"route_history": [
+				"ash_gate"
+			],
+			"run_bsc": 0.0,
+			"run_cells": 0.0,
+			"run_keys": [],
+			"run_node_id": "ash_gate",
+			"run_time": 0.0724043333333335
+		},
+		"version": 1.0,
+		"weapon_slot": 0.0
+	},
+	"provenance": "Actual unmodified v1 capture and isolated Profile disk reload",
+	"source_hashes": {
+		"data/biomes.json": "950a37e0345383207b275a448ca6d39dcc3d77f4c28187aa41e2d470a02455e8",
+		"data/enemies.json": "19e7fcb62b94d10e6392cf46a0a0f2c1e59412a7dacb446d51dfb99e86dab2e0",
+		"data/gear.json": "cd72e3764a96dad4a8b82dabfcd3f8341bf355e78ceee5bfc9576a26d08f53ab",
+		"data/passage.json": "e529b5604e87c08e4842da2ffc4b41ec620fb69467d80c684f26ff138d2323c0",
+		"data/room_modules.json": "9c6e342ce1111c9e29f6bd5e9a76f69ad3829c252e1bf99282054822be814b12",
+		"data/route_graph.json": "4e1e9ee2340f68578572eb2804df5d781ad1e1cc4131eaae0d2aa0df0f651175",
+		"data/route_profiles.json": "9c29a7709243f25e64342b8382a4b0384502368db6f0c3cefeef35a569e0b2fc",
+		"data/traversal.json": "bbb2324d9bb6f7e5bbdda3fa0065eb93d971b2ada57ea9ac6303c1633a5ba5bc",
+		"data/weapons.json": "003c8e5e5dd6bcf5751e9e822e24c752393db238458eda72d0fe4291b0816f67",
+		"scripts/autoload/data.gd": "4fe7e0621e83a78f9fee332d0694773aedda37666c1057eb565bb38f82e11094",
+		"scripts/autoload/game.gd": "2709e6c4d30b0d2d3139fcfceb34c22fc3048025aa7fc1d56b30c15a1ae6a43a",
+		"scripts/main.gd": "175d1ed09833f024d3fa7d0cd6464ae8ee6ffd4892de4151d1b5cae80e82277b",
+		"scripts/systems/run_checkpoint.gd": "90ebd6874ddb77ab7238064e98f98b9f5845788fee27118eeddfd79e6f9a4ef5",
+		"scripts/world/biome_gen.gd": "22bc9781e3cc1d95f8dbba8b2c3183838803aeb1b11ae97bd39a1491c5dcb80f",
+		"scripts/world/level.gd": "6d63cddb55a3141337d7719a974abd12fb7f0f28c8a60dccfebe7dfd31307bdc"
+	}
+}

@@ -12,6 +12,8 @@ var _main: Node
 func _ready() -> void:
 	_main = $Main
 	await get_tree().process_frame
+	if Game.in_hub or Game.run_phase != "arena":
+		_fail("arena must own a live run, not retain Hub settlement guards")
 
 	var player := Game.player
 	if player == null:

@@ -57,11 +57,11 @@ class GlobPool extends Node2D:
 		for i in ring.size():
 			ring[i].y *= 0.34
 		MathArt.px_poly(self, ring, Color(MathArt.INK, 0.62 * fade),
-			Color(MathArt.WHITE, (0.30 + 0.35 * pulse) * fade), 2.0)
+			Color(MathArt.DANGER, (0.30 + 0.35 * pulse) * fade), 2.0)
 		for i in 5:
 			var bubble := MathArt.phyllotaxis(i + 1, radius * 0.26)
 			MathArt.disc(self, Vector2(bubble.x, bubble.y * 0.34), 2.0,
-				Color(MathArt.PALE, (0.25 + 0.4 * pulse) * fade))
+				Color(MathArt.DANGER, (0.25 + 0.4 * pulse) * fade))
 
 var kind := "grunt"
 var cfg: Dictionary = {}
@@ -94,6 +94,11 @@ var _recover_cd := 0.0
 var _glob: Projectile = null
 var _glob_fired := false
 var _glob_at := Vector2.ZERO
+
+
+var poison_left := 0.0
+var poison_tick := 0.0
+var poison_attr := 0
 
 
 func configure(kind_id: String, config: Dictionary, hp_scale: float = 1.0) -> void:
@@ -147,6 +152,17 @@ func _build_nodes() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if poison_left > 0 and not _dead:
+		poison_left = maxf(0, poison_left - delta)
+		poison_tick -= delta
+		if poison_tick <= 0:
+			var status: Dictionary = Data.gear["statuses"]["poison"]
+			poison_tick += float(status["interval"])
+			var amount := Damage.compute(float(status["damage"]), poison_attr, false, 1)
+			hp -= amount
+			Combat.damage_number(global_position + Vector2(0, -50), amount, false)
+			if hp <= 0:
+				_die()
 	if _dead:
 		velocity.y = minf(velocity.y + GRAVITY * delta, 900.0)
 		velocity.x = move_toward(velocity.x, 0.0, 700.0 * delta)
@@ -521,14 +537,14 @@ func _spit() -> void:
 		float(cfg.get("projectile_speed", 250.0)), 700.0)
 	var glob := Projectile.new()
 	glob.position = spawn
-	glob.setup_ballistic(velocity, float(cfg.get("damage", 8.0)), Color(cfg.get("color", "#bdbdbd")), self)
+	glob.setup_ballistic(velocity, float(cfg.get("damage", 8.0)), MathArt.DANGER, self)
 	var root := Game.fx_root
 	if is_instance_valid(root):
 		root.add_child(glob)
 		_glob = glob
 		_glob_fired = true
 		_glob_at = spawn
-	Combat.burst(spawn, MathArt.WHITE, 4, 80.0)
+	Combat.burst(spawn, 4)
 
 
 ## The glob is a shared Projectile, so its landing point is not reported: poll
@@ -565,7 +581,7 @@ func _spawn_pool(at: Vector2) -> void:
 	# into the hub (it is parented to fx_root/world, not to the level).
 	pool.add_to_group("hazard_pool")
 	root.add_child(pool)
-	Juice.shatter(root, at, MathArt.PALE_DIM, 6)
+	Juice.shatter(root, at, MathArt.DANGER, 6)
 	Sfx.play("land", -14, 1.4)
 
 
@@ -660,7 +676,7 @@ func _spawn_shockwaves() -> void:
 	# The feet take the hit, not the body: a ring on the ground line is what makes
 	# the slam read as "the floor moved" rather than "the boss stopped".
 	var feet := global_position + Vector2(0.0, float(cfg.get("body_height", 64.0)) * 0.5)
-	Combat.ring(feet, MathArt.PALE, 62.0)
+	Combat.ring(feet, MathArt.DANGER, 62.0)
 	Juice.land_dust(get_parent(), feet, 1.4)
 	for direction in [-1.0, 1.0]:
 		var wave := Projectile.new()
@@ -671,7 +687,7 @@ func _spawn_shockwaves() -> void:
 			Vector2(direction, 0),
 			float(cfg.get("shockwave_speed", 430.0)),
 			float(cfg.get("shockwave_damage", 13.0)),
-			Color(cfg.get("color", "#e3e3e3")),
+			MathArt.DANGER,
 			self
 		)
 		var root := Game.fx_root
@@ -706,11 +722,11 @@ func _shoot() -> void:
 	var velocity := MathArt.ballistic_velocity(spawn, target, float(cfg.get("projectile_speed", 320.0)), 700.0)
 	var projectile := Projectile.new()
 	projectile.position = spawn
-	projectile.setup_ballistic(velocity, float(cfg.get("damage", 7.0)), Color(cfg.get("color", "#bdbdbd")), self)
+	projectile.setup_ballistic(velocity, float(cfg.get("damage", 7.0)), MathArt.DANGER, self)
 	var root := Game.fx_root
 	if is_instance_valid(root):
 		root.add_child(projectile)
-	Combat.burst(spawn, MathArt.WHITE, 5, 90.0)
+	Combat.burst(spawn, 5)
 	Juice.hit_sparks(get_parent(), spawn, Vector2(float(facing), 0), 0.5)
 
 
@@ -736,9 +752,9 @@ func take_hit(info: Dictionary) -> void:
 		last_tier = 0
 		Combat.block_number(global_position + Vector2(0, -54))
 		var shield_point := global_position + Vector2(float(facing) * 18.0, -10.0)
-		Combat.spark(shield_point, Vector2(float(facing), 0.0), false, MathArt.WHITE)
+		Combat.spark(shield_point, Vector2(float(facing), 0.0), false, MathArt.FIRE)
 		Combat.block_burst(shield_point, facing)
-		Combat.impact(shield_point, Vector2(float(facing), 0.0), 0, MathArt.WHITE)
+		Combat.impact(shield_point, Vector2(float(facing), 0.0), 0, MathArt.FIRE)
 		Juice.block(get_parent(), shield_point, facing)
 		Sfx.play("block", -8)
 		Combat.shake(0.10)
@@ -747,6 +763,10 @@ func take_hit(info: Dictionary) -> void:
 		return
 
 	hp -= damage
+	if str(info.get("status", "")) == "poison":
+		poison_left = float(Data.gear["statuses"]["poison"]["duration"])
+		poison_tick = float(Data.gear["statuses"]["poison"]["interval"])
+		poison_attr = int(info.get("status_attr", 0))
 	# Impact frame: 2 frames of a pure white silhouette, then a fading outline.
 	impact = 0.034
 	flash = 0.10
@@ -761,7 +781,7 @@ func take_hit(info: Dictionary) -> void:
 	var contact: Vector2 = info.get("point", global_position + Vector2(0, -18))
 	var tier: int = clampi(int(info.get("tier", 0)) + (1 if crit else 0), 0, 3)
 	last_tier = tier
-	Combat.impact(contact, Vector2(float(dir), 0.0), tier, MathArt.WHITE)
+	Combat.impact(contact, Vector2(float(dir), 0.0), tier, MathArt.FIRE)
 	if tier >= 2:
 		Combat.screen_punch(float(tier) / 3.0)
 	Combat.damage_number(global_position + Vector2(0, -50), int(damage), crit)
@@ -787,12 +807,14 @@ func _die() -> void:
 	if _dead:
 		return
 	_dead = true
+	if Game.build != null and not Game.run_over:
+		Game.build.gold += int(Data.gear["economy"]["kill_gold"])
 	state = EState.DEAD
 	hitbox.disable()
 	collision_layer = 0
 	collision_mask = 0
 	velocity = Vector2(randf_range(-60.0, 60.0), -160.0)
-	var tint := Color(cfg.get("color", "#bdbdbd"))
+	var tint := MathArt.BOSS if bool(cfg.get("boss", false)) else MathArt.ENEMY
 	var sides := 3
 	match kind:
 		"archer":
@@ -815,8 +837,8 @@ func _die() -> void:
 	var kill_tier := clampi(maxi(1, last_tier), 1, 3)
 	Combat.shatter(global_position + Vector2(0, -14), tint, sides,
 		24 if is_boss else 12, 420.0 if is_boss else 320.0)
-	Combat.impact(global_position + Vector2(0, -16), Vector2(0, -1), 3 if is_boss else kill_tier, MathArt.WHITE)
-	Juice.shatter(get_parent(), global_position + Vector2(0, -14), MathArt.WHITE, 24 if is_boss else 12)
+	Combat.impact(global_position + Vector2(0, -16), Vector2(0, -1), 3 if is_boss else kill_tier, MathArt.FIRE)
+	Juice.shatter(get_parent(), global_position + Vector2(0, -14), tint, 24 if is_boss else 12)
 	if is_boss:
 		Combat.screen_punch(0.9)
 	elif kill_tier >= 3:
@@ -842,9 +864,11 @@ func _die() -> void:
 		_settle_pickup.call_deferred(pickup)
 
 	if Game.boss == self:
-		Game.boss = null
 		Game.boss_defeated = true
-	Game.add_kill()
+	# Record the dead boss identity before clearing the live HUD pointer.
+	Game.add_kill(is_boss)
+	if Game.boss == self:
+		Game.boss = null
 	died.emit(self)
 	var tween := create_tween()
 	tween.tween_property(visual, "modulate:a", 0.0, 0.35)

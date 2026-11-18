@@ -13,6 +13,12 @@ output/*
 # Session exports (pi writes these into the project root)
 pi-session-*.html
 
+# Python validation bytecode
+__pycache__/
+
+# Vendored dependencies (restore with `npm ci` inside .pi/npm)
+node_modules/
+
 # OS noise
 Thumbs.db
 desktop.ini

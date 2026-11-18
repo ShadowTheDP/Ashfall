@@ -1,154 +1,119 @@
 extends Node
-## Regression probe for R (restart) inside a floor.
-##
-## The bug: Hud._restart() called reload_current_scene(), which rebuilt Main,
-## showed the title and landed in the hub. Because Game.start_floor() had
-## already advanced best_floor on entry, the door then offered the NEXT floor.
-## So a retry banked progression, skipped the floor and - if the player had
-## died - recorded a death that the retry then discarded the body of.
-##
-## What must hold after a retry, from both "paused mid-fight" and "dead":
-##   * still on the same floor, in the same run, not in the hub
-##   * Profile is untouched: runs / deaths / victories / best_floor / cells
-##   * exactly one Player in the world, and it is alive and processing
-##   * the old level is gone: no enemies, no projectiles, no stale door
-##   * HUD is not paused, the tree is not paused, time is not dilated
-##
-## Run: godot --headless --path . tests/restart_probe.tscn
-
+## Formal run restart abandons the run; R only interacts. No same-biome retry.
 var _main: Node
 var _fails := 0
+var _checks := 0
 
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_main = $Main
 	Profile.reset_profile()
-	Profile.bank(120)
 	await get_tree().process_frame
-	await get_tree().create_timer(0.3).timeout
 	_main.enter_hub()
-	await get_tree().create_timer(0.3).timeout
-
-	await _descend(1)
-	await _check_retry_paused()
-
-	# Dying then pressing R is the nastier path: end_run(false) has already
-	# written a death into the profile.
-	var level: Node = _main.level
-	if level != null and Game.player != null:
-		Game.player.hp = 0.0
-	await get_tree().create_timer(0.4).timeout
-	if not Game.run_over:
-		_fail("death did not end the run")
-	await _check_retry_dead()
-
-	print("")
-	if _fails == 0:
-		print("RESTART PROBE OK")
-	else:
-		print("RESTART PROBE FAILED (%d)" % _fails)
-	await get_tree().create_timer(0.2).timeout
+	await _start()
+	Game.add_cells(9)
+	Game.add_kill()
+	var total_kills := Profile.total_kills
+	Game.run_keys.append("test_key")
+	Game.apply_reward("edge")
+	var runs := Profile.runs
+	var deaths := Profile.deaths
+	await _key(KEY_ESCAPE)
+	_check(_main.hud.paused and get_tree().paused, "Esc pauses")
+	await _key(KEY_R)
+	_check(_main.hud.paused and Game.run_node_id == "ash_gate" and Profile.runs == runs, "R while paused cannot retry")
+	await _key(KEY_ENTER)
+	_check(_main.hud._abandon_confirm and _main.hud.paused and Profile.runs == runs and Game.run_cells == 9, "first Enter only asks; run remains untouched")
+	await _key(KEY_T)
+	_check(_main.hud._abandon_confirm and not Game.in_hub and _main.hud.paused, "confirmation owns title key; no flow leaks underneath")
+	await _key(KEY_ESCAPE)
+	_check(not _main.hud._abandon_confirm and _main.hud.paused and Profile.runs == runs, "Escape cancels abandonment back to pause")
+	await _key(KEY_ENTER)
+	await _key(KEY_KP_ENTER)
+	await _wait(0.1)
+	_check(Game.in_hub and Game.run_node_id.is_empty(), "abandon returns to start")
+	_check(Profile.runs == runs + 1 and Profile.deaths == deaths, "abandon counts once without fake death")
+	_check(Profile.total_kills == total_kills + 1, "abandon settles the displayed kill count once")
+	_check(Game.run_cells == 0 and Game.run_keys.is_empty() and Game.attr.is_empty() and not Game.exit_selected and Game.pending_destination.is_empty(), "abandon clears run resources and destination")
+	_check(not get_tree().paused and not _main.hud.paused and Engine.time_scale == 1.0, "abandon clears pause/hitstop")
+	await _start()
+	await _die(false)
+	await _start()
+	await _die(true)
+	await _start()
+	# Build a boss state via legal selected edges; physical exits are in run_probe.
+	var carried_kills := 0
+	for id in ["hanging_gallery", "stone_ramparts", "bridge_sentinel"]:
+		Game.add_kill()
+		carried_kills += 1
+		_check(Game.select_destination(id), "fixture selects next exit")
+		Game.run_phase = "passage"
+		_check(_main.start_node(id), "boss fixture follows legal edge")
+		await _wait(0.05)
+		_check(Game.kills == carried_kills, "kills accumulate across biome transitions")
+	await _die(false)
+	print("RESTART PROBE %s (%d checks, %d failures)" % ["OK" if _fails == 0 else "FAILED", _checks, _fails])
 	get_tree().quit(0 if _fails == 0 else 1)
 
 
-func _descend(floor_index: int) -> void:
-	_main._on_descend(floor_index)
-	await get_tree().create_timer(0.6).timeout
+func _start() -> void:
+	await _wait(0.12)
+	_main._on_descend(1)
+	await _wait(0.15)
+	_check(Game.kills == 0, "next run resets its kill counter")
 
 
-func _snapshot() -> Dictionary:
-	return {
-		"cells": Profile.cells, "souls": Profile.souls,
-		"runs": Profile.runs, "deaths": Profile.deaths,
-		"victories": Profile.victories, "best_floor": Profile.best_floor,
-	}
-
-
-func _diff(before: Dictionary) -> String:
-	var out: Array[String] = []
-	for key in before:
-		if before[key] != Profile.get(key):
-			out.append("%s %s -> %s" % [key, str(before[key]), str(Profile.get(key))])
-	return ", ".join(out)
-
-
-func _players() -> int:
-	var count := 0
+func _die(clearing: bool) -> void:
+	Game.add_kill()
+	var kills := Game.kills
+	var total_kills := Profile.total_kills
+	Game.add_cells(13)
+	var runs := Profile.runs
+	var deaths := Profile.deaths
+	var banked := Profile.cells
+	if clearing:
+		_main._on_exit_chosen(str(Game.route_exits()[0]["to"]))
+		_check(Game.exit_selected, "transition fixture has selected exit")
+	Game.player.invuln = 0
+	Game.player.take_hit({"damage": 99999.0, "source_pos": Game.player.position - Vector2(40, 0)})
+	Combat.cancel_hitstop()
+	await _wait(0.08)
+	_check(Game.run_over and not _main._cleared_floor and not Game.exit_selected and Game.pending_destination.is_empty(), "ordinary/boss/transition death cancels clear and destination")
+	_check(Profile.runs == runs + 1 and Profile.deaths == deaths + 1, "death settles once")
+	_check(Profile.total_kills == total_kills + kills, "death settles all displayed cross-biome kills")
+	Game.add_cells(5)
+	_main._on_player_died()
+	_check(Game.run_cells == 0 and Profile.cells == banked and Profile.deaths == deaths + 1 and Profile.total_kills == total_kills + kills, "late pickup and repeated signal cannot settle again")
+	await _key(KEY_R)
+	_check(Game.run_over, "R cannot revive dead run")
+	await _key(KEY_ENTER)
+	await _wait(0.08)
+	_check(Game.in_hub and Profile.runs == runs + 1, "Enter returns clean hub without duplicate run")
+	var players := 0
 	for node in _main.world.get_children():
-		if node is Player:
-			count += 1
-	return count
+		if node is Player or node is Projectile or node is FunctionWave or node.is_in_group("hazard_pool"):
+			players += 1
+	_check(players == 0 and is_instance_valid(Game.player), "world has no stale floor body/FX; Hub owns player")
 
 
-func _retry() -> void:
-	# Pause first, like a player would, then press R through the HUD path.
-	if not Game.run_over:
-		_main.hud._set_paused(true)
+func _key(code: int) -> void:
+	for down in [true, false]:
+		var event := InputEventKey.new()
+		event.physical_keycode = code
+		event.keycode = code
+		event.pressed = down
+		Input.parse_input_event(event)
 		await get_tree().process_frame
-	_main.hud._restart()
-	await get_tree().create_timer(0.4).timeout
 
 
-func _assert_retry(label: String, before: Dictionary, floor_index: int) -> void:
-	if Game.in_hub:
-		_fail("%s: retry landed in the hub" % label)
-	if Game.floor_index != floor_index:
-		_fail("%s: retry moved to floor %d (wanted %d)" % [label, Game.floor_index, floor_index])
-	if Game.run_over:
-		_fail("%s: run_over survived the retry" % label)
-	if get_tree().paused:
-		_fail("%s: tree stayed paused" % label)
-	if _main.hud.paused:
-		_fail("%s: HUD stayed paused" % label)
-	if not is_equal_approx(Engine.time_scale, 1.0):
-		_fail("%s: time_scale is %.2f" % [label, Engine.time_scale])
-	if Profile.best_floor != before["best_floor"]:
-		_fail("%s: retry advanced best_floor (%s)" % [label, _diff(before)])
-	# Both snapshots are taken immediately before the retry, so ANY change here
-	# is the retry writing progress it has no right to write.
-	var changed := _diff(before)
-	if not changed.is_empty():
-		_fail("%s: retry touched the profile (%s)" % [label, changed])
-	var players := _players()
-	if players != 1:
-		_fail("%s: %d Player nodes in the world" % [label, players])
-	if Game.player == null or not is_instance_valid(Game.player):
-		_fail("%s: Game.player is gone" % label)
-	elif Game.player.hp <= 0.0:
-		_fail("%s: retried player is already dead" % label)
-	elif not Game.player.is_physics_processing():
-		_fail("%s: retried player is frozen" % label)
-	var leftovers := 0
-	for node in _main.world.get_children():
-		if node is Enemy or node is Projectile or node is FunctionWave:
-			leftovers += 1
-	if leftovers > 0:
-		_fail("%s: %d nodes from the old floor survived" % [label, leftovers])
-	var level: Node = _main.level
-	if level == null:
-		_fail("%s: no level after the retry" % label)
-	elif int(level.enemies_remaining()) <= 0:
-		_fail("%s: retried floor has no enemies" % label)
-	print("  %s: floor=%d enemies=%d players=%d profile[%s]" % [
-		label, Game.floor_index, int(level.enemies_remaining()) if level != null else -1,
-		players, _diff(before) if not changed.is_empty() else "unchanged"])
+func _wait(seconds: float) -> void:
+	await get_tree().create_timer(seconds, true).timeout
 
 
-func _check_retry_paused() -> void:
-	var before := _snapshot()
-	# Earn cells so a wrongly-banked attempt would be visible in Profile.cells.
-	Game.add_cells(9)
-	await _retry()
-	_assert_retry("paused retry", before, 1)
-
-
-func _check_retry_dead() -> void:
-	var before := _snapshot()
-	await _retry()
-	_assert_retry("dead retry", before, 1)
-
-
-func _fail(message: String) -> void:
-	_fails += 1
-	push_error("RESTART FAIL: " + message)
-	print("RESTART FAIL: ", message)
+func _check(ok: bool, message: String) -> void:
+	_checks += 1
+	if not ok:
+		_fails += 1
+		push_error("RESTART FAIL: " + message)
+		get_tree().quit(1)

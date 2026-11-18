@@ -48,10 +48,10 @@ func _draw() -> void:
 			var alpha := peak * vignette_k * (0.35 - float(i) * 0.08)
 			if alpha <= 0.0:
 				continue
-			MathArt.px_rect(self, Rect2(inset, inset, size.x - inset * 2.0, 3.0), Color(0.0, 0.0, 0.0, alpha))
-			MathArt.px_rect(self, Rect2(inset, size.y - inset - 3.0, size.x - inset * 2.0, 3.0), Color(0.0, 0.0, 0.0, alpha))
-			MathArt.px_rect(self, Rect2(inset, inset, 3.0, size.y - inset * 2.0), Color(0.0, 0.0, 0.0, alpha))
-			MathArt.px_rect(self, Rect2(size.x - inset - 3.0, inset, 3.0, size.y - inset * 2.0), Color(0.0, 0.0, 0.0, alpha))
+			MathArt.px_rect(self, Rect2(inset, inset, size.x - inset * 2.0, 3.0), Color(MathArt.BLACK, alpha))
+			MathArt.px_rect(self, Rect2(inset, size.y - inset - 3.0, size.x - inset * 2.0, 3.0), Color(MathArt.BLACK, alpha))
+			MathArt.px_rect(self, Rect2(inset, inset, 3.0, size.y - inset * 2.0), Color(MathArt.BLACK, alpha))
+			MathArt.px_rect(self, Rect2(size.x - inset - 3.0, inset, 3.0, size.y - inset * 2.0), Color(MathArt.BLACK, alpha))
 
 	# Scanline offset: two 1px bands slide sideways for 2 frames.
 	for band in _bands:
@@ -62,5 +62,5 @@ func _draw() -> void:
 		var y := float(band["y"]) * size.y
 		var height: float = band["height"]
 		var offset: float = float(band["offset"]) * k
-		MathArt.px_rect(self, Rect2(offset, y, size.x, height), Color(1.0, 1.0, 1.0, 0.16 * k))
-		MathArt.px_rect(self, Rect2(-offset, y + height, size.x, height), Color(0.0, 0.0, 0.0, 0.22 * k))
+		MathArt.px_rect(self, Rect2(offset, y, size.x, height), Color(MathArt.WHITE, 0.16 * k))
+		MathArt.px_rect(self, Rect2(-offset, y + height, size.x, height), Color(MathArt.BLACK, 0.22 * k))

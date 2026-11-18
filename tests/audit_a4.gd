@@ -4,7 +4,7 @@ extends Node
 ##
 ## Run: godot --headless --path . tests/audit_a4.tscn
 ##
-## Text metrics come from the real fallback font at the real sizes, so a
+## Text metrics come from the shipped UI face at the real sizes, so a
 ## failure here means a string overflows its card on a 768x480 screen.
 
 var _main: Node
@@ -13,11 +13,19 @@ var _checks := 0
 var _font: Font
 
 
+
 func _ready() -> void:
+	if not Data.is_node_ready():
+		await Data.ready
+	if not Interface.is_node_ready():
+		await Interface.ready
+	if not Sfx.is_node_ready():
+		await Sfx.ready
+	TranslationServer.set_locale("en")
 	# The title pauses the tree; the probe has to keep running through that.
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_main = $Main
-	_font = ThemeDB.fallback_font
+	_font = MathArt.ui_font()
 	Profile.reset_profile()
 	Profile.bank(900)
 	await get_tree().process_frame
@@ -27,6 +35,7 @@ func _ready() -> void:
 	await _test_hub_esc()
 	await _test_reachability()
 	await _test_j_leak()
+	await _test_missing_skill_tree()
 	await _test_reward()
 	_test_text_fit()
 	_test_hints()
@@ -123,13 +132,17 @@ func _test_reachability() -> void:
 	_check(str(archive.get("_tab")) == "weapon", "RIGHT did not switch archive tab")
 	await _press(KEY_DOWN)
 	_check(int(archive.get("_index")) == 1, "DOWN did not move the archive row")
-	# Weapons price the unlock as `unlock_cost`; the card must quote it.
 	var line := str(archive.call("_unlock_line", "arc_saber"))
-	_check(line.contains("60"), "archive hides the weapon price: %s" % line)
+	_check(line.contains("SILT CISTERN") and line.contains("20 C"), "archive hides blueprint source/investment: %s" % line)
 	var owned := Profile.unlocked_weapons.size()
+	var wallet := Profile.cells
+	await _press(KEY_ENTER)
+	_check(Profile.unlocked_weapons.size() == owned and Profile.cells == wallet, "archive bypassed Collector blueprint")
+	_check(str(archive.get("_note")).contains("BLUEPRINT"), "missing blueprint acquisition note")
+	await _press(KEY_DOWN)
 	await _press(KEY_ENTER)
 	await get_tree().create_timer(0.2).timeout
-	_check(Profile.unlocked_weapons.size() == owned + 1, "Enter did not unlock a weapon")
+	_check(Profile.unlocked_weapons.size() == owned + 1, "Enter did not unlock legacy non-blueprint weapon")
 	_check(str(archive.get("_note")).contains("UNLOCKED"), "Enter gave no unlock note")
 	await _press(KEY_ESCAPE)
 	await get_tree().create_timer(0.2).timeout
@@ -214,6 +227,19 @@ func _test_j_leak() -> void:
 	_close_all()
 
 
+func _test_missing_skill_tree() -> void:
+	var tree: Node = _main.skill_tree
+	_main.skill_tree = null
+	await _open_at(_main.hub, 520.0)
+	_check(not _main.hub.ui.is_open(), "missing SkillTree must not open a second implementation")
+	_check(_main.hub.player.is_physics_processing(), "missing SkillTree must release the station freeze")
+	_check(Game.announce_text == "SKILL TREE UNAVAILABLE", "missing SkillTree must report an unavailable module")
+	_main.skill_tree = tree
+	await _open_at(_main.hub, 520.0)
+	_check(tree.is_open(), "restored SkillTree remains keyboard-reachable")
+	await _press(KEY_ESCAPE)
+
+
 # --------------------------------------------------------------------- reward
 
 func _test_reward() -> void:
@@ -242,66 +268,38 @@ func _test_text_fit() -> void:
 	if _font == null:
 		_fail("no fallback font to measure with")
 		return
-	# 1. Archive list rows: 12px name, 34px in from a 298px row, 150px kept on
-	#    the right for WORN / the gem. (archive_screen._draw_list)
 	for tab in ArchiveScreen.TABS:
 		var table := _table(tab)
 		for id in table:
-			_fit(str(table[id].get("name", id)), 12, 264.0 - 34.0, "archive row name")
-			_fit(str(table[id].get("name", id)), 16, 376.0 - 32.0, "archive card name")
-	# 2. Archive stat columns: 8px label in 62px, 11px value in 90px.
-	for label in ["DAMAGE TAKEN", "BLADE LENGTH", "I-FRAMES", "TELEGRAPH / HIT / RECOVER",
-			"DAMAGE PER COMBO STEP", "HP BONUS", "DAMAGE PER STEP"]:
-		_fit(label, 8, 344.0, "archive label %s" % label)
-	_fit("DAMAGE TAKEN", 8, 62.0, "archive label column")
-	_fit("+50 ms", 11, 90.0, "archive value column")
-	_fit("NO RECORD. MEET IT IN THE FIELD.", 9, 376.0, "archive unknown line")
-	_fit("LEFT/RIGHT TAB      UP/DOWN SCROLL      ENTER EQUIP / UNLOCK      ESC CLOSE",
-		8, 768.0, "archive footer")
-	_fit("ENTER TO UNLOCK FOR 999 CELLS", 9, 376.0, "archive unlock line")
-	# 3. Skill tree card: the status column starts 176px from the right edge,
-	#    the text starts 16px in, so the text owns 512-16-8 px.
+			_wrapped_fits(str(table[id].get("name", id)), 13, 210, 2, "archive row")
+			_wrapped_fits(str(table[id].get("name", id)), 20, 298, 2, "archive title")
 	for id in Data.skill_nodes:
 		var node: Dictionary = Data.skill_nodes[id]
-		_fit(str(node.get("text", "")), 10, 488.0, "skill text %s" % id)
-		_fit(str(node.get("name", id)), 14, 400.0, "skill card name")
-		_fit(str(node.get("name", id)), 8, 120.0, "skill node label")
-	_fit("REQUIRES EDGE III, SWIFT II", 10, 160.0, "skill status column")
-	# 4. HUD floor banner: 320px centred at 11px.
-	for key in Data.floors:
-		_fit(str(Data.floors[key].get("name", "")), 11, 320.0, "floor banner %s" % key)
-	_fit("%d HOSTILE%s   FLOOR %d / %d" % [99, "S", 5, 5], 8, 320.0, "floor subline")
-	_fit("FLOOR %d / %d   GATE OPEN" % [5, 5], 8, 320.0, "floor gate line")
-	# The floor name is also announced at 24px on entry (hud._draw_announce).
-	for key in Data.floors:
-		_fit(str(Data.floors[key].get("name", "")), 24, 400.0, "floor announce %s" % key)
-	_fit("PERFECT DODGE", 24, 400.0, "announce line")
-	_fit("%d CELLS    %d KILLS    x%d COMBO    %d PERFECT    %02d:%02d" % [
-		9999, 999, 999, 999, 99, 59], 10, 480.0, "run over stats")
-	_fit("A/D MOVE    SPACE JUMP    J EDGE    K KUNAI    L AEGIS    SHIFT ROLL    ESC PAUSE",
-		8, 768.0 - 20.0 - 140.0, "hud hint strip")
-	_fit("ESC RESUME      R RESTART      Q QUIT", 10, 400.0, "pause hints")
-	# 5. Reward cards: 178 wide, name 14px, description 9px.
+		_fit(str(node.get("name", id)).capitalize(), 11, 110, "skill node label")
+		_wrapped_fits(str(node.get("name", id)).capitalize(), 20, 220, 2, "skill title")
+		_wrapped_fits(str(node.get("text", "")), 13, 220, 4, "skill effect")
 	for id in Data.rewards:
-		_fit(str(Data.rewards[id].get("name", id)), 14, 178.0, "boon name")
-		for line in str(Data.rewards[id].get("desc", "")).split("\n"):
-			_fit(str(line), 9, 178.0, "boon desc")
-		# 4 desc lines would collide with the "PRESS n" line at y+126.
-		var lines := str(Data.rewards[id].get("desc", "")).split("\n").size()
-		_check(100.0 + float(lines) * 12.0 <= 126.0, "boon %s desc runs into PRESS n" % id)
-	_fit("LEFT/RIGHT SELECT      1/2/3 QUICK PICK      ENTER CONFIRM", 6, 440.0, "reward hints")
-	# 6. Hub station rows (read-only files: report-only widths, still asserted so
-	#    a future content edit cannot silently overflow them).
-	for id in Data.characters:
-		var cfg: Dictionary = Data.characters[id]
-		_fit("%s" % str(cfg.get("name", id)), 12, 506.0, "hub character name")
-		_fit("HP %d   SPD %d   KNIVES %d   %s" % [int(cfg.get("hp", 0.0)),
-			int(cfg.get("speed", 0.0)), int(cfg.get("knives", 0)), str(cfg.get("passive_text", ""))],
-			8, 540.0, "hub character passive")
-	for id in Data.upgrades:
-		var cfg: Dictionary = Data.upgrades[id]
-		_fit("LV %d/%d   %s" % [5, int(cfg.get("max", 1)), str(cfg.get("text", ""))],
-			8, 540.0, "hub upgrade text")
+		_wrapped_fits(str(Data.rewards[id].get("name", id)), 20, 180, 2, "boon name")
+		_wrapped_fits(str(Data.rewards[id].get("desc", "")), 13, 180, 4, "boon effect")
+	for table in [Data.characters, Data.upgrades]:
+		for id in table:
+			_wrapped_fits(str(table[id].get("name", id)), 13, 210, 2, "hub row")
+			_wrapped_fits(str(table[id].get("name", id)), 20, 372, 2, "hub title")
+	for key in Data.floors:
+		_fit(str(Data.floors[key].get("name", "")), 24, 400, "floor announcement")
+	# Long tokens and spaces must survive wrapping; a cropped line can conceal an effect.
+	for value in ["UNBROKEN".repeat(40), "A long item name with many affixes ".repeat(12)]:
+		var lines := MathArt.ui_wrap(value, 180, 13)
+		_check("".join(lines) == value, "wrapping preserves complete content")
+		for line in lines: _fit(line, 13, 180, "long content")
+	_fit("PERFECT DODGE", 24, 400, "combat announcement")
+	_fit("999999 Gold · 999999 Cells", 11, 220, "large wallet")
+
+
+func _wrapped_fits(value: String, size: int, width: float, rows: int, what: String) -> void:
+	var lines := MathArt.ui_wrap(value, width, size)
+	_check(lines.size() <= rows, "%s exceeds its visible lines (%s)" % [what, value])
+	for line in lines: _fit(line, size, width, what)
 
 
 func _table(tab: String) -> Dictionary:
@@ -321,32 +319,30 @@ func _fit(text: String, size: int, width: float, what: String) -> void:
 
 # --------------------------------------------------------------------- hints
 
-## Every panel has to advertise the keys it acts on, on screen.
+## Every panel has to advertise the shared InputMap actions it acts on, through
+## the same prompt service; no page may paint a frozen keyboard-only label.
 func _test_hints() -> void:
-	_hint_covers("res://scripts/ui/archive_screen.gd",
-		["ESC", "LEFT/RIGHT", "UP/DOWN", "ENTER"])
-	_hint_covers("res://scripts/ui/skill_tree.gd", ["ESC", "ARROW", "ENTER"])
-	_hint_covers("res://scripts/meta/hub_ui.gd",
-		["ESC", "UP/DOWN", "LEFT/RIGHT", "ENTER"])
-	_hint_covers("res://scripts/ui/reward_screen.gd",
-		["LEFT/RIGHT", "ENTER", "1/2/3"])
+	_prompt_covers("res://scripts/ui/archive_screen.gd", [&"ui_back", &"ui_nav_left", &"ui_nav_right", &"ui_nav_up", &"ui_nav_down", &"ui_accept", &"ui_tab_prev", &"ui_tab_next", &"ui_secondary", &"ui_detail_up", &"ui_detail_down"])
+	_prompt_covers("res://scripts/ui/skill_tree.gd", [&"ui_back", &"ui_accept", &"ui_nav_up", &"ui_nav_left", &"ui_nav_down", &"ui_nav_right"])
+	_prompt_covers("res://scripts/meta/hub_ui.gd", [&"ui_back", &"ui_accept", &"ui_nav_up", &"ui_nav_down", &"ui_nav_left", &"ui_nav_right", &"ui_tab_prev", &"ui_tab_next"])
+	_prompt_covers("res://scripts/ui/reward_screen.gd", [&"ui_nav_left", &"ui_nav_right", &"ui_accept"])
+	var reward := FileAccess.get_file_as_string("res://scripts/ui/reward_screen.gd")
+	_check(reward.contains('"1 2 3"'), "reward keeps the numeric quick-pick hint on screen")
 
 
-func _hint_covers(path: String, labels: Array) -> void:
-	var text := FileAccess.get_file_as_string(path)
-	if text.is_empty():
+func _prompt_covers(path: String, actions: Array) -> void:
+	var source := FileAccess.get_file_as_string(path)
+	if source.is_empty():
 		_fail("cannot read %s" % path)
 		return
-	# The hint line is the one draw_string that closes with ESC CLOSE / CONFIRM.
-	var hint := ""
-	for line in text.split("\n"):
-		if line.contains("ESC CLOSE") or line.contains("CONFIRM") or line.contains("QUICK PICK") \
-				or line.contains("NEAREST NODE") or line.contains("ENTER BUY"):
-			hint += line + "\n"
-	_check(not hint.is_empty(), "%s draws no key hint line" % path.get_file())
-	for label in labels:
-		_check(hint.contains(str(label)) or text.contains(str(label)),
-			"%s never mentions %s" % [path.get_file(), label])
+	_check(source.contains("Interface.prompt("), "%s routes key hints through the prompt service" % path.get_file())
+	for action: StringName in actions:
+		_check(source.contains('&"%s"' % action), "%s advertises %s" % [path.get_file(), action])
+	for line in source.split("\n"):
+		if not line.contains("MathArt.ui_key("):
+			continue
+		for frozen in ['"ENTER"', '"ESC"', '"A D"', '"W S"', '"W A S D"']:
+			_check(not line.contains(frozen), "%s has no frozen keyboard hint %s" % [path.get_file(), frozen])
 
 
 # --------------------------------------------------------------------- helpers

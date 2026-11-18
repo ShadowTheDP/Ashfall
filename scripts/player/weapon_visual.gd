@@ -79,24 +79,6 @@ func _draw() -> void:
 			_draw_edge()
 
 
-## Where the blade actually ends. Same math as the draw pass, so the tip marker
-## and the drawn blade can never drift apart.
-func blade_tip(hand: Vector2, angle: float, length: float) -> Vector2:
-	var dir := Vector2.from_angle(angle)
-	match _shape:
-		"curve":
-			var side := dir.orthogonal()
-			var radius := (length - GRIP) / CURVE_ARC
-			return hand + dir * GRIP - side * radius + (side * radius).rotated(CURVE_ARC)
-		"chain":
-			var sag := CHAIN_SAG * float(CHAIN_LINKS * CHAIN_LINKS)
-			return hand + dir * length - dir.orthogonal() * sag
-		"orbit":
-			return hand + Vector2.from_angle(angle + _t * ORBIT_RATE + PI) * length
-		_:
-			return hand + dir * length
-
-
 # --- Shapes -----------------------------------------------------------------
 
 ## The sword that already works: one tapered quad, one bevel, a short guard.
@@ -239,7 +221,7 @@ func _draw_fittings(dir: Vector2, side: Vector2) -> void:
 
 
 func _tone(amount: float) -> Color:
-	return Color(MathArt.WHITE, _alpha * amount)
+	return Color(MathArt.PICKUP, _alpha * amount)
 
 
 func _metal() -> Color:

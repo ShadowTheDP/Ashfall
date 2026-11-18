@@ -6,7 +6,7 @@ extends Node2D
 
 var _facing := 1
 var _radius := 60.0
-var _tint := MathArt.WHITE
+var _tint := MathArt.FIRE
 var _sides := 5
 var _life := 0.32
 var _t := 0.0
@@ -51,9 +51,9 @@ func _draw() -> void:
 	# Inscribed polygon spins as it expands: the mathematical counterpoint that
 	# keeps the half-ring from reading as a plain arc.
 	var poly := MathArt.ngon(_sides, front * 0.82, center + k * 2.4 * float(_facing))
-	MathArt.px_poly(self, poly, Color(0, 0, 0, 0), Color(MathArt.WHITE, alpha * 0.3), 1.0)
+	MathArt.px_poly(self, poly, Color.TRANSPARENT, Color(_tint, alpha * 0.3), 1.0)
 	# Front edge: a short bright chord at the cone mouth, so the direction is
 	# unambiguous even in a single frame.
 	var a := Vector2.from_angle(center - half * 0.6) * front
 	var b := Vector2.from_angle(center + half * 0.6) * front
-	MathArt.px_line(self, a, b, Color(MathArt.WHITE, alpha * 0.55), 1.0)
+	MathArt.px_line(self, a, b, Color(_tint, alpha * 0.55), 1.0)

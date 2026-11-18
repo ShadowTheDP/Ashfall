@@ -2,13 +2,13 @@ class_name Player
 extends CharacterBody2D
 ## Movement and combat feel. Everything is tuned for motion first: asymmetric
 ## gravity, apex hang, a square that tumbles one face per jump, and generous
-## input forgiveness. No colour is used for feedback anywhere.
+## input forgiveness. Semantic colors keep player attacks and threats distinct.
 
 signal died
 signal landed(strength: float)
 signal took_off
 
-enum State { IDLE, RUN, AIR, ROLL, ATTACK, HURT, DEAD }
+enum State { IDLE, RUN, AIR, ROLL, ATTACK, HURT, DEAD, CLIMB, DIVE }
 
 @export_group("Movement")
 @export var max_speed := 300.0
@@ -69,6 +69,10 @@ const BASE_ROLL_IFRAME_END := 0.24
 const BASE_CRIT_BONUS := 0.0
 
 var state: State = State.IDLE
+var _action_lock := 0.0
+var traversal_world: Node
+var _climb_vine := Rect2()
+var _wall_jump_t := 0.0
 var facing := 1
 var hp := 0.0
 var invuln := 0.0
@@ -77,6 +81,7 @@ var squash := 1.0
 
 var coyote := 0.0
 var jump_buffer := 0.0
+var drop_through_t := 0.0
 var roll_t := 0.0
 ## Counts up from the start of a roll and keeps counting through the recovery,
 ## so i-frames bought past roll_time (up to 0.43 s) actually exist.
@@ -114,6 +119,11 @@ var aegis_t := 0.0
 var aegis_cd := 0.0
 
 var weapon: Dictionary = {}
+var weapon_slot := 0
+var guard_item: Dictionary = {}
+var guard_t := 0.0
+var aegis_item: Dictionary = {}
+var _air_roll_used := false
 var weapon_combo: Array = []
 var attack_cfg: Dictionary = {}
 var hitbox: Hitbox
@@ -142,10 +152,26 @@ func _ready() -> void:
 	add_to_group("player")
 
 
-## Reads the persistent loadout (character, armour, weapon) and permanent
-## upgrades. Everything the hub sells funnels through here, so gameplay never
-## has to know about Profile directly.
+## Route projection reads RunBuild only; Hub/legacy fixtures retain Profile power.
+## Reapplying must not refill instances, heal, or compound derived values.
 func _apply_loadout() -> void:
+	if Game.build != null:
+		max_hp = Game.build.health()
+		hp = minf(hp, max_hp)
+		max_speed = float(Data.characters["square"]["speed"])
+		jump_velocity = float(Data.characters["square"]["jump"])
+		roll_iframe_end = BASE_ROLL_IFRAME_END
+		crit_bonus = BASE_CRIT_BONUS
+		armor_taken = 1.0 + Game.build.effect("damage_taken")
+		armor_hp = 0.0
+		character_id = "square"
+		passive_id = "none"
+		echo_every = 0
+		perfect_dodge_scale = 1.0
+		aegis_cooldown_scale = 1.0
+		_select_weapon(weapon_slot)
+		_sync_skills()
+		return
 	# Idempotent on purpose: armour, skill nodes and the passive all ADD to
 	# these, so without the reset a second call would compound every one of
 	# them. Nothing here may use `+=` without a matching default above.
@@ -197,10 +223,10 @@ func on_crit() -> void:
 		refund_knife()
 
 
-## The two-colour build. A weapon carries a colour in data/weapons.json and
-## scales with the levels of that colour: in-run boons plus the soul upgrades
-## the hub sells. Weapons with no colour (none today) stay at baseline.
+## Routes use Scroll axes; only legacy fixtures add boons and Profile upgrades.
 func attribute_level(colour: String) -> int:
+	if Game.build != null:
+		return int(Game.build.attributes.get(colour, 0))
 	if colour.is_empty():
 		return 0
 	return int(Game.attr.get(colour, 0)) + int(Profile.bonus(colour))
@@ -268,22 +294,55 @@ func _build_nodes() -> void:
 	camera.make_current()
 
 
+func suppress_actions() -> void:
+	_action_lock = 0.12
+	jump_buffer = 0.0
+	guard_t = 0.0
+	aegis_t = 0.0
+	_cancel_swing()
+	if state == State.ATTACK:
+		set_state(State.IDLE)
+
+
+func _action_pressed(action: String) -> bool:
+	return _action_lock <= 0.0 and Input.is_action_just_pressed(action)
+
+
 func _physics_process(delta: float) -> void:
+	_action_lock = maxf(0.0, _action_lock - delta)
 	if state == State.DEAD:
 		velocity.x = move_toward(velocity.x, 0.0, 900.0 * delta)
 		velocity.y = minf(velocity.y + gravity_fall * delta, max_fall_speed)
 		move_and_slide()
 		return
 
+	if Game.build != null:
+		Game.build.tick(delta)
+		_sync_skills()
+	guard_t = maxf(0, guard_t - delta)
 	_tick_timers(delta)
+	if drop_through_t > 0.0:
+		drop_through_t = maxf(0.0, drop_through_t - delta)
+		if drop_through_t == 0.0:
+			set_collision_mask_value(4, true)
 
-	if Input.is_action_just_pressed("throw") and state != State.HURT:
-		_throw_knife()
-	if Input.is_action_just_pressed("aegis") and state != State.HURT:
-		_cast_aegis()
+	if _action_pressed("weapon_two") and state not in [State.HURT, State.ROLL, State.ATTACK]:
+		_use_weapon(1)
+	if _action_pressed("throw") and state != State.HURT:
+		_use_skill(2)
+	if _action_pressed("aegis") and state != State.HURT:
+		_use_skill(3)
 
 	var dir := Input.get_axis("move_left", "move_right")
-	if Input.is_action_just_pressed("jump"):
+	if _traversal_step(dir, delta):
+		return
+	if _action_pressed("jump") and Input.is_action_pressed("drop") and is_on_floor():
+		# Layer 4 is the one-way deck only; solid world collision remains active.
+		set_collision_mask_value(4, false)
+		drop_through_t = 0.18
+		velocity.y = 120.0
+		jump_buffer = 0.0
+	elif _action_pressed("jump"):
 		jump_buffer = jump_buffer_time
 	if is_on_floor():
 		coyote = coyote_time
@@ -306,7 +365,109 @@ func _physics_process(delta: float) -> void:
 	_post_move(fall_speed, delta)
 
 
+func relocate(at: Vector2) -> void:
+	_climb_vine = Rect2()
+	_wall_jump_t = 0.0
+	jump_buffer = 0.0
+	coyote = 0.0
+	drop_through_t = 0.0
+	set_collision_mask_value(4, true)
+	velocity = Vector2.ZERO
+	if state not in [State.DEAD, State.HURT]:
+		set_state(State.AIR)
+	suppress_actions()
+	global_position = at
+	reset_physics_interpolation()
+	if is_instance_valid(camera):
+		camera.global_position = at
+		camera.reset_physics_interpolation()
+
+
+func _space_jump() -> bool:
+	return _action_pressed("jump") and (Input.is_action_pressed("jump_explicit") or not Input.is_action_pressed("climb_up"))
+
+
+func _traversal_step(dir: float, delta: float) -> bool:
+	if state in [State.CLIMB, State.DIVE] and _action_pressed("roll") and _can_roll() and roll_cd <= 0:
+		_start_roll(dir)
+		return false
+	if not is_instance_valid(traversal_world) or Game.run_phase != "biome" or state in [State.HURT, State.ROLL, State.ATTACK]:
+		_climb_vine = Rect2()
+		if state in [State.CLIMB, State.DIVE]:
+			set_state(State.AIR)
+		return false
+	if _space_jump() and Input.is_action_pressed("drop") and not is_on_floor():
+		_cancel_swing()
+		_climb_vine = Rect2()
+		jump_buffer = 0.0
+		set_state(State.DIVE)
+	if state == State.DIVE:
+		velocity.x = move_toward(velocity.x, dir * max_speed, air_accel * delta)
+		velocity.y = float(Data.traversal["dive_speed"])
+		var speed := velocity.y
+		move_and_slide()
+		if is_on_floor():
+			var broken := false
+			for n in get_slide_collision_count():
+				var contact := get_slide_collision(n)
+				var collider := contact.get_collider()
+				if contact.get_normal().y < -0.5 and collider != null and collider.has_method("try_break"):
+					broken = collider.try_break(self) or broken
+			if not broken:
+				set_state(State.IDLE)
+		_post_move(speed, delta)
+		return true
+	var climb_axis := Input.get_axis("climb_up", "climb_down")
+	if not _climb_vine.has_area() and absf(climb_axis) > 0 and Profile.unlocked_runes.has("canopy_rune"):
+		_climb_vine = traversal_world.vine_at(global_position, climb_axis > 0)
+	if _climb_vine.has_area():
+		if _space_jump():
+			_climb_vine = Rect2()
+			_jump(false)
+			velocity.x = dir * max_speed
+			return false
+		if not _climb_vine.grow(12).has_point(global_position):
+			_climb_vine = Rect2()
+			set_state(State.AIR)
+			return false
+		set_state(State.CLIMB)
+		tumbling = false
+		if climb_axis > 0:
+			# Bypass intervening decks, then catch the vine's lower landing.
+			var through_deck := global_position.y < _climb_vine.end.y - 48
+			set_collision_mask_value(4, not through_deck)
+			drop_through_t = 0.18 if through_deck else 0.0
+		velocity = Vector2(clampf((_climb_vine.get_center().x - global_position.x) * 8.0, -120, 120), climb_axis * float(Data.traversal["climb_speed"]))
+		move_and_slide()
+		if climb_axis > 0 and is_on_floor():
+			_climb_vine = Rect2()
+			set_state(State.IDLE)
+		elif climb_axis < 0 and global_position.y <= _climb_vine.position.y + 24:
+			_climb_vine = Rect2()
+			set_state(State.AIR)
+		return true
+	if is_on_wall() and Profile.unlocked_runes.has("climb_rune"):
+		var normal := get_wall_normal()
+		if _space_jump():
+			_jump(false)
+			velocity.x = normal.x * max_speed
+			_wall_jump_t = float(Data.traversal["wall_jump_lock"])
+			move_and_slide()
+			return true
+		if dir * normal.x < 0 and absf(climb_axis) > 0:
+			set_state(State.CLIMB)
+			velocity = Vector2(dir * max_speed, climb_axis * float(Data.traversal["climb_speed"]))
+			move_and_slide()
+			return true
+		if velocity.y > 0 and dir * normal.x < 0:
+			velocity.y = minf(velocity.y, float(Data.traversal["wall_slide_speed"]))
+	if state == State.CLIMB:
+		set_state(State.AIR)
+	return false
+
+
 func _tick_timers(delta: float) -> void:
+	_wall_jump_t = maxf(0.0, _wall_jump_t - delta)
 	invuln = maxf(0.0, invuln - delta)
 	roll_iframe_t += delta
 	roll_cd = maxf(0.0, roll_cd - delta)
@@ -329,7 +490,7 @@ func _tick_timers(delta: float) -> void:
 		tumble = minf(1.0, tumble + delta / 0.07)
 		if tumble >= 1.0:
 			tumbling = false
-	if knife_charges < knife_max:
+	if Game.build == null and knife_charges < knife_max:
 		_knife_regen += delta
 		if _knife_regen >= knife_regen_time:
 			_knife_regen = 0.0
@@ -343,22 +504,23 @@ func _tick_free(dir: float, delta: float) -> void:
 	var rate := ground_accel if on_floor else air_accel
 	if absf(dir) < 0.01:
 		rate = ground_friction if on_floor else air_drag
-	velocity.x = move_toward(velocity.x, dir * max_speed, rate * delta)
+	if _wall_jump_t <= 0.0:
+		velocity.x = move_toward(velocity.x, dir * max_speed, rate * delta)
 	if absf(dir) > 0.01:
 		facing = 1 if dir > 0.0 else -1
 
 	if jump_buffer > 0.0 and coyote > 0.0:
 		_jump(on_floor)
 
-	if Input.is_action_just_released("jump") and velocity.y < 0.0:
+	if _action_lock <= 0.0 and Input.is_action_just_released("jump") and velocity.y < 0.0:
 		velocity.y *= jump_cut
 
-	if Input.is_action_just_pressed("roll") and on_floor and roll_cd <= 0.0:
+	if _action_pressed("roll") and _can_roll() and roll_cd <= 0.0:
 		_start_roll(dir)
 		return
 
-	if Input.is_action_just_pressed("attack"):
-		_start_attack(0)
+	if _action_pressed("attack"):
+		_use_weapon(0)
 		return
 
 	if on_floor:
@@ -407,11 +569,10 @@ func _tick_roll(delta: float) -> void:
 		set_state(State.AIR if not is_on_floor() else State.IDLE)
 		return
 
-	if roll_t > roll_time * 0.55 and Input.is_action_just_pressed("attack"):
-		# Cancelling into an attack used to skip the cooldown entirely: the roll
-		# is the cheapest i-frame path, and it was the one that never paid.
+	if roll_t > roll_time * 0.55 and (_action_pressed("attack") or _action_pressed("weapon_two")):
 		roll_cd = roll_cooldown
-		_start_attack(0)
+		set_state(State.AIR if not is_on_floor() else State.IDLE)
+		_use_weapon(1 if _action_pressed("weapon_two") else 0)
 
 
 func _tick_attack(delta: float) -> void:
@@ -430,11 +591,11 @@ func _tick_attack(delta: float) -> void:
 	elif is_on_floor():
 		velocity.x = move_toward(velocity.x, 0.0, 1600.0 * delta)
 
-	if Input.is_action_just_pressed("attack") and attack_index < weapon_combo.size() - 1:
+	if _action_pressed("attack" if weapon_slot == 0 else "weapon_two") and attack_index < weapon_combo.size() - 1:
 		attack_queued = true
 
 	var cancel_at := float(attack_cfg.get("cancel_at", 0.6))
-	if Input.is_action_just_pressed("roll") and is_on_floor() and roll_cd <= 0.0 and attack_t >= attack_total * cancel_at:
+	if _action_pressed("roll") and _can_roll() and roll_cd <= 0.0 and attack_t >= attack_total * cancel_at:
 		_start_roll(Input.get_axis("move_left", "move_right"))
 		return
 
@@ -467,6 +628,8 @@ func _apply_gravity(delta: float) -> void:
 
 func _post_move(fall_speed: float, delta: float) -> void:
 	var on_floor := is_on_floor()
+	if on_floor:
+		_air_roll_used = false
 	if on_floor and not _was_on_floor:
 		var strength := clampf((fall_speed - 180.0) / 700.0, 0.0, 1.6)
 		if fall_speed > 200.0:
@@ -483,6 +646,9 @@ func _post_move(fall_speed: float, delta: float) -> void:
 
 
 func _start_roll(dir: float) -> void:
+	if not is_on_floor():
+		_air_roll_used = true
+	_climb_vine = Rect2()
 	if absf(dir) > 0.01:
 		facing = 1 if dir > 0.0 else -1
 	_cancel_swing()
@@ -495,6 +661,80 @@ func _start_roll(dir: float) -> void:
 	set_state(State.ROLL)
 	Sfx.play("roll", -13, randf_range(0.95, 1.05))
 	Juice.dust(get_parent(), global_position + Vector2(0, 22), signf(velocity.x), 0.8)
+
+
+func _can_roll() -> bool:
+	return is_on_floor() or not _air_roll_used
+
+
+func _select_weapon(slot: int) -> void:
+	if Game.build == null:
+		return
+	weapon_slot = slot
+	var item := Game.build.slots[slot]
+	var cfg := Game.build.definition(item)
+	weapon = Data.weapons.get(str(cfg.get("weapon", "")), {}).duplicate(true)
+	weapon["attribute"] = cfg.get("attribute", "")
+	weapon_combo = weapon.get("combo", [])
+	permanent_damage_mult = Game.build.power(item)
+	if is_instance_valid(visual) and is_instance_valid(visual.weapon_visual):
+		visual.weapon_visual.setup(str(item["id"]))
+
+
+func _use_weapon(slot: int) -> void:
+	if Game.build == null:
+		if slot == 0:
+			_start_attack(0)
+		return
+	_select_weapon(slot)
+	var item := Game.build.slots[slot]
+	var cfg := Game.build.definition(item)
+	if cfg["action"] == "melee":
+		_start_attack(0)
+	elif Game.build.use(slot):
+		guard_item = item
+		guard_t = float(cfg["duration"])
+		Combat.ring(global_position, MathArt.PICKUP, 26)
+
+
+func _use_skill(slot: int) -> void:
+	var action := "kunai" if slot == 2 else "aegis"
+	if Game.build != null:
+		action = str(Game.build.definition(Game.build.slots[slot])["action"])
+	if action == "kunai":
+		_throw_knife(slot)
+	elif action == "aegis":
+		_cast_aegis(slot)
+
+
+func _sync_skills() -> void:
+	if Game.build == null:
+		return
+	knife_max = 0
+	knife_charges = 0
+	aegis_cd = 0
+	for item in Game.build.slots:
+		var cfg := Game.build.definition(item)
+		if cfg.get("action") == "kunai":
+			knife_max += int(cfg["charges"])
+			knife_charges += int(item["charges"])
+			knife_regen_time = Game.build.cooldown(item)
+		elif cfg.get("action") == "aegis":
+			aegis_cd = float(item["cooldown"])
+
+
+func _counter(item: Dictionary) -> void:
+	if Game.build == null or item.is_empty():
+		return
+	var cfg := Game.build.definition(item)
+	var point := global_position + Vector2(facing * 14, -8)
+	Combat.block_number(global_position + Vector2(0, -50))
+	Combat.impact(point, Vector2(facing, 0), 1)
+	Juice.block(get_parent(), point, facing)
+	Sfx.play("block", -6)
+	for enemy in get_tree().get_nodes_in_group("enemies"):
+		if not enemy._dead and global_position.distance_to(enemy.global_position) <= float(cfg["radius"]):
+			enemy.take_hit({"damage":Damage.compute(float(cfg["damage"]) * Game.build.power(item) * Game.total_damage_mult(), Game.build.level(item), false, 1), "source_pos":global_position, "point":enemy.global_position, "knockback":260, "tier":1, "status":str(Data.gear["affixes"][item["affix"]].get("status", "")), "status_attr":Game.build.level(item)})
 
 
 func _start_attack(index: int) -> void:
@@ -523,6 +763,7 @@ func _open_hitbox() -> void:
 	var rect := hitbox.shape_node.shape as RectangleShape2D
 	rect.size = Vector2(float(size[0]), float(size[1]))
 	hitbox.attr = weapon_attr_level()
+	hitbox.status_id = str(Data.gear["affixes"][Game.build.slots[weapon_slot]["affix"]].get("status", "")) if Game.build != null else ""
 	hitbox.enable(
 		float(attack_cfg.get("damage", 10.0)) * Game.total_damage_mult() * permanent_damage_mult,
 		float(attack_cfg.get("knockback", 180.0)),
@@ -537,17 +778,18 @@ func _open_hitbox() -> void:
 		global_position + Vector2(float(facing) * 13.0, 4.0),
 		facing,
 		attack_index,
-		MathArt.WHITE,
+		MathArt.PICKUP,
 		blade
 	)
 	if attack_index == weapon_combo.size() - 1 and not weapon_combo.is_empty():
 		var wave := FunctionWave.new()
 		wave.position = global_position + Vector2(facing * 26.0, -18.0)
 		wave.attr = weapon_attr_level()
+		wave.status_id = hitbox.status_id
 		# The wave used to carry a literal 8.0, so a Fractal Edge finisher released
 		# the same wave as a Rusty Sword. It is content: data/weapons.json.
 		wave.setup(facing, float(weapon.get("wave_damage", 8.0)) * Game.total_damage_mult() * permanent_damage_mult,
-			MathArt.WHITE, self, crit_multiplier())
+			MathArt.TACTICS, self, crit_multiplier())
 		var root := Game.fx_root
 		if is_instance_valid(root):
 			root.add_child(wave)
@@ -568,8 +810,7 @@ func _open_hitbox() -> void:
 func take_hit(info: Dictionary) -> void:
 	if state == State.DEAD:
 		return
-	# The reward is tied to the ROLL's i-frame window, not to `is_invulnerable()`:
-	# that also reports the post-hit invulnerability, so rolling out of a hit's
+	# Reward only the roll window: rolling out of a hit's
 	# 0.55 s tail paid EDGE + a knife + an announce for a hit that was stopped by
 	# hurt frames, not by the dodge. And the window now runs past roll_time (up to
 	# 0.43 s with armour + GHOST + GLASS), so the state check had to go too.
@@ -578,18 +819,25 @@ func take_hit(info: Dictionary) -> void:
 		return
 	if invuln > 0.0:
 		return
+	var source_pos: Vector2 = info.get("source_pos", global_position)
+	if guard_t > 0 and (source_pos.x - global_position.x) * facing >= 0:
+		guard_t = 0
+		_counter(guard_item)
+		return
 	if aegis_t > 0.0:
 		_aegis_block()
 		return
 	var damage := float(info.get("damage", 1)) * armor_taken
+	var lost := minf(hp, damage)
 	hp = maxf(0.0, hp - damage)
+	Game.note_damage_taken(lost)
 	invuln = invuln_time
 	flash = 0.14
 	squash = 1.24
 	hurt_t = hurt_time
+	guard_t = 0.0
 	_cancel_swing()
 
-	var source_pos: Vector2 = info.get("source_pos", global_position)
 	var dir := signf(global_position.x - source_pos.x)
 	if dir == 0.0:
 		dir = -facing
@@ -607,15 +855,15 @@ func take_hit(info: Dictionary) -> void:
 	Combat.damage_number(global_position + Vector2(0, -46), int(damage), false)
 	# The spark belongs at the contact EDGE, not on the body centre: a hit that
 	# explodes in the middle of the square reads as the square hurting itself.
-	var contact := global_position + Vector2(float(dir) * 14.0, -8.0)
-	Combat.spark(contact, Vector2(dir, 0), false, MathArt.WHITE)
+	var contact := global_position + Vector2(-dir * 14.0, -8.0)
+	Combat.spark(contact, Vector2(dir, 0), false, MathArt.FIRE)
 	Combat.hurt_burst(contact, int(dir))
-	Juice.hit_sparks(get_parent(), global_position + Vector2(float(dir) * 8.0, -10.0), Vector2(dir, 0), 1.2)
+	Juice.hit_sparks(get_parent(), contact, Vector2(dir, 0), 1.2)
 	if weight > 0.6:
 		# Only a genuinely heavy hit punches the frame; a chip hit must never
 		# take the player's eyes off the telegraph that is still coming.
 		Combat.screen_punch(0.5 * weight)
-		Combat.ring(global_position + Vector2(0, -12), MathArt.WHITE, 40.0)
+		Combat.ring(global_position + Vector2(0, -12), MathArt.DANGER, 40.0)
 	Sfx.play("hurt", -6)
 	Game.hurt_flash = 0.22 + 0.20 * weight
 	Game.combo_break()
@@ -626,11 +874,7 @@ func take_hit(info: Dictionary) -> void:
 
 func heal(amount: float) -> void:
 	hp = minf(max_hp, hp + amount)
-	Juice.pickup(get_parent(), global_position + Vector2(0, -10))
-
-
-func is_invulnerable() -> bool:
-	return invuln > 0.0 or is_roll_invulnerable()
+	Juice.pickup(get_parent(), global_position + Vector2(0, -10), MathArt.HEAL)
 
 
 ## The roll's own window, measured from the start of the roll and independent of
@@ -660,6 +904,14 @@ func add_knife_max() -> void:
 
 
 func refund_knife() -> void:
+	if Game.build != null:
+		for item in Game.build.slots:
+			var cfg := Game.build.definition(item)
+			if cfg.get("action") == "kunai":
+				item["charges"] = mini(int(cfg["charges"]), int(item["charges"]) + 1)
+				break
+		_sync_skills()
+		return
 	if knife_charges < knife_max:
 		knife_charges += 1
 
@@ -677,17 +929,26 @@ func _nearest_enemy(radius: float) -> Node2D:
 	return best
 
 
-func _throw_knife() -> void:
-	if knife_charges <= 0:
+func _throw_knife(slot := 2) -> void:
+	if not is_instance_valid(Game.fx_root):
+		return
+	var item: Dictionary = {}
+	if Game.build != null:
+		item = Game.build.slots[slot]
+		if not Game.build.use(slot):
+			return
+	elif knife_charges <= 0:
 		Sfx.play("ui", -20, 1.4)
 		return
-	knife_charges -= 1
+	else:
+		knife_charges -= 1
 	var spawn := global_position + Vector2(float(facing) * 8.0, -16.0)
 	var target := _nearest_enemy(540.0)
 	var aim_point := spawn + Vector2(float(facing) * 360.0, -70.0)
 	if target != null:
 		aim_point = target.global_position + Vector2(0, -16)
-	var velocity := MathArt.ballistic_velocity(spawn, aim_point, knife_speed, Projectile.KUNAI_GRAVITY)
+	var speed := float(Game.build.definition(item)["speed"]) if Game.build != null else knife_speed
+	var velocity := MathArt.ballistic_velocity(spawn, aim_point, speed, Projectile.KUNAI_GRAVITY)
 	var projectile := Projectile.new()
 	projectile.position = spawn
 	# A kunai is a tactics weapon whatever the blade is.
@@ -695,36 +956,51 @@ func _throw_knife() -> void:
 	projectile.setup_player(
 		velocity,
 		knife_damage * Game.total_damage_mult() * permanent_damage_mult,
-		MathArt.WHITE,
+		MathArt.TACTICS,
 		self,
 		crit_multiplier()
 	)
+	if Game.build != null:
+		projectile.damage = float(Game.build.definition(item)["damage"]) * Game.build.power(item) * Game.total_damage_mult()
+		projectile.attr = Game.build.level(item)
+		projectile.crit_mult = float(Game.build.definition(item).get("crit_multiplier", 1.5))
+		projectile.status_id = str(Data.gear["affixes"][item["affix"]].get("status", ""))
 	var root: Node = Game.fx_root
 	if is_instance_valid(root):
 		root.add_child(projectile)
 	Combat.parabola_preview(spawn, velocity, Projectile.KUNAI_GRAVITY)
-	Combat.burst(spawn, MathArt.WHITE, 4, 90.0)
+	Combat.burst(spawn, 4)
 	Sfx.play("throw", -9, randf_range(0.95, 1.05))
 
 
-func _cast_aegis() -> void:
-	if aegis_cd > 0.0 or state == State.DEAD:
+func _cast_aegis(slot := 3) -> void:
+	if Game.build != null:
+		if not Game.build.use(slot):
+			return
+		aegis_item = Game.build.slots[slot]
+		aegis_t = float(Game.build.definition(aegis_item)["duration"])
+	elif aegis_cd > 0.0 or state == State.DEAD:
 		return
-	aegis_t = aegis_time
-	aegis_cd = aegis_time + aegis_cooldown * aegis_cooldown_scale
-	Combat.ring(global_position + Vector2(0, -6), MathArt.WHITE, 52.0)
-	Combat.burst(global_position + Vector2(0, -8), MathArt.WHITE, 10, 150.0)
+	else:
+		aegis_t = aegis_time
+		aegis_cd = aegis_time + aegis_cooldown * aegis_cooldown_scale
+	Combat.ring(global_position + Vector2(0, -6), MathArt.PICKUP, 52.0)
+	Combat.burst(global_position + Vector2(0, -8), 10)
 	Sfx.play("dodge", -10, 0.8)
 
 
 func _aegis_block() -> void:
+	if Game.build != null:
+		aegis_t = 0.0
+		_counter(aegis_item)
+		return
 	aegis_t = 0.0
 	Combat.block_number(global_position + Vector2(0, -50))
 	var block_point := global_position + Vector2(float(facing) * 14.0, -8.0)
-	Combat.spark(block_point, Vector2(float(facing), 0.0), false, MathArt.WHITE)
+	Combat.spark(block_point, Vector2(float(facing), 0.0), false, MathArt.FIRE)
 	Combat.block_burst(block_point, facing)
-	Combat.impact(block_point, Vector2(float(facing), 0.0), 1, MathArt.WHITE)
-	Combat.ring(global_position + Vector2(0, -8), MathArt.WHITE, 46.0)
+	Combat.impact(block_point, Vector2(float(facing), 0.0), 1, MathArt.FIRE)
+	Combat.ring(global_position + Vector2(0, -8), MathArt.PICKUP, 46.0)
 	Juice.block(get_parent(), block_point, facing)
 	Combat.shake(0.22)
 	Sfx.play("block", -6, 1.1)
@@ -788,8 +1064,8 @@ func _die() -> void:
 	set_state(State.DEAD)
 	_cancel_swing()
 	velocity = Vector2(-facing * 140.0, -300.0)
-	Combat.burst(global_position + Vector2(0, -16), MathArt.WHITE, 20, 280.0)
-	Juice.shatter(get_parent(), global_position + Vector2(0, -14), MathArt.WHITE, 18)
+	Combat.burst(global_position + Vector2(0, -16), 20)
+	Juice.shatter(get_parent(), global_position + Vector2(0, -14), MathArt.PLAYER, 18)
 	Combat.shake(0.85)
 	Sfx.play("death", -5)
 	Game.end_run(false)

@@ -1,13 +1,13 @@
 ; Engine configuration file.
 ; Ashfall — an original Dead-Cells-like combat study.
-; 768x480 logical, integer x2 = 1536x960. Monochrome, motion-first.
+; 768x480 logical, resizable window (initial 1536x960), aspect keep, fractional scale. MathArt color, motion-first.
 
 config_version=5
 
 [application]
 
 config/name="Ashfall (DC-like)"
-config/description="Original roguelite combat-feel prototype. No third-party game code or assets."
+config/description="Original roguelite combat-feel prototype. No third-party game code or art. Bundled text face: Noto Sans CJK TC (SIL OFL 1.1)."
 config/version="0.3.0"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
@@ -17,6 +17,7 @@ config/icon="res://icon.svg"
 
 Data="*res://scripts/autoload/data.gd"
 Profile="*res://scripts/autoload/profile.gd"
+Interface="*res://scripts/autoload/interface.gd"
 Sfx="*res://scripts/autoload/sfx.gd"
 Combat="*res://scripts/autoload/combat.gd"
 Game="*res://scripts/autoload/game.gd"
@@ -27,10 +28,132 @@ window/size/viewport_width=768
 window/size/viewport_height=480
 window/size/window_width_override=1536
 window/size/window_height_override=960
+window/size/resizable=true
 window/stretch/mode="viewport"
 window/stretch/aspect="keep"
-window/stretch/scale_mode="integer"
+window/stretch/scale_mode="fractional"
 window/vsync/vsync_mode=1
+
+[input]
+
+move_left={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":65,"script":null), Object(InputEventKey,"device":-1,"physical_keycode":4194319,"script":null), Object(InputEventJoypadMotion,"device":-1,"axis":0,"axis_value":-1.0,"script":null), Object(InputEventJoypadButton,"device":-1,"button_index":13,"script":null)]
+}
+move_right={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":68,"script":null), Object(InputEventKey,"device":-1,"physical_keycode":4194321,"script":null), Object(InputEventJoypadMotion,"device":-1,"axis":0,"axis_value":1.0,"script":null), Object(InputEventJoypadButton,"device":-1,"button_index":14,"script":null)]
+}
+climb_up={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":87,"script":null), Object(InputEventKey,"device":-1,"physical_keycode":4194320,"script":null), Object(InputEventJoypadMotion,"device":-1,"axis":1,"axis_value":-1.0,"script":null), Object(InputEventJoypadButton,"device":-1,"button_index":11,"script":null)]
+}
+climb_down={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":83,"script":null), Object(InputEventKey,"device":-1,"physical_keycode":4194322,"script":null), Object(InputEventJoypadMotion,"device":-1,"axis":1,"axis_value":1.0,"script":null), Object(InputEventJoypadButton,"device":-1,"button_index":12,"script":null)]
+}
+drop={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":83,"script":null), Object(InputEventKey,"device":-1,"physical_keycode":4194322,"script":null), Object(InputEventJoypadMotion,"device":-1,"axis":1,"axis_value":1.0,"script":null), Object(InputEventJoypadButton,"device":-1,"button_index":12,"script":null)]
+}
+jump={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":32,"script":null), Object(InputEventKey,"device":-1,"physical_keycode":87,"script":null), Object(InputEventKey,"device":-1,"physical_keycode":4194320,"script":null), Object(InputEventJoypadButton,"device":-1,"button_index":0,"script":null)]
+}
+jump_explicit={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":32,"script":null), Object(InputEventJoypadButton,"device":-1,"button_index":0,"script":null)]
+}
+attack={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":74,"script":null), Object(InputEventKey,"device":-1,"physical_keycode":90,"script":null), Object(InputEventKey,"device":-1,"physical_keycode":49,"script":null), Object(InputEventJoypadButton,"device":-1,"button_index":2,"script":null)]
+}
+weapon_two={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":50,"script":null), Object(InputEventJoypadMotion,"device":-1,"axis":4,"axis_value":1.0,"script":null)]
+}
+throw={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":75,"script":null), Object(InputEventKey,"device":-1,"physical_keycode":81,"script":null), Object(InputEventJoypadButton,"device":-1,"button_index":3,"script":null)]
+}
+aegis={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":76,"script":null), Object(InputEventKey,"device":-1,"physical_keycode":69,"script":null), Object(InputEventJoypadButton,"device":-1,"button_index":9,"script":null)]
+}
+roll={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":4194325,"script":null), Object(InputEventJoypadButton,"device":-1,"button_index":1,"script":null)]
+}
+pause={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":4194305,"script":null), Object(InputEventJoypadButton,"device":-1,"button_index":6,"script":null)]
+}
+interact={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":82,"script":null), Object(InputEventJoypadButton,"device":-1,"button_index":10,"script":null)]
+}
+heal={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":70,"script":null), Object(InputEventKey,"device":-1,"physical_keycode":72,"script":null), Object(InputEventJoypadMotion,"device":-1,"axis":5,"axis_value":1.0,"script":null)]
+}
+map={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":4194306,"script":null), Object(InputEventJoypadButton,"device":-1,"button_index":4,"script":null)]
+}
+restart={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":4194309,"script":null), Object(InputEventKey,"device":-1,"physical_keycode":4194310,"script":null)]
+}
+ui_nav_up={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":87,"script":null), Object(InputEventKey,"device":-1,"physical_keycode":4194320,"script":null), Object(InputEventJoypadButton,"device":-1,"button_index":11,"script":null), Object(InputEventJoypadMotion,"device":-1,"axis":1,"axis_value":-1.0,"script":null)]
+}
+ui_nav_down={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":83,"script":null), Object(InputEventKey,"device":-1,"physical_keycode":4194322,"script":null), Object(InputEventJoypadButton,"device":-1,"button_index":12,"script":null), Object(InputEventJoypadMotion,"device":-1,"axis":1,"axis_value":1.0,"script":null)]
+}
+ui_nav_left={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":65,"script":null), Object(InputEventKey,"device":-1,"physical_keycode":4194319,"script":null), Object(InputEventJoypadButton,"device":-1,"button_index":13,"script":null), Object(InputEventJoypadMotion,"device":-1,"axis":0,"axis_value":-1.0,"script":null)]
+}
+ui_nav_right={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":68,"script":null), Object(InputEventKey,"device":-1,"physical_keycode":4194321,"script":null), Object(InputEventJoypadButton,"device":-1,"button_index":14,"script":null), Object(InputEventJoypadMotion,"device":-1,"axis":0,"axis_value":1.0,"script":null)]
+}
+ui_accept={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":4194309,"script":null), Object(InputEventKey,"device":-1,"physical_keycode":4194310,"script":null), Object(InputEventKey,"device":-1,"physical_keycode":32,"script":null), Object(InputEventKey,"device":-1,"physical_keycode":74,"script":null), Object(InputEventKey,"device":-1,"physical_keycode":90,"script":null), Object(InputEventJoypadButton,"device":-1,"button_index":0,"script":null)]
+}
+ui_back={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":4194305,"script":null), Object(InputEventJoypadButton,"device":-1,"button_index":1,"script":null)]
+}
+ui_tab_prev={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":4194323,"script":null), Object(InputEventJoypadButton,"device":-1,"button_index":9,"script":null)]
+}
+ui_tab_next={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":4194324,"script":null), Object(InputEventJoypadButton,"device":-1,"button_index":10,"script":null)]
+}
+ui_detail_up={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":4194320,"script":null), Object(InputEventJoypadMotion,"device":-1,"axis":3,"axis_value":-1.0,"script":null)]
+}
+ui_detail_down={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":4194322,"script":null), Object(InputEventJoypadMotion,"device":-1,"axis":3,"axis_value":1.0,"script":null)]
+}
+ui_secondary={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":88,"script":null), Object(InputEventJoypadButton,"device":-1,"button_index":2,"script":null)]
+}
+
+[internationalization]
+
+locale/fallback="en"
+locale/include_text_server_data=true
+locale/translations=PackedStringArray("res://data/localization/ui.en.translation", "res://data/localization/ui.zh_TW.translation")
 
 [physics]
 
@@ -42,6 +165,6 @@ common/physics_interpolation=true
 
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
-environment/defaults/default_clear_color=Color(0.064, 0.064, 0.064, 1)
+environment/defaults/default_clear_color=Color(0, 0, 0, 1)
 textures/canvas_textures/default_texture_filter=1
 anti_aliasing/quality/msaa_2d=2

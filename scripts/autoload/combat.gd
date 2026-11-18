@@ -57,7 +57,7 @@ const TIER_PUNCH := [0.0, 0.0, 0.45, 0.75]
 
 ## Tiered impact: line sparks + ring + 1-frame flash at the real contact point.
 ## tier: 0 light, 1 medium, 2 heavy, 3 finisher.
-func impact(at: Vector2, direction: Vector2, tier: int, tint: Color = MathArt.WHITE) -> void:
+func impact(at: Vector2, direction: Vector2, tier: int, tint: Color = MathArt.FIRE) -> void:
 	var fx := ImpactFx.new()
 	fx.position = at
 	fx.setup(direction, tier, tint)
@@ -91,14 +91,6 @@ func impact(at: Vector2, direction: Vector2, tier: int, tint: Color = MathArt.WH
 		Juice.speed_lines(_fx_parent(), at, direction, tint, 12, 620.0)
 
 
-## Death, telegraphs and heavy windups pull inward instead of exploding.
-func gather(at: Vector2, radius: float, tint: Color = MathArt.WHITE) -> void:
-	var vortex := VortexFx.new()
-	vortex.position = at
-	vortex.setup(at, radius, tint, 16, 6.0, 0.5)
-	_add(vortex)
-
-
 func _fx_parent() -> Node:
 	return Game.fx_root if is_instance_valid(Game.fx_root) else null
 
@@ -111,7 +103,7 @@ func punch(amount: float) -> void:
 		Game.player.camera.add_punch(amount)
 
 
-## Full-screen monochrome feedback (vignette pulse + scanline offset).
+## Full-screen impact feedback (vignette pulse + scanline offset).
 func screen_punch(amount: float) -> void:
 	if amount <= 0.0:
 		return
@@ -124,7 +116,7 @@ func screen_punch(amount: float) -> void:
 		_add(fx)
 
 
-func spark(at: Vector2, direction: Vector2, crit: bool, tint: Color = Color.WHITE) -> void:
+func spark(at: Vector2, direction: Vector2, crit: bool, tint: Color = MathArt.FIRE) -> void:
 	var fx := HitSpark.new()
 	fx.position = at
 	fx.setup(direction, crit, tint)
@@ -153,14 +145,14 @@ func _mark_crit() -> void:
 		return
 	# 5 sides for a crit on light..heavy, 6 on a finisher.
 	_last_impact.mark_crit(6 if _last_impact.tier > ImpactFx.Tier.HEAVY else 5)
-	Juice.critical_halo(_fx_parent(), _last_impact.position, MathArt.WHITE)
+	Juice.critical_halo(_fx_parent(), _last_impact.position, MathArt.ACCENT)
 	hitstop(0.05)
 
 
 func block_number(at: Vector2) -> void:
 	var fx := DamageNumber.new()
 	fx.position = at
-	fx.setup(0, false, "BLOCK")
+	fx.setup(0, false, ContentText.of("UI_FLOAT_BLOCK", "BLOCK"))
 	_add(fx)
 
 
@@ -174,7 +166,7 @@ func slash(at: Vector2, facing: int, attack_index: int, tint: Color, blade_lengt
 func afterimage(at: Vector2, facing: int) -> void:
 	var fx := Afterimage.new()
 	fx.position = at
-	fx.setup(facing, MathArt.PALE)
+	fx.setup(facing, MathArt.PLAYER)
 	_add(fx)
 
 
@@ -187,7 +179,7 @@ func dust(at: Vector2, count: int, direction: Vector2) -> void:
 	Juice.dust(root, at, direction.x, clampf(float(count) / 6.0, 0.4, 1.6))
 
 
-func burst(at: Vector2, tint: Color, count: int = 14, speed: float = 260.0) -> void:
+func burst(at: Vector2, count: int = 14) -> void:
 	var root: Node = Game.fx_root
 	if not is_instance_valid(root):
 		return
@@ -245,20 +237,20 @@ func dodge_burst(at: Vector2) -> void:
 			away = Vector2(float(-Game.player.facing), 0.0)
 	away = away.normalized()
 	for step in [-0.6, -0.2, 0.2, 0.6]:
-		Juice.speed_lines(host, at, away.rotated(float(step)), MathArt.PALE, 3, 420.0)
+		Juice.speed_lines(host, at, away.rotated(float(step)), MathArt.PLAYER, 3, 420.0)
 
 
 func block_burst(at: Vector2, facing: int) -> void:
 	var fx := BurstFx.new()
 	fx.position = at
-	fx.setup("block", MathArt.PALE_DIM, facing)
+	fx.setup("block", MathArt.PICKUP, facing)
 	_add(fx)
 	# Emitted on the shield arc the player can actually see: the Aegis shell sits
 	# 30-40 px from the body centre and the block point is 14 px in front of it,
 	# so 26 px of arc lands on the rings. Directional information, not decoration.
 	var host := _fx_parent()
 	if is_instance_valid(host):
-		Juice.block_shell(host, at, facing, MathArt.PALE)
+		Juice.block_shell(host, at, facing, MathArt.PICKUP)
 
 
 func hurt_burst(at: Vector2, facing: int) -> void:

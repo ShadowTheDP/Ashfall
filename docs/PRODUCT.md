@@ -1,6 +1,10 @@
 # Ashfall 業務文檔
 
-> 版本 0.3.0 · Godot 4.7.2 · 單色 2D 動作原型
+產品成果以 [GOALS.md](GOALS.md) 為準。九訪問主路、合法 Cistern 替代、三種不同 Boss、原子勝利與完整 Passage 已實作；UI 成熟度增量通過 focused 工程驗證。真人雙路線驗收、UI 美術／理解仍待完成，因此交付 A 尚未正式完成。當前狀態與證據只以 [current-state](agent/current-state.md) 為準；本文件保留產品／架構／數值，不複製進度。
+
+正式 route 使用 run-owned 五槽、三軸 Scroll／Mutation、gold／loot與Profile v6永久藍圖／Forge及三個獨立存檔；biome入口／Passage檢查點可續玩，區內戰鬥不逐幀保存。首次合法0BSC勝利保存殘留Cells、BSC1與最終Rune。BSC1僅解鎖，未實作高難度。本文永久數值／每房boon／固定五層等表格描述仍活躍的legacy fixtures，不疊加正式build。契約：[run-build.md](design/run-build.md)、[save-slots.md](design/save-slots.md)、[route-runtime.md](design/route-runtime.md)、[delivery-a.md](design/delivery-a.md)。UI 全面美術／結構升級已完成工程，2026-11-15 授權全遊戲多色；真人美術滿意與理解待確認。音訊退出引用警告仍有記錄。
+
+> 版本 0.3.0 · Godot 4.7.2 · 多色 2D 動作原型（2026-11-15 授權）
 > 文件目的：讓任何接手的人（或 AI）在 30 分鐘內理解這個專案**做什麼、怎麼跑、
 > 每一塊負責什麼、數值在哪裡、如何驗證**。
 
@@ -12,17 +16,17 @@
 
 **Ashfall** 是一個原創的 roguelite / metroidvania **戰鬥手感原型**。
 它不是商業完整的遊戲，而是一個「把打起來爽不爽這件事做到極致」的技術驗證——
-今天已經能跑完一輪完整的 run（標題 → 大廳 → 5 層 → 勝利），並把永久進度寫進存檔。
+目前正式路線由標題／大廳進入九訪問、三Boss循環；Canopy解鎖另一輪的Cistern替代，取得不同藍圖／Phase Rune後合流。功能驗收和人類難度／節奏簽核分開記錄。
 
 | 項目 | 內容 |
 |---|---|
 | 類型 | 2D 橫向動作 / roguelite |
 | 平台 | Windows（Godot 4.7.2，GL Compatibility） |
-| 一輪長度 | 5 層（第 5 層是 Boss）；清層回大廳，死亡也回大廳 |
-| 進度 | `Profile` 寫 `user://ashfall_profile.json`：cells / souls / 永久升級 / 技能節點 / 圖鑑 / 解鎖 |
+| 一輪長度 | 兩支九訪問路線／三Boss；非終局轉場經Passage，死亡／放棄或勝利回Hub |
+| 進度 | `Profile` 寫三槽：`user://ashfall_profile.json`（slot 1）與 `.slot2` / `.slot3`；cells / souls / 永久升級 / 技能節點 / 圖鑑 / 解鎖，另存這一局的 checkpoint |
 | 操作 | **純鍵盤**，不需要滑鼠 |
-| 美術 | 零外部資產。所有圖形由程式繪製，所有音效由 Python 合成 |
-| 視覺 | **完全單色**（黑 / 白 / 灰），768×480 邏輯解析度，整數 ×2 放大 |
+| 美術 | 零外部美術資產：所有圖形由程式繪製，所有音效由 Python 合成。唯一外部檔是內附文字字型 Noto Sans CJK TC（SIL OFL 1.1，固定來源見 `assets/fonts/PROVENANCE.md`） |
+| 視覺 | **MathArt 多色語意／biome 調色盤**，768×480 邏輯解析度，視窗可縮放（初始 1536×960，aspect keep 連續縮放） |
 | 依賴 | 無第三方 runtime 套件 |
 
 ### 1.2 核心設計主張
@@ -30,8 +34,8 @@
 1. **手感優先於內容。** 玩家 90% 的體驗來自打擊感，不是關卡數量。
 2. **數學即美術。** 沒有貼圖、沒有精靈圖。所有形狀來自多邊形、星形、
    螺線、諧波、拋物線。這讓風格一致、零授權風險、改一個常數就換樣子。
-3. **單色強迫可讀性。** 沒有顏色可以依賴，所以辨識必須靠**形狀、明度、
-   輪廓粗細、動作**。這反過來讓每個元素都必須「長得像它自己」。
+3. **色彩輔助可讀性。** navy／slate 空間與局部暖光建立層次，角色／軸／資源有穩定語意色；
+   辨識仍由**形狀、明度、輪廓粗細、動作與文字**共同承擔，不只依賴色相。
 4. **流暢優先於像素對齊。** 角色與相機使用浮點座標，不做像素吸附。
    120 Hz 物理 + 插值，動作在任何刷新率下都平滑。
 
@@ -70,7 +74,7 @@ project.godot
 HUD 設為 `visible = false`；玩家按 `Enter` / `Space` / `J` 後才解除暫停、顯示 HUD，
 並呼叫 `Main.enter_hub()`。
 
-大廳模式下，`enter_hub()` / `start_floor()` 互換 `world` 裡的子節點：
+正式 Hub run 由 `start_node()` 先驗證生成資料與目的地，再交由 `start_floor()` 組裝；後者保留給 legacy fixtures 的單參數入口。
 
 ```
 Main.enter_hub()
@@ -79,30 +83,32 @@ Main.enter_hub()
   ├─ Hub.setup(Profile.best_floor)
   └─ _build_meta_screens()                 ArchiveScreen + SkillTree
 
-Main.start_floor(n)
-  ├─ _clear_terrain()
-  ├─ 新的 Player
-  ├─ Level.build(n, randi())               └─ LevelGen.generate(n, seed)
-  └─ 重設相機 limits（大廳把 limits 拉寬過）
+Main.start_node(id)
+  ├─ Level.route_layout(id, seed)         BiomeGen + SurfaceReach；失敗保持原場景
+  ├─ Game.enter_node(id)                 核對已選目的地並記錄 visit
+  ├─ start_floor(profile, prepared)       重用同一 Player / build
+  ├─ Level.build(profile, seed, prepared) 組裝模組／碰撞／互動
+  └─ 重設玩家位置、插值及相機 bounds
 ```
 
 測試用 `.tscn` 設 `skip_title = true`（+ 可選 `auto_rewards`），直接進競技場模式。
 
-### 2.2 五個 Autoload（全域單例）
+### 2.2 六個 Autoload（全域單例）
 
 | 名稱 | 檔案 | 職責 |
 |---|---|---|
-| `Data` | `scripts/autoload/data.gd` | 載入 `data/*.json`，提供 `weapons` / `enemies` / `rewards` / `floors` / `upgrades` / `skill_nodes` / `characters` / `armor` 字典 |
-| `Profile` | `scripts/autoload/profile.gd` | **唯一的存檔讀寫**：cells / souls / 升級 / 技能 / 圖鑑 / 解鎖 / 統計，寫 `user://ashfall_profile.json` |
-| `Sfx` | `scripts/autoload/sfx.gd` | 18 個音效池（16 個 AudioStreamPlayer 輪替）+ 32 秒音樂循環 |
+| `Data` | `scripts/autoload/data.gd` | 載入並驗證 `data/*.json`：正式 biome／module／route／gear／passage 表與 legacy `weapons` / `enemies` / `rewards` / `floors` / `upgrades` / `skill_nodes` / `characters` / `armor` 字典 |
+| `Profile` | `scripts/autoload/profile.gd` | **唯一的存檔讀寫**：三槽（slot 1 為 `user://ashfall_profile.json`，另 `.slot2` / `.slot3`）；cells / souls / 升級 / 技能 / 圖鑑 / 解鎖 / 統計，外加這一局的入口／Passage checkpoint 與獨立的 `user://ashfall_settings.cfg` 偏好 |
+| `Interface` | `scripts/autoload/interface.gd` | locale／InputMap overrides、最後有效輸入裝置與 action 提示；不接管任何頁面的 focus、scroll、confirm 或交易 |
+| `Sfx` | `scripts/autoload/sfx.gd` | 18 個音效池（16 個 AudioStreamPlayer 輪替）+ 32 秒音樂循環；原生 Music／SFX buses |
 | `Combat` | `scripts/autoload/combat.gd` | Hitstop、鏡頭震動、zoom punch、所有 FX 生成入口 |
-| `Game` | `scripts/autoload/game.gd` | 單局狀態、連擊、boon、屬性色、樓層流程、輸入註冊、全域節點引用 |
+| `Game` | `scripts/autoload/game.gd` | 單局狀態：路線歷史／visit、`RunBuild` 引用、錢包、flask、settlement、Passage 服務交易、連擊與全域節點引用；legacy 的 `start_floor()` 樓層流程仍供 arena／soak 使用。輸入綁定在 `project.godot` 的原生 InputMap，不再由此節點執行時註冊 |
 
 `Profile` 是唯一讀寫存檔的節點，遊戲玩法永遠不直接碰存檔：
-戰鬥讀的是 `Player._apply_loadout()`，而那裡只呼叫 `Profile.bonus(stat)`。
+正式 route 的 `Player._apply_loadout()` 只投影 `Game.build`；Profile 只約束合法起始武器。Hub／legacy fixtures 才套 `Profile.bonus(stat)` 等舊 loadout。
 存檔用「先寫 `.tmp` 再 rename」：寫到一半中斷也不會毀掉舊檔，
 不會出現一份被截斷、把整份進度清空的存檔。
-`_sanitize()` 會丟掉資料表已經不認得的 id，並把升級等級 clamp 到 `max`。
+`_sanitize()` 會封存資料表不認得的 ID／選擇及超出上限值，而非靜默丟棄；舊版本原始 bytes／snapshot 與 higher-version 拒寫保護由 Profile 擁有。v4新增seen_biomes，不把room discovery寫成永久全開；v5增量保存藍圖交付／投入、Mutation解鎖和Forge，保留v4原始備份；v6把這一局的入口／Passage checkpoint 與永久解鎖分開保存。
 
 `Game` 同時持有：
 - `Game.player` — 當前玩家
@@ -113,13 +119,19 @@ Main.start_floor(n)
 
 | 目錄 | 檔案 | 職責 |
 |---|---|---|
-| `scripts/systems/` | `math_art.gd` | **視覺語言**：幾何 primitive、灰階調色盤、繪圖 helper |
+| `scripts/systems/` | `math_art.gd` | **視覺語言**：幾何 primitive、tonal／semantic／biome 調色盤、繪圖 helper |
 | | `juice.gd` | **粒子預設**：包裝 Godot 的 `CPUParticles2D`，9 種配方 |
 | | `damage.gd` | **唯一傷害公式**（`ATTR_SCALE = 0.12`） |
 | | `geom3d.gd` | 3D→2D 投影，只有 Warden Boss 用 |
 | | `layers.gd` | 物理層 bit 常數 |
+| | `route_graph.gd` | 正式九訪問路線圖：節點、分歧、Rune／key 前置與合法性驗證 |
+| | `run_build.gd` | **局內 gear 唯一 owner**：UID、五槽、charges、品質／詞綴、Gold、Mutation |
+| | `run_checkpoint.gd` | 入口／Passage checkpoint 的版本、內容與狀態合法性 |
+| | `surface_reach.gd` | 生成結果的碰撞分割、來源／落點／key／出口可達與敵人淨空 |
 | `scripts/meta/` | `hub.gd` | **大廳**：1600 px 可行走地面、4 座站台、下降門與樓層選擇 |
 | | `hub_ui.gd` | **UPGRADES / CHARACTER 面板**：列表 + 卡片、購買/解鎖/選擇 |
+| | `passage.gd` | **Passage 場景**：Collector／Mutation／Craft／Challenge／Fountain 五座常設站台（Boss Passage 再加 Forge）與已選定目的地的實體出口；只發訊號，不決定去哪 |
+| | `collector.gd` | **Passage 服務面板**：所有服務共用的單一暫停 owner；換裝、Mutation、鍛造、挑戰都在這裡交易，關閉不會順便選目的地 |
 | `scripts/player/` | `player.gd` | 移動狀態機、三段劍、飛刀、Aegis、翻滾、翻面跳躍、`_apply_loadout()` |
 | | `player_visual.gd` | 玩家繪製：正方形、劍、斬痕、Aegis 環、翻滾 |
 | | `weapon_visual.gd` | 6 種武器幾何（curve / lens / fractal / chain / orbit） |
@@ -128,18 +140,24 @@ Main.start_floor(n)
 | | `enemy_visual.gd` | 幾何原型繪製、預警、受擊輪廓 |
 | | `projectile.gd` | 拋物線投射物（箭 / 飛刀 / 震波） |
 | | `cell_pickup.gd` | 細胞掉落與磁吸 |
+| | `route_boss.gd` / `route_boss_visual.gd` / `route_boss_column.gd` | 三隻路線 Boss 的行為、幾何與柱狀 Hazard |
 | `scripts/combat/` | `hitbox.gd` | 近戰 hitbox（每揮只命中一次） |
 | | `function_wave.gd` | 第三段釋放的正弦行進波 |
-| `scripts/world/` | `level.gd` | **一層**：把 `LevelGen` 的佈局變成碰撞與石頭，管房間觸發、出口門、`room_cleared` / `cleared` / `player_died` |
-| | `level_gen.gd` | **關卡生成**：純資料 `(floor, seed)` → 房間、石板、柱子、出生點、BFS 驗證 |
+| `scripts/world/` | `level.gd` | 把模組圖變成碰撞／地形，2D 房間 discovery／啟動、敵人／Rune／key／checkpoint、實體目的地出口與事件；legacy fixture 仍可 build |
+| | `biome_gen.gd` | 純資料 `(node, seed, catalogs)` → 房間／socket／graph／敵人候選／gate；schema 與組裝拒絕不合法資料 |
+| `scripts/world/` | `traversal_gate.gd` / `progress_pickup.gd` | 實體 key／break gate 與守衛後 Rune／run key 拾取 |
+| | `level_gen.gd` | active legacy 物理／敵人／Boss fixture 的原生成器；正式 biome 改走 BiomeGen |
 | | `arena.gd` | ⚠ **競技場模式專用**（手感 fixture，只有 harness 會走到）：地形資料 + 碰撞 + 幾何繪製 |
 | | `encounter.gd` | ⚠ **競技場模式專用**：4 波導演 + Boon 流程 |
 | | `braziers.gd` / `runes.gd` / `motes.gd` | 競技場模式的背景裝飾（火盆 / 符文 / 微粒） |
+| | `run_loot.gd` | 正式 route 的地面 offer（gold／food／gear／chest／shop／scroll）；離場時退役未領 instance |
 | `scripts/ui/` | `hud.gd` | HUD、暫停、結算、Boss 血條、Build 摘要 |
 | | `reward_screen.gd` | 鍵盤三選一 Boon（`ROOM CLEARED` / `WAVE CLEARED`） |
 | | `archive_screen.gd` | **ARCHIVES**：bestiary / weapons / armour 三分頁 |
 | | `skill_tree.gd` | **SKILLS**：11 節點、前置依賴、cells 付費 |
 | | `title_screen.gd` | 數學標題畫面 |
+| | `exploration_map.gd` | 已發現房間／地標與世界圖、checkpoint 選擇、modal pause／輸入隔離 |
+| | `build_screen.gd` | 換裝／比較／Scroll 選擇的唯一鍵盤 owner |
 | `scripts/fx/` | `impact_fx.gd` | **分級打擊特效**（火花 + 環 + 白閃 + 多邊形） |
 | | `screen_punch.gd` | 全屏暗角脈衝 + 掃描帶 |
 | | `slash_fx.gd` | 獨立斬擊弧 |
@@ -156,7 +174,7 @@ Main.start_floor(n)
 
 ## 3. 遊戲循環
 
-### 3.1 正式循環
+### 3.1 正式交付 A 路線
 
 ```
 標題  (整棵樹暫停；Enter / Space / J 開始)
@@ -166,12 +184,15 @@ Main.start_floor(n)
   ├─ SKILLS     11 節點技能樹
   ├─ ARCHIVES   bestiary / weapons / armour
   ├─ CHARACTER  6 種身體
-  └─ 下降門     A/D 選層（1..best_floor+1），J 下樓
+  └─ 起始門     R / J → Ash Gate
   ↓
-第 1 層 → 第 2 層 → 第 3 層 → 第 4 層 → 第 5 層
-  ├─ 清層     finish_floor() 立刻入帳 → 回大廳
-  ├─ 死亡     end_run(false)，未入帳的 cells 消失 → 回大廳
-  └─ 清完第 5 層  end_run(true)，入帳 + 1 soul → 回大廳
+Ash Gate → Hanging Gallery 或已解鎖的 Silt Cistern → Stone Ramparts → Bridge Sentinel
+  → Stilt Foundry → Clock Spire → Clock Warden → High Keep → Silent Regent
+  ├─ R 實體出口 → Main._on_exit_chosen(id) → Game記pending → enter_passage()
+  ├─ Passage  藍圖／Mutation／craft／挑戰／Fountain；Boss後Forge；固定目的地
+  ├─ Tab 地圖  已發現房間／世界；checkpoint可選已啟用點返回
+  ├─ 死亡／放棄  清局內資源，永久投入保留；拒寫時保留待結算可重試
+  └─ 最終勝利  原子保存統計／殘留Cells／首次BSC1與最終Rune → 回Hub
 ```
 
 ### 3.2 大廳（Hub）
@@ -181,11 +202,17 @@ Main.start_floor(n)
 | 地面寬度 | 1600 px（牆外還有碰撞） |
 | 站台 | 4 座：UPGRADES `x=210`、SKILLS `x=520`、ARCHIVES `x=830`、CHARACTER `x=1140` |
 | 互動 | 靠近 `REACH = 70` px 內按 `J` / `Enter`；開面板時凍結玩家物理 |
-| 下降門 | `x = 1560`；`A`/`D` 在 `1..best_floor+1` 之間步進，`J` 下降 |
+| 下降門 | `x = 1560`；新的一輪永遠從 Floor 1 開始，`J` 下降 |
 | 互斥 | 同時只能開一個面板（`Main._any_panel_open()`）；Esc 只關當下那個 |
-| 樓層起點 | `Hub.setup(Profile.best_floor)`：預設指向「下一個沒去過的層」 |
+| 樓層起點 | `Hub.setup(Profile.best_floor)`：入口固定指向 Floor 1；`best_floor` 只控制永久解鎖內容 |
 
-### 3.3 樓層（Level / LevelGen）
+### 3.3 生成與房間（Level / BiomeGen）
+
+正式流程使用 `data/biomes.json` concept graph 與 `data/room_modules.json`。640×276 格位容納上下支路、合流與能力室；32px 薄樓板避免把下層房間埋入厚地基。walk socket 重合且朝向相反，能力邊驗證實際來源／目標，key 位於門前，敵人按房間 budget 與真實身體尺寸放置。資料錯誤在轉場前拒絕。
+
+Canopy／Phase 在 Gallery／Cistern 真正取得；Climb／Ground 的正常來源仍需未製作 biome。Tab 為探索 modal，普通 checkpoint 不要求 Rune；Phase 則要求其 Rune 與安全成對落點。完整契約及工程證據見 [biome-graph.md](design/biome-graph.md)。
+
+以下 `LevelGen` 幾何只描述仍在使用的 legacy fixtures，不是正式新地圖：
 
 ```
 main.start_floor(n)
@@ -209,20 +236,25 @@ main.start_floor(n)
 | 柱子 | 房間之間的柱不可跳過，強迫用房間的平台往上再往前 |
 | 可達性 | 生成後 BFS 驗證：終點不可達就告警，不發一層死關 |
 
-**★ 房間與樓層流程**
+**★ 正式房間與訪問流程**
 
 ```
-進入房間矩形 → 生成該房敵人（避開玩家 160 px；Boss 用 boss_at 專用車道）
-  房內最後一隻死 → room_cleared(index)
-     └─ Main：floor_rewards_left--，>0 就升起 boon 選擇器（RewardScreen）
-全層敵人清空 → 出口門開啟（轉速變快、變白）
-走進門柱 |dx| < 62、|dy| < 260 → cleared
-   ├─ Game.finish_floor()：run_cells 立刻入帳
-   ├─ 未到第 5 層 → announce FLOOR CLEARED，轉場後回大廳
-   └─ 第 5 層 → Game.end_run(true)：入帳 + 1 soul
+進入房間 → 生成該房敵人；守衛全死 → 可拾取該房 Rune
+普通 biome 可留敵離開；Boss biome 要先擊敗對應 Boss
+靠近實體出口按 R → Main._on_exit_chosen(destination)
+   ├─ 非終局：固定目的地 → enter_passage()，保留 player / build / Cells
+   ├─ Collector 等服務關閉回 Passage；Fountain 每訪問一次，繼續門不能改路
+   └─ Silent Regent：核對九訪問／三次 Boss 擊殺／必要進度
+      → 原子保存殘留 Cells、BSC1 解鎖及最終 Rune → 勝利 → Enter 回 Hub
 ```
 
-### 3.4 局內 build（兩色）
+legacy Arena／LevelGen 的 `room_cleared → floor_rewards_left → RewardScreen` 仍供舊 fixture 使用；正式 route 改由可互動 Scroll／gear 提供 build 成長。
+
+### 3.4 正式局內 build 與 legacy 分界
+
+正式 route：`RunBuild` 的兩武器／兩技能／護符為唯一 owner；B/T/S Scroll 影響各件匹配傷害和 max HP，gold／charges／cooldown／品質／詞綴跨場景保留。1/2、Q/E 和比較選單操作同一份狀態；死亡／放棄清除局內裝備，Profile v6以入口／Passage檢查點暫存這一局，與永久解鎖分開。Mutation效果／槽位和服務見delivery-a契約。每房 boon 和舊永久 power 不疊加，舊資料不刪除。詳見 [run-build.md](design/run-build.md)、[save-slots.md](design/save-slots.md)。
+
+以下是 **legacy Arena／LevelGen fixtures** 的兩屬性契約（2026-11-15 起亦以 MathArt 軸色表達；分類／玩法不變）：
 
 - 每把武器帶 `attribute`：`brutality`（紅）或 `tactics`（紫）；飛刀永遠算 tactics。
 - 帶 `attribute` 的 boon（EDGE / HUNTER = brutality，GHOST / ARMORY = tactics）
@@ -263,22 +295,14 @@ FLOOR CLEARED  或  YOU DIED
 
 | 動作 | 按鍵 | 手把 |
 |---|---|---|
-| 移動 | `A` `D` / `←` `→` | 左類比 |
-| 跳躍 | `Space` `W` `↑` | A |
-| 正弦劍（三段） | `J` `Z` | X |
-| 拋物線飛刀 | `K` | Y |
-| Aegis 護盾 | `L` | LB |
-| 翻滾 | `Shift` | B |
-| 暫停 | `Esc` | Start |
-| 重來 | `R` | Back |
-| 離開（暫停時） | `Q` | — |
-| 開始 / 選 Boon | `Enter` / `1` `2` `3` | — |
-| 大廳：開站台 / 下降（靠近時） | `J` `Enter` | — |
-| 大廳：切換樓層（門口） | `A` `D` / `←` `→` | — |
-| 面板內：移動 / 確認 / 關閉 | 方向鍵或 `WASD` / `J` `Enter` `Space` / `Esc` | — |
+| 完整操作、暫停層級、地圖與服務頁逐鍵契約 | 由 [README](../README.md) 的「操作（完整鍵盤）」表擁有 | 同一套 native InputMap action |
 
-輸入在 `game.gd._setup_input()` **執行時註冊**，不寫在 `project.godot`。
-`shortcut: 沒有遊戲內重綁；等設定選單出現時再搬進 project.godot。`
+- 玩法與選單 action 都註冊在 `project.godot` 的原生 InputMap；`Interface` 只套用 locale／input overrides、記錄最後裝置與產生提示，不接管頁面輸入。`Game` 不再執行時註冊輸入。
+- 鍵盤永遠完整可用；手把是附加路徑，走同一套 action 與焦點語意。
+- 數字直選等快捷鍵可以存在，但不能是唯一操作路徑；開啟面板的同一按鍵不得觸發攻擊、購買或離開。
+- `jump_explicit` 讓重綁後的跳躍在攀爬中仍可跳離；它不是使用者可見的重綁項目。
+
+歷史 legacy／arena 控制不在這裡保留為現行規則；需要追溯時只讀 dated evidence，不還原舊 runtime 註冊。
 
 ### 4.2 移動數值
 
@@ -492,39 +516,21 @@ Combat.impact(point, direction, tier)
 | 項目 | 值 |
 |---|---|
 | 邏輯解析度 | 768×480 |
-| 視窗 | 1536×960（整數 ×2） |
-| 拉伸 | `viewport` + `scale_mode=integer` |
+| 視窗 | 初始 1536×960；可拖曳／最大化縮放 |
+| 拉伸 | `viewport` + `aspect=keep` + `scale_mode=fractional` |
 | 材質過濾 | Linear |
 | 物理 | 120 Hz + `physics_interpolation=true` |
 | 相機 | `zoom=1.0`，浮點位置，不取整 |
 
-### 7.2 灰階梯度
+### 7.2 多色調色盤（2026-11-15）
 
-所有顏色來自 `MathArt`，**嚴格中性灰（`r == g == b`）**，沒有任何色相偏移：
+全遊戲世界、角色、FX 與 UI 的多色授權取代舊單色規則。MathArt 是唯一色彩來源：
+navy／slate／cream tonal ramp 承擔背景與文字層級；mint 玩家、coral 敵人／危險、gold Boss／焦點、cyan 拾取／Cells、green 治療與 survival、violet tactics、amber 火光。
+`axis_color(axis)` 統一三軸，`biome_color(id, role)` 提供十個正式 biome 及 hub／passage／arena 的背景、石面、邊緣、暖光與遠近景。
 
-```
-BLACK      #000000   純黑（描邊）
-INK        #0a0a0a   背景最深
-BG_0..2    #111111 → #1b1b1b → #252525
-STONE_DIM  #333333
-STONE      #404040   地形 / 內凹面
-STONE_HI   #5b5b5b   地形邊線 / 行走線
-MID_DIM    #707070
-MID        #808080   次要文字
-LIGHT_DIM  #a0a0a0
-LIGHT      #bdbdbd   敵人本體
-PALE_DIM   #d5d5d5   盾牌 / 敵人輪廓
-PALE       #e3e3e3   Boss
-WHITE_DIM  #f2f2f2
-WHITE      #ffffff   玩家 / 命中高光
-```
+確切角色、fallback、參考與取捨見 [MathArt 設計](design/math-art.md)。主 agent 已觀看公開 wiki Prisoners' Quarters 的 teal／navy／cyan 和 Promenade 的 turquoise／violet 實圖；參考冷色深度／暖光分離，不移植原作素材。選擇分層與固定語意色，放棄全屏同色染色／全面高飽和。
 
-語意別名：`PLAYER = WHITE`、`PLAYER_CORE = INK`、`ENEMY = LIGHT`、
-`ENEMY_RIM = PALE_DIM`、`BOSS = PALE`、`PICKUP = WHITE`、`DANGER = WHITE`、
-`SHIELD = PALE_DIM`。
-
-資料裡也不允許有色相：`data/rewards.json` 的 `color` 全部是中性灰（`#c9c9c9` 等），
-`data/enemies.json` 的 `color` 也一樣。
+不改 canonical `data/*.json` 的既有色值或 checkpoint content stamp；渲染透過 MathArt 語意色解析。幾何、浮點運動、玩法／進度、存檔不變。真人美術／理解與真人雙路線驗收仍待完成。
 
 ### 7.3 幾何 primitive
 
@@ -532,17 +538,16 @@ WHITE      #ffffff   玩家 / 命中高光
 |---|---|---|
 | `ngon(n, r)` | 正 n 邊形 | 敵人本體、HUD 裝飾 |
 | `star(n, r1, r2)` | 星形 | 暴擊火花、玫瑰窗、五芒星 |
-| `superellipse` | \|x/a\|^e+\|y/b\|^e=1 | 保留 |
+| `superellipse` | \|x/a\|^e+\|y/b\|^e=1 | 門／出口輪廓 |
 | `lissajous` | x=sin(at+δ), y=sin(bt) | 標題畫面 |
 | `rose` | r=R·cos(kθ) | 火盆火焰 |
 | `phyllotaxis` | r=s√i, θ=i·137.5° | 微粒、餘燼、火花 |
 | `spiral` | r=R·e^(−bθ) | 羊角、boon 圖示 |
-| `harmonic_wave` | y=A·sin(kx+φ) | 保留 |
 | `ballistic_velocity` | 拋物線解 | 飛刀、弓箭 |
 
 ### 7.4 角色繪製
 
-**玩家**：白框正方形 + 黑色內凹面 + 白色核心點 + 2px 黑描邊。
+**玩家**：mint 語意正方形 + 深色內凹面 + 明亮核心點 + 2px 深色描邊。
 - 握點在**下半部前緣** `(facing×13, +4)`
 - 劍靜止**朝上**（`REST_ANGLE = -1.30` rad）
 - 劍是**單一漸細四邊形**（底 4.2px → 尖 0.7px），只有一側有 1px 高光
@@ -560,9 +565,17 @@ WHITE      #ffffff   玩家 / 命中高光
 | 檔案 | 內容 | 誰讀 |
 |---|---|---|
 | `floors.json` | 5 層：`name / rooms / width / enemies / boss / palette / reward / beats` | `Game.start_floor()`、`LevelGen._floor_config()`、`LevelGen._pick_kinds()`、`Hud` |
-| `rooms.json` | 每種 room kind 的手寫模板（2-3 個變體），`parts` 格式見 `docs/design/map-generation.md` | `LevelGen._pick_template()` |
+| `rooms.json` | 每種 legacy room kind 的手寫模板（2-3 個變體）；只供 legacy fixtures，不是正式生成契約 | `LevelGen._pick_template()` |
+| `biomes.json` | 正式 biome 目錄與 motif／調色盤 | `BiomeGen.validate*()`、`MathArt.biome_color()` |
+| `room_modules.json` | 正式房間模組、socket 與碰撞幾何 | `BiomeGen`、`surface_reach.gd` |
+| `generation_spatial_v2.json` | 每 profile 的空間嵌入與 authored 佈局 | `BiomeGen.validate_spatial()`、生成探針 |
+| `route_graph.json` | 九訪問三 Boss 路線圖與 Rune／key 前置 | `RouteGraph.validate()`、`Profile.slot_summary()` |
+| `route_profiles.json` | 路線 profile 的 seed／BSC 參數 | `RouteGraph`、`BiomeGen` |
+| `passage.json` | 藍圖、Mutation、重置／鍛造價目與挑戰 | `Data.valid_passage()`、`Collector`、`RunBuild` |
+| `traversal.json` | 互動距離等移動常數 | `Player`、`RunLoot`、`traversal_gate.gd` |
+| `gear.json` | 正式 route 的 item catalog／starters／品質詞綴／Scroll／poison／價目掉落池與 placements | `Data.valid_gear()`、`RunBuild`、`Player`、`RunLoot`、HUD／BuildScreen |
 | `weapons.json` | 每段攻擊的時序、傷害、hitbox、`tier`、`blade`，加 `attribute` / `crit_multiplier` | `Player._open_hitbox()`、`PlayerVisual._blade_length()` |
-| `enemies.json` | 7 種敵人的數值與行為旗標 | `Enemy.configure()` |
+| `enemies.json` | 10 筆條目：7 種普通敵人（`grunt` / `archer` / `charger` / `bulwark` / `spitter` / `leaper` / legacy Boss `warden`）加上三隻路線 Boss（`bridge_sentinel` / `clock_warden` / `silent_regent`）的數值與行為旗標 | `Enemy.configure()`、`RouteBoss`、`SurfaceReach` 的敵人淨空、`Data.valid_route_bosses()` |
 | `rewards.json` | Boon 的名稱、描述、顏色、`attribute` | `RewardScreen`、`Game.apply_reward()` |
 | `upgrades.json` | 9 種永久升級（含 souls 定價的 brutality / tactics） | `Profile.upgrade_*()` / `HubUi` |
 | `skill_nodes.json` | 11 節點技能樹（`requires` 前置） | `Profile.skill_available()`、`SkillTree` |
@@ -639,59 +652,60 @@ Perfect Dodge 期間 `Game.total_damage_mult()` 額外 ×1.25。
 ### 10.1 一鍵驗證
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools\check.ps1
+python tools/check.py
 ```
 
-依序執行 15 個階段（今天實跑：`ALL CHECKS PASSED`，exit 0）：
+以下表保留 legacy fixture 的歷史驗證入口與用途；表內舊數字不是本輪驗收結果。目前證據、限制與 timeout 只以 [`current-state`](agent/current-state.md) 為準。
 
 | 階段 | 指令 | 驗證什麼 |
 |---|---|---|
 | 1 | `--import` | 資源匯入、腳本編譯 |
-| 2 | `--script tests/run_tests.gd` | **111** 項資料 / 公式 / 數學常數檢查 |
+| 2 | `tests/run_tests.tscn` | 資料 / 公式 / 數學常數檢查（最新 grouped evidence：118） |
 | 3 | `tests/combat_probe.tscn` | 真實輸入的命中、傷害、死亡、i-frames |
 | 4 | `tests/reward_probe.tscn` | 鍵盤 Boon 選擇器 |
 | 5 | `tests/soak.tscn` | 競技場模式：全部敵人 + 4 波 + Boss + 勝利 |
 | 6 | `tests/esc_probe.tscn` | 大廳面板開/關/購買；Esc 只關一個 panel |
 | 7 | `tests/floor_probe.tscn` | 大廳 → 樓層交接（相機 limits、地形釋放） |
-| 8 | `tests/run_probe.tscn` | 完整 run：5 層 → 勝利 |
+| 8 | `tests/run_probe.tscn` | 兩條四訪問路線、實體出口與固定目的地 Passage、Boss／Rune 出口重畫（112 checks，切片非首通） |
+| L2a | `tests/biome_gen_probe.gd` | 模組／socket／碰撞及 schema 反例；32seed ×16 Rune 為2759/0 |
+| L2b | `tests/biome_play_probe.tscn` | 真實分岔合流、能力／key／探索圖／modal／壞圖保護48/0 |
+| P | `tests/profile_purchase_probe.tscn` | 永久購買完整提交／存檔失敗回滾／介面回報（114 checks） |
+| R | `tests/restart_probe.tscn` | 跨區擊殺與死亡／放棄僅結算一次（42 checks） |
 | 9 | `tests/audit_a1.tscn` | 戰鬥 / 武器 |
-| 10 | `tests/audit_a2.tscn` | 存檔 / 經濟（**123 checks**） |
+| 10 | `tests/audit_a2.tscn` | 存檔 / 經濟（最新 grouped evidence：138 checks） |
 | 11 | `tests/audit_a3.tscn` | 層 / 出生點（5 層 × 15 seeds） |
-| 12 | `tests/audit_a4.tscn` | UI / 輸入（**226 checks**） |
+| 12 | `tests/audit_a4.tscn` | UI / 輸入、技能模組缺失（**230 checks**） |
 | 13 | `tests/audit_v1.tscn` | 垂直可達性（5 層 × 40 seeds） |
 | 14 | `tests/audit_v2.tscn` | 敵人 / 遭遇 |
-| 15 | `tests/audit_v3.tscn` | run 流程 / 進度（**162 checks**） |
+| 15 | `tests/audit_v3.tscn` | run 流程 / 進度（最新 flow-only evidence：52 checks；完整 legacy walk 未完成） |
 
 ### 10.2 視覺驗證（需顯示器，不進 headless 驗證）
 
 ```powershell
-# 標題畫面 + Enter 驗證
-.\.tools\Godot_v4.7.2-stable_win64_console.exe --path . tests\title_capture.tscn
-
-# 遊戲畫面
-.\.tools\Godot_v4.7.2-stable_win64_console.exe --path . tests\capture_scene.tscn
-
-# 逐幀打擊截圖（輕擊 + 終結技）
-.\.tools\Godot_v4.7.2-stable_win64_console.exe --path . tests\impact_capture.tscn
-
-# 跳躍逐幀（驗證翻面）
-.\.tools\Godot_v4.7.2-stable_win64_console.exe --path . tests\jump_capture.tscn
-
-# 大廳與 meta 面板
-.\.tools\Godot_v4.7.2-stable_win64_console.exe --path . tests\meta_capture.tscn
+# 標題、戰鬥、逐幀打擊、跳躍、大廳與 Bloom；全部走隔離存檔
+python tools/check.py --capture title
+python tools/check.py --capture scene
+python tools/check.py --capture impact
+python tools/check.py --capture jump
+python tools/check.py --capture meta
+python tools/check.py --capture bloom
 ```
 
 輸出到 `output/screenshots/`（gitignored）。
 
-### 10.3 目前狀態
+### 10.3 歷史 L2 證據與本輪入口
 
-```
-TESTS OK (111 checks)
-PROBE OK    REWARD OK    SOAK OK
-ESC TEST OK    FLOOR PROBE OK    RUN PROBE OK
-AUDIT A1..A4 OK    AUDIT V1..V3 OK
-ALL CHECKS PASSED
-```
+目前驗證入口、歷史 Passages／Boss／兩路正常鍵盤操作與人工 gate 見 [current-state](agent/current-state.md) 及其中連結的原始日誌；本節只保留歷史 L2 證據。
+
+下列為歷史L2五節點工程證據：
+
+- `biome_gen_probe -- --seeds=32`: 2,759/2,759
+- `biome_play_probe`: 48/48；最新 display capture 亦 48/48
+- `run_probe`:112/112；兩條四訪問路線、出口重畫，非九訪問首通
+- 該輪安全維護：purchase114、migration56、economy138、CLI safety12與路徑17；Python runner8項程序測試，Bloom16項實際渲染檢查。UI230／restart42為上一輪證據；最新規範見 [launching.md](launching.md)，狀態見 [current-state](agent/current-state.md)。
+- `audit_v3 -- --flow-only`: 52/52
+
+這些是隔離存檔的自動檢查，不等於人工手感、完整 sequential suite、九訪問 0-BSC 首通、完整 build 或 Windows export。
 
 ---
 
@@ -700,8 +714,8 @@ ALL CHECKS PASSED
 ### 11.1 環境
 
 ```powershell
-# 第一次：下載固定版 Godot 到 .tools\
-powershell -ExecutionPolicy Bypass -File tools\fetch_godot.ps1
+# 第一次：從官方 release 下載 Godot 4.7.2，解壓到 .tools\
+# 啟動與防毒規範：docs/launching.md
 
 # 啟動
 .\play.bat
@@ -726,7 +740,7 @@ powershell -ExecutionPolicy Bypass -File tools\fetch_godot.ps1
 
 | 改動類型 | 最低驗證 |
 |---|---|
-| JSON 資料 / 傷害公式 / 屬性縮放 | `tests/run_tests.gd` |
+| JSON 資料 / 傷害公式 / 屬性縮放 | `tests/run_tests.tscn` |
 | 玩家攻擊 / 受擊 / 翻滾 | `tests/combat_probe.tscn` |
 | 敵人 AI / 波次 / 掉落（競技場） | `tests/soak.tscn` |
 | 樓層生成 / 出生點 / 可達性 | `tests/audit_a3.tscn` + `tests/audit_v1.tscn` |
@@ -740,7 +754,7 @@ powershell -ExecutionPolicy Bypass -File tools\fetch_godot.ps1
 ### 11.4 硬性規則（違反會破壞整體風格）
 
 1. **視覺只能透過 `MathArt`**。不引入貼圖、不用 `Sprite2D`。
-2. **不新增色相**。所有顏色來自 `MathArt` 灰階梯度。
+2. **色彩透過 MathArt**（2026-11-15 多色授權）：使用 tonal／semantic／axis／biome palettes，維持明度、輪廓與形狀辨識。
 3. **角色沒有手腳、沒有眼睛**。手是一個點。
 4. **不為角色加變形**（squash / stretch）。純平面 2D，只有旋轉與位移。
 5. **斬痕不能是連續填充形狀**。用斷開的細弧 + 切線。
@@ -755,13 +769,13 @@ powershell -ExecutionPolicy Bypass -File tools\fetch_godot.ps1
 
 | 限制 | 影響 | 可能解法 |
 |---|---|---|
-| 單一存檔槽（`user://ashfall_profile.json`） | 不能多檔案 / 回滾 | 加槽位選擇與備份 |
-| 沒有難度層級 / 無盡模式 | 清完 5 層就只剩刷 | 加難度等級或 endless 樓層 |
-| 只有一隻 Boss（第 5 層的 The Warden） | 後期變化少 | 每層 boss，或第 3 層加一隻中王 |
+| 有限檢查點（三槽） | 區域內戰鬥／位置／掉落未逐幀保存；內容變更拒絕舊局恢復 | 從入口／Passage續玩；詳見save-slots契約 |
+| 完整世界與 BSC 難度尚未交付 | 交付 A 在合法終局後結束；目前沒有完整擴充世界或 BSC 1–5 gameplay | 另立範圍與驗收，不由舊 roadmap 自動授權 |
+| 替代 Boss 尚未製作 | A 只有三個主路 Boss | 交付 B 按獨立行為與場地驗收 |
 | 沒有設定選單 | 輸入不能重綁 | 把輸入搬進 `project.godot` + UI |
 | 敵人不會為了追擊而跳平台 | 弓箭手可能掉下去 | 加跳躍 AI |
 | 沒有匯出 preset | 無法產出 exe | 下載 export templates（1.28 GB） |
-| 遊戲內文字是英文 | 中文玩家要適應 | 加 CJK 字型 |
+| 雙語 UI 尚未完整驗收 | 內附 CJK 字型與原生翻譯層已接線（首次預設繁中、可切英文），完整 UI 文案翻譯與真人判讀仍待完成 | 補齊翻譯表並由真人走查 |
 | Bloom 是螢幕空間近似 | 不是真 HDR | 可接受 |
 
 ---
@@ -787,11 +801,13 @@ powershell -ExecutionPolicy Bypass -File tools\fetch_godot.ps1
 | `README.md` | 專案入口、快速開始、目錄結構 |
 | `AGENTS.md` | AI agent 工作規則、硬性約束 |
 | `MEMORY.md` | 持久決策、指令、風險、驗證狀態 |
-| `docs/agent/current-state.md` | 當前目標與下一步 |
-| `docs/design/pillars.md` | 五根柱子與里程碑規劃 |
+| [docs/agent/current-state.md](agent/current-state.md) | 唯一目前狀態、證據、剩餘工作與人工 gate |
+| [ASHFALL_UI_IMPROVE_PLAN.md](../ASHFALL_UI_IMPROVE_PLAN.md) | 唯一 UI 執行計畫（1–4 完成；5 為下一步） |
+| [docs/GOALS.md](GOALS.md) | 各部分最終目標 G01–G16、驗收與範圍 |
 | `docs/design/math-art.md` | **視覺語言完整規格** |
 | `docs/design/impact.md` | **打擊感完整規格** |
 | `docs/design/combat-feel.md` | 手感調參表與理由 |
-| `docs/design/meta.md` | meta 層（大廳 / 樓層 / 進度）的介面契約 |
-| `docs/design/map-generation.md` | 生成器：beat sheet、模板格式、annex、不變量 |
-| `Changing Description.txt` | 變更紀錄 |
+| `docs/design/route-runtime.md` | route、run、Passage、死亡契約 |
+| `docs/design/biome-graph.md` | room graph、socket、能力、實體出口與 reach 契約 |
+| `docs/design/roguelite-parity.md` | 公開參考、差異盤點與原創邊界 |
+| `docs/research/dead-cells-ui-reference-atlas-2026-11-04.md` | UI 對照圖錄；唯一保留的 UI 參考來源 |

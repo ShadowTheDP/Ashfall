@@ -54,17 +54,8 @@ func _ready() -> void:
 	await get_tree().create_timer(0.3).timeout
 	await _shot("h03_door")
 
-	# Generated floors.
-	for floor_index in [1, 3, 5]:
-		_main.start_floor(floor_index)
-		await get_tree().create_timer(1.1).timeout
-		await _shot("h04_floor%d" % floor_index)
-		# Walk right so the next room and its enemies appear.
-		Input.action_press("move_right")
-		await get_tree().create_timer(2.2).timeout
-		Input.action_release("move_right")
-		await get_tree().create_timer(0.5).timeout
-		await _shot("h05_floor%d_room" % floor_index)
+	# Generated-floor screenshots lived on the retired five-floor path; the
+	# formal route's rooms are captured by the biome probe instead.
 
 	print("meta_capture: done")
 	get_tree().quit()
@@ -80,8 +71,21 @@ func _close_all() -> void:
 
 
 func _shot(name: String) -> void:
+	await get_tree().process_frame
+	$Main.hud.queue_redraw()
 	await RenderingServer.frame_post_draw
 	var image := get_viewport().get_texture().get_image()
 	var path := "%s/%s.png" % [_dir, name]
 	image.save_png(path)
-	print("saved ", path)
+	await _physical_capture(name)
+	print("META FRAME %dms %s" % [Time.get_ticks_msec(), name])
+	if OS.get_environment("ASHFALL_CAPTURE_ACK_DIR").is_empty(): await get_tree().create_timer(0.08, true).timeout
+
+func _physical_capture(label: String) -> void:
+	var directory := OS.get_environment("ASHFALL_CAPTURE_ACK_DIR")
+	if directory.is_empty(): return
+	var path := directory.path_join(label + ".json")
+	var deadline := Time.get_ticks_msec() + 1500
+	while not FileAccess.file_exists(path) and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+	assert(FileAccess.file_exists(path), "owned physical capture acknowledgement: " + label)

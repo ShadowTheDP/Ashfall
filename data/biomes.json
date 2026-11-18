@@ -1,0 +1,1503 @@
+{
+  "schema_version": 1,
+  "grid": [
+    640,
+    276
+  ],
+  "biomes": {
+    "ash_gate": {
+      "tag": "ash",
+      "palette": 0,
+      "enemy_pool": [
+        "grunt",
+        "archer"
+      ],
+      "nodes": [
+        {
+          "id": "entry",
+          "role": "entry",
+          "grid": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "split",
+          "role": "split",
+          "grid": [
+            1,
+            0
+          ]
+        },
+        {
+          "id": "lower",
+          "role": "combat",
+          "grid": [
+            2,
+            0
+          ],
+          "budget": 2
+        },
+        {
+          "id": "upper",
+          "role": "guard",
+          "grid": [
+            2,
+            -1
+          ],
+          "budget": 1
+        },
+        {
+          "id": "merge",
+          "role": "merge",
+          "grid": [
+            3,
+            0
+          ],
+          "budget": 1
+        },
+        {
+          "id": "exit_main",
+          "role": "exit",
+          "grid": [
+            4,
+            0
+          ]
+        },
+        {
+          "id": "exit_alt",
+          "role": "exit",
+          "grid": [
+            4,
+            -1
+          ]
+        },
+        {
+          "id": "canopy_vault",
+          "role": "canopy_vault",
+          "grid": [
+            2,
+            -2
+          ],
+          "requires_runes": [
+            "canopy_rune"
+          ],
+          "cache": 12
+        },
+        {
+          "id": "ground_vault",
+          "role": "ground_vault",
+          "grid": [
+            1,
+            1
+          ],
+          "requires_runes": [
+            "ground_rune"
+          ],
+          "cache": 12
+        },
+        {
+          "id": "wall_vault",
+          "role": "wall_vault",
+          "grid": [
+            0,
+            -1
+          ],
+          "requires_runes": [
+            "climb_rune"
+          ],
+          "cache": 12
+        }
+      ],
+      "edges": [
+        {
+          "from": "entry",
+          "from_socket": "east",
+          "to": "split",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "split",
+          "from_socket": "east",
+          "to": "lower",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "split",
+          "from_socket": "east_high",
+          "to": "upper",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "lower",
+          "from_socket": "east",
+          "to": "merge",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "upper",
+          "from_socket": "east",
+          "to": "merge",
+          "to_socket": "west_high",
+          "mode": "walk"
+        },
+        {
+          "from": "merge",
+          "from_socket": "east",
+          "to": "exit_main",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "merge",
+          "from_socket": "east_high",
+          "to": "exit_alt",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "upper",
+          "from_socket": "north",
+          "to": "canopy_vault",
+          "to_socket": "south",
+          "mode": "vine",
+          "rune": "canopy_rune"
+        },
+        {
+          "from": "split",
+          "from_socket": "south",
+          "to": "ground_vault",
+          "to_socket": "north",
+          "mode": "break",
+          "rune": "ground_rune"
+        },
+        {
+          "from": "entry",
+          "from_socket": "north",
+          "to": "wall_vault",
+          "to_socket": "south",
+          "mode": "wall",
+          "rune": "climb_rune"
+        }
+      ],
+      "rune_room": "",
+      "rune": "",
+      "checkpoints": [
+        "entry",
+        "merge",
+        "ground_vault"
+      ],
+      "exits": {
+        "primary_room": "exit_main",
+        "secondary_room": "exit_alt"
+      }
+    },
+    "hanging_gallery": {
+      "tag": "gallery",
+      "palette": 2,
+      "enemy_pool": [
+        "grunt",
+        "archer",
+        "leaper"
+      ],
+      "nodes": [
+        {
+          "id": "entry",
+          "role": "entry",
+          "grid": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "split",
+          "role": "split",
+          "grid": [
+            1,
+            0
+          ]
+        },
+        {
+          "id": "lower",
+          "role": "combat",
+          "grid": [
+            2,
+            0
+          ],
+          "budget": 2
+        },
+        {
+          "id": "upper",
+          "role": "guard",
+          "grid": [
+            2,
+            -1
+          ],
+          "budget": 1
+        },
+        {
+          "id": "merge",
+          "role": "merge",
+          "grid": [
+            3,
+            0
+          ],
+          "budget": 1
+        },
+        {
+          "id": "exit_main",
+          "role": "exit",
+          "grid": [
+            4,
+            0
+          ]
+        },
+        {
+          "id": "exit_alt",
+          "role": "exit",
+          "grid": [
+            4,
+            -1
+          ]
+        },
+        {
+          "id": "canopy_vault",
+          "role": "canopy_vault",
+          "grid": [
+            2,
+            -2
+          ],
+          "requires_runes": [
+            "canopy_rune"
+          ],
+          "cache": 12
+        },
+        {
+          "id": "ground_vault",
+          "role": "ground_vault",
+          "grid": [
+            1,
+            1
+          ],
+          "requires_runes": [
+            "ground_rune"
+          ],
+          "cache": 12
+        },
+        {
+          "id": "wall_vault",
+          "role": "wall_vault",
+          "grid": [
+            0,
+            -1
+          ],
+          "requires_runes": [
+            "climb_rune"
+          ],
+          "cache": 12
+        }
+      ],
+      "edges": [
+        {
+          "from": "entry",
+          "from_socket": "east",
+          "to": "split",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "split",
+          "from_socket": "east",
+          "to": "lower",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "split",
+          "from_socket": "east_high",
+          "to": "upper",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "lower",
+          "from_socket": "east",
+          "to": "merge",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "upper",
+          "from_socket": "east",
+          "to": "merge",
+          "to_socket": "west_high",
+          "mode": "walk"
+        },
+        {
+          "from": "merge",
+          "from_socket": "east",
+          "to": "exit_main",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "merge",
+          "from_socket": "east_high",
+          "to": "exit_alt",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "upper",
+          "from_socket": "north",
+          "to": "canopy_vault",
+          "to_socket": "south",
+          "mode": "vine",
+          "rune": "canopy_rune"
+        },
+        {
+          "from": "split",
+          "from_socket": "south",
+          "to": "ground_vault",
+          "to_socket": "north",
+          "mode": "break",
+          "rune": "ground_rune"
+        },
+        {
+          "from": "entry",
+          "from_socket": "north",
+          "to": "wall_vault",
+          "to_socket": "south",
+          "mode": "wall",
+          "rune": "climb_rune"
+        }
+      ],
+      "rune_room": "upper",
+      "rune": "canopy_rune",
+      "checkpoints": [
+        "entry",
+        "merge",
+        "ground_vault"
+      ],
+      "exits": {
+        "primary_room": "exit_main",
+        "secondary_room": "exit_alt"
+      }
+    },
+    "silt_cistern": {
+      "tag": "cistern",
+      "palette": 3,
+      "enemy_pool": [
+        "grunt",
+        "spitter"
+      ],
+      "nodes": [
+        {
+          "id": "entry",
+          "role": "entry",
+          "grid": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "split",
+          "role": "split",
+          "grid": [
+            1,
+            0
+          ]
+        },
+        {
+          "id": "lower",
+          "role": "combat",
+          "grid": [
+            2,
+            0
+          ],
+          "budget": 2,
+          "cache": 6
+        },
+        {
+          "id": "upper",
+          "role": "guard",
+          "grid": [
+            2,
+            -1
+          ],
+          "budget": 2
+        },
+        {
+          "id": "merge",
+          "role": "merge",
+          "grid": [
+            3,
+            0
+          ],
+          "budget": 1
+        },
+        {
+          "id": "exit_main",
+          "role": "exit",
+          "grid": [
+            4,
+            0
+          ]
+        },
+        {
+          "id": "exit_alt",
+          "role": "exit",
+          "grid": [
+            4,
+            -1
+          ]
+        },
+        {
+          "id": "canopy_vault",
+          "role": "canopy_vault",
+          "grid": [
+            2,
+            -2
+          ],
+          "requires_runes": [
+            "canopy_rune"
+          ],
+          "cache": 16
+        },
+        {
+          "id": "ground_vault",
+          "role": "ground_vault",
+          "grid": [
+            1,
+            1
+          ],
+          "requires_runes": [
+            "ground_rune"
+          ],
+          "cache": 12
+        },
+        {
+          "id": "wall_vault",
+          "role": "wall_vault",
+          "grid": [
+            0,
+            -1
+          ],
+          "requires_runes": [
+            "climb_rune"
+          ],
+          "cache": 12
+        },
+        {
+          "id": "phase_vault",
+          "role": "phase_vault",
+          "grid": [
+            4,
+            -3
+          ],
+          "requires_runes": [
+            "phase_rune"
+          ],
+          "cache": 24
+        }
+      ],
+      "edges": [
+        {
+          "from": "entry",
+          "from_socket": "east",
+          "to": "split",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "split",
+          "from_socket": "east",
+          "to": "lower",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "split",
+          "from_socket": "east_high",
+          "to": "upper",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "lower",
+          "from_socket": "east",
+          "to": "merge",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "upper",
+          "from_socket": "east",
+          "to": "merge",
+          "to_socket": "west_high",
+          "mode": "walk"
+        },
+        {
+          "from": "merge",
+          "from_socket": "east",
+          "to": "exit_main",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "merge",
+          "from_socket": "east_high",
+          "to": "exit_alt",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "upper",
+          "from_socket": "north",
+          "to": "canopy_vault",
+          "to_socket": "south",
+          "mode": "vine",
+          "rune": "canopy_rune"
+        },
+        {
+          "from": "split",
+          "from_socket": "south",
+          "to": "ground_vault",
+          "to_socket": "north",
+          "mode": "break",
+          "rune": "ground_rune"
+        },
+        {
+          "from": "entry",
+          "from_socket": "north",
+          "to": "wall_vault",
+          "to_socket": "south",
+          "mode": "wall",
+          "rune": "climb_rune"
+        },
+        {
+          "from": "upper",
+          "from_socket": "phase",
+          "to": "phase_vault",
+          "to_socket": "phase",
+          "mode": "phase",
+          "rune": "phase_rune"
+        }
+      ],
+      "rune_room": "upper",
+      "rune": "phase_rune",
+      "checkpoints": [
+        "entry",
+        "merge",
+        "ground_vault"
+      ],
+      "exits": {
+        "primary_room": "exit_main",
+        "secondary_room": "exit_alt"
+      }
+    },
+    "stone_ramparts": {
+      "tag": "ramparts",
+      "palette": 0,
+      "enemy_pool": [
+        "grunt",
+        "bulwark"
+      ],
+      "nodes": [
+        {
+          "id": "entry",
+          "role": "entry",
+          "grid": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "split",
+          "role": "split",
+          "grid": [
+            1,
+            0
+          ]
+        },
+        {
+          "id": "lower",
+          "role": "combat",
+          "grid": [
+            2,
+            0
+          ],
+          "budget": 2
+        },
+        {
+          "id": "upper",
+          "role": "guard",
+          "grid": [
+            2,
+            -1
+          ],
+          "budget": 1
+        },
+        {
+          "id": "merge",
+          "role": "merge",
+          "grid": [
+            3,
+            0
+          ],
+          "budget": 1
+        },
+        {
+          "id": "exit_main",
+          "role": "exit",
+          "grid": [
+            4,
+            0
+          ]
+        },
+        {
+          "id": "exit_alt",
+          "role": "exit",
+          "grid": [
+            4,
+            -1
+          ]
+        },
+        {
+          "id": "canopy_vault",
+          "role": "canopy_vault",
+          "grid": [
+            2,
+            -2
+          ],
+          "requires_runes": [
+            "canopy_rune"
+          ],
+          "cache": 12
+        },
+        {
+          "id": "ground_vault",
+          "role": "ground_vault",
+          "grid": [
+            1,
+            1
+          ],
+          "requires_runes": [
+            "ground_rune"
+          ],
+          "cache": 12
+        },
+        {
+          "id": "wall_vault",
+          "role": "wall_vault",
+          "grid": [
+            0,
+            -1
+          ],
+          "requires_runes": [
+            "climb_rune"
+          ],
+          "cache": 12
+        }
+      ],
+      "edges": [
+        {
+          "from": "entry",
+          "from_socket": "east",
+          "to": "split",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "split",
+          "from_socket": "east",
+          "to": "lower",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "split",
+          "from_socket": "east_high",
+          "to": "upper",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "lower",
+          "from_socket": "east",
+          "to": "merge",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "upper",
+          "from_socket": "east",
+          "to": "merge",
+          "to_socket": "west_high",
+          "mode": "walk"
+        },
+        {
+          "from": "merge",
+          "from_socket": "east",
+          "to": "exit_main",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "merge",
+          "from_socket": "east_high",
+          "to": "exit_alt",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "upper",
+          "from_socket": "north",
+          "to": "canopy_vault",
+          "to_socket": "south",
+          "mode": "vine",
+          "rune": "canopy_rune"
+        },
+        {
+          "from": "split",
+          "from_socket": "south",
+          "to": "ground_vault",
+          "to_socket": "north",
+          "mode": "break",
+          "rune": "ground_rune"
+        },
+        {
+          "from": "entry",
+          "from_socket": "north",
+          "to": "wall_vault",
+          "to_socket": "south",
+          "mode": "wall",
+          "rune": "climb_rune"
+        }
+      ],
+      "rune_room": "",
+      "rune": "",
+      "checkpoints": [
+        "entry",
+        "merge",
+        "ground_vault"
+      ],
+      "exits": {
+        "primary_room": "exit_main",
+        "secondary_room": "exit_alt"
+      },
+      "key": {
+        "id": "rampart_key",
+        "room": "lower",
+        "at": [
+          320,
+          -24
+        ]
+      },
+      "local_gate": {
+        "id": "rampart_lock",
+        "kind": "key",
+        "key": "rampart_key",
+        "room": "merge",
+        "rect": [
+          620,
+          -1012,
+          20,
+          1044
+        ]
+      }
+    },
+    "bridge_sentinel": {
+      "tag": "bridge",
+      "palette": 4,
+      "enemy_pool": [],
+      "boss": "bridge_sentinel",
+      "nodes": [
+        {
+          "id": "entry",
+          "role": "entry",
+          "grid": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "arena",
+          "role": "arena",
+          "grid": [
+            1,
+            0
+          ],
+          "boss": true
+        },
+        {
+          "id": "exit_main",
+          "role": "exit",
+          "grid": [
+            2,
+            0
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "from": "entry",
+          "from_socket": "east",
+          "to": "arena",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "arena",
+          "from_socket": "east",
+          "to": "exit_main",
+          "to_socket": "west",
+          "mode": "walk"
+        }
+      ],
+      "rune": "",
+      "rune_room": "",
+      "checkpoints": [
+        "entry"
+      ],
+      "exits": {
+        "primary_room": "exit_main",
+        "secondary_room": "exit_main"
+      }
+    },
+    "stilt_foundry": {
+      "tag": "foundry",
+      "palette": 3,
+      "enemy_pool": [
+        "charger",
+        "bulwark",
+        "spitter"
+      ],
+      "nodes": [
+        {
+          "id": "entry",
+          "role": "entry",
+          "grid": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "split",
+          "role": "split",
+          "grid": [
+            1,
+            0
+          ]
+        },
+        {
+          "id": "lower",
+          "role": "combat",
+          "grid": [
+            2,
+            0
+          ],
+          "budget": 2
+        },
+        {
+          "id": "press",
+          "role": "combat",
+          "grid": [
+            3,
+            0
+          ],
+          "budget": 2
+        },
+        {
+          "id": "upper",
+          "role": "guard",
+          "grid": [
+            2,
+            -1
+          ],
+          "budget": 2
+        },
+        {
+          "id": "hoist",
+          "role": "reward",
+          "grid": [
+            3,
+            -1
+          ],
+          "budget": 1,
+          "cache": 16
+        },
+        {
+          "id": "merge",
+          "role": "merge",
+          "grid": [
+            4,
+            0
+          ],
+          "budget": 1
+        },
+        {
+          "id": "exit_main",
+          "role": "exit",
+          "grid": [
+            5,
+            0
+          ]
+        },
+        {
+          "id": "casting_cache",
+          "role": "canopy_vault",
+          "grid": [
+            2,
+            -2
+          ],
+          "requires_runes": [
+            "canopy_rune"
+          ],
+          "cache": 20
+        }
+      ],
+      "edges": [
+        {
+          "from": "entry",
+          "from_socket": "east",
+          "to": "split",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "split",
+          "from_socket": "east",
+          "to": "lower",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "split",
+          "from_socket": "east_high",
+          "to": "upper",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "lower",
+          "from_socket": "east",
+          "to": "press",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "press",
+          "from_socket": "east",
+          "to": "merge",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "upper",
+          "from_socket": "east",
+          "to": "hoist",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "hoist",
+          "from_socket": "east",
+          "to": "merge",
+          "to_socket": "west_high",
+          "mode": "walk"
+        },
+        {
+          "from": "merge",
+          "from_socket": "east",
+          "to": "exit_main",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "upper",
+          "from_socket": "north",
+          "to": "casting_cache",
+          "to_socket": "south",
+          "mode": "vine",
+          "rune": "canopy_rune"
+        }
+      ],
+      "rune": "",
+      "rune_room": "",
+      "checkpoints": [
+        "entry",
+        "merge"
+      ],
+      "exits": {
+        "primary_room": "exit_main",
+        "secondary_room": "exit_main"
+      },
+      "key": {
+        "id": "foundry_key",
+        "room": "press",
+        "at": [
+          320,
+          -24
+        ]
+      }
+    },
+    "clock_spire": {
+      "tag": "spire",
+      "palette": 2,
+      "enemy_pool": [
+        "archer",
+        "leaper"
+      ],
+      "nodes": [
+        {
+          "id": "entry",
+          "role": "entry",
+          "grid": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "split",
+          "role": "split",
+          "grid": [
+            1,
+            0
+          ],
+          "budget": 1
+        },
+        {
+          "id": "lower",
+          "role": "combat",
+          "grid": [
+            2,
+            0
+          ],
+          "budget": 2
+        },
+        {
+          "id": "upper",
+          "role": "guard",
+          "grid": [
+            2,
+            -1
+          ],
+          "budget": 2
+        },
+        {
+          "id": "merge",
+          "role": "merge",
+          "grid": [
+            3,
+            0
+          ],
+          "budget": 1
+        },
+        {
+          "id": "crown",
+          "role": "spire_crown",
+          "grid": [
+            3,
+            -1
+          ],
+          "cache": 12
+        },
+        {
+          "id": "exit_main",
+          "role": "exit",
+          "grid": [
+            4,
+            -1
+          ]
+        },
+        {
+          "id": "bell_cache",
+          "role": "canopy_vault",
+          "grid": [
+            2,
+            -2
+          ],
+          "requires_runes": [
+            "canopy_rune"
+          ],
+          "cache": 18
+        }
+      ],
+      "edges": [
+        {
+          "from": "entry",
+          "from_socket": "east",
+          "to": "split",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "split",
+          "from_socket": "east",
+          "to": "lower",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "split",
+          "from_socket": "east_high",
+          "to": "upper",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "lower",
+          "from_socket": "east",
+          "to": "merge",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "upper",
+          "from_socket": "east",
+          "to": "crown",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "merge",
+          "from_socket": "north",
+          "to": "crown",
+          "to_socket": "south",
+          "mode": "walk"
+        },
+        {
+          "from": "crown",
+          "from_socket": "east",
+          "to": "exit_main",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "upper",
+          "from_socket": "north",
+          "to": "bell_cache",
+          "to_socket": "south",
+          "mode": "vine",
+          "rune": "canopy_rune"
+        }
+      ],
+      "rune": "clock_rune",
+      "rune_room": "upper",
+      "checkpoints": [
+        "entry",
+        "merge"
+      ],
+      "exits": {
+        "primary_room": "exit_main",
+        "secondary_room": "exit_main"
+      },
+      "key": {
+        "id": "clock_key",
+        "room": "crown",
+        "at": [
+          390,
+          -24
+        ]
+      }
+    },
+    "high_keep": {
+      "tag": "keep",
+      "palette": 0,
+      "enemy_pool": [
+        "bulwark",
+        "charger",
+        "archer"
+      ],
+      "nodes": [
+        {
+          "id": "entry",
+          "role": "entry",
+          "grid": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "split",
+          "role": "split",
+          "grid": [
+            1,
+            0
+          ],
+          "budget": 1
+        },
+        {
+          "id": "lower",
+          "role": "combat",
+          "grid": [
+            2,
+            0
+          ],
+          "budget": 3,
+          "cache": 10
+        },
+        {
+          "id": "upper",
+          "role": "guard",
+          "grid": [
+            2,
+            -1
+          ],
+          "budget": 3,
+          "cache": 20
+        },
+        {
+          "id": "merge",
+          "role": "merge",
+          "grid": [
+            3,
+            0
+          ],
+          "budget": 2
+        },
+        {
+          "id": "exit_main",
+          "role": "exit",
+          "grid": [
+            4,
+            0
+          ]
+        },
+        {
+          "id": "canopy_cache",
+          "role": "canopy_vault",
+          "grid": [
+            2,
+            -2
+          ],
+          "requires_runes": [
+            "canopy_rune"
+          ],
+          "cache": 22
+        },
+        {
+          "id": "phase_cache",
+          "role": "phase_vault",
+          "grid": [
+            4,
+            -3
+          ],
+          "requires_runes": [
+            "phase_rune"
+          ],
+          "cache": 28
+        }
+      ],
+      "edges": [
+        {
+          "from": "entry",
+          "from_socket": "east",
+          "to": "split",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "split",
+          "from_socket": "east",
+          "to": "lower",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "split",
+          "from_socket": "east_high",
+          "to": "upper",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "lower",
+          "from_socket": "east",
+          "to": "merge",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "upper",
+          "from_socket": "east",
+          "to": "merge",
+          "to_socket": "west_high",
+          "mode": "walk"
+        },
+        {
+          "from": "merge",
+          "from_socket": "east",
+          "to": "exit_main",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "upper",
+          "from_socket": "north",
+          "to": "canopy_cache",
+          "to_socket": "south",
+          "mode": "vine",
+          "rune": "canopy_rune"
+        },
+        {
+          "from": "upper",
+          "from_socket": "phase",
+          "to": "phase_cache",
+          "to_socket": "phase",
+          "mode": "phase",
+          "rune": "phase_rune"
+        }
+      ],
+      "rune": "",
+      "rune_room": "",
+      "checkpoints": [
+        "entry",
+        "merge"
+      ],
+      "exits": {
+        "primary_room": "exit_main",
+        "secondary_room": "exit_main"
+      },
+      "keys": [
+        {
+          "id": "court_key_left",
+          "room": "lower",
+          "at": [
+            128,
+            -24
+          ]
+        },
+        {
+          "id": "court_key_right",
+          "room": "upper",
+          "at": [
+            128,
+            -24
+          ]
+        }
+      ]
+    },
+    "clock_warden": {
+      "tag": "clock_boss",
+      "palette": 2,
+      "enemy_pool": [],
+      "boss": "clock_warden",
+      "nodes": [
+        {
+          "id": "entry",
+          "role": "entry",
+          "grid": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "arena",
+          "role": "arena",
+          "grid": [
+            1,
+            0
+          ],
+          "boss": true
+        },
+        {
+          "id": "exit_main",
+          "role": "exit",
+          "grid": [
+            2,
+            0
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "from": "entry",
+          "from_socket": "east",
+          "to": "arena",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "arena",
+          "from_socket": "east",
+          "to": "exit_main",
+          "to_socket": "west",
+          "mode": "walk"
+        }
+      ],
+      "rune": "",
+      "rune_room": "",
+      "checkpoints": [
+        "entry"
+      ],
+      "exits": {
+        "primary_room": "exit_main",
+        "secondary_room": "exit_main"
+      }
+    },
+    "silent_regent": {
+      "tag": "regent",
+      "palette": 4,
+      "enemy_pool": [],
+      "boss": "silent_regent",
+      "nodes": [
+        {
+          "id": "entry",
+          "role": "entry",
+          "grid": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "arena",
+          "role": "arena",
+          "grid": [
+            1,
+            0
+          ],
+          "boss": true
+        },
+        {
+          "id": "exit_main",
+          "role": "exit",
+          "grid": [
+            2,
+            0
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "from": "entry",
+          "from_socket": "east",
+          "to": "arena",
+          "to_socket": "west",
+          "mode": "walk"
+        },
+        {
+          "from": "arena",
+          "from_socket": "east",
+          "to": "exit_main",
+          "to_socket": "west",
+          "mode": "walk"
+        }
+      ],
+      "rune": "",
+      "rune_room": "",
+      "checkpoints": [
+        "entry"
+      ],
+      "exits": {
+        "primary_room": "exit_main",
+        "secondary_room": "exit_main"
+      }
+    }
+  }
+}

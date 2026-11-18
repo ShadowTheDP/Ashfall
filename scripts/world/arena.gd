@@ -35,11 +35,11 @@ const PLATFORM_SPAWNS := [
 	Vector2(1320.0, -196.0),
 ]
 
-const STONE := MathArt.STONE
-const STONE_2 := MathArt.STONE
-const STONE_3 := MathArt.STONE_HI
-const EDGE := MathArt.STONE_HI
-const AMBER := MathArt.PALE_DIM
+var STONE := MathArt.biome_color("arena", "stone")
+var STONE_2 := MathArt.biome_color("arena", "stone")
+var STONE_3 := MathArt.biome_color("arena", "edge")
+var EDGE := MathArt.biome_color("arena", "edge")
+var AMBER := MathArt.biome_color("arena", "accent")
 
 var _specks: Array[Vector3] = []
 var _cracks: Array[Vector4] = []
@@ -106,14 +106,14 @@ func _draw_rose_window() -> void:
 	var center := Vector2(720, -170)
 	for i in 3:
 		var radius := 210.0 - float(i) * 46.0
-		MathArt.px_ring(self, center, radius, Color(0.458, 0.458, 0.458, 0.10 + float(i) * 0.02), 1.0)
+		MathArt.px_ring(self, center, radius, Color(AMBER, 0.10 + float(i) * 0.02), 1.0)
 	for i in 12:
 		var angle := TAU * float(i) / 12.0 - PI * 0.5
 		var inner := center + Vector2.from_angle(angle) * 120.0
 		var outer := center + Vector2.from_angle(angle) * 210.0
-		MathArt.px_line(self, inner, outer, Color(0.458, 0.458, 0.458, 0.07), 1.0)
+		MathArt.px_line(self, inner, outer, Color(AMBER, 0.07), 1.0)
 	MathArt.px_poly(self, MathArt.star(12, 122.0, 96.0, -PI * 0.5, center),
-		Color(0, 0, 0, 0), Color(0.458, 0.458, 0.458, 0.06), 1.0)
+		Color(0, 0, 0, 0), Color(AMBER, 0.06), 1.0)
 
 
 func _draw_monoliths() -> void:
@@ -121,12 +121,12 @@ func _draw_monoliths() -> void:
 		var x: float = column["x"]
 		var width: float = column["w"]
 		var top := -470.0
-		MathArt.px_rect(self, Rect2(x, top, width, 470.0), Color(0.081, 0.081, 0.081, 0.62))
-		MathArt.px_rect(self, Rect2(x + width - 3.0, top, 3.0, 470.0), Color(0.050, 0.050, 0.050, 0.62))
-		MathArt.px_rect(self, Rect2(x + 2.0, top, 1.0, 470.0), Color(0.219, 0.219, 0.219, 0.24))
+		MathArt.px_rect(self, Rect2(x, top, width, 470.0), Color(MathArt.BG_2, 0.62))
+		MathArt.px_rect(self, Rect2(x + width - 3.0, top, 3.0, 470.0), Color(MathArt.INK, 0.62))
+		MathArt.px_rect(self, Rect2(x + 2.0, top, 1.0, 470.0), Color(EDGE, 0.24))
 		# Hex capital.
 		var cap := MathArt.ngon(6, width * 0.5, 0.0, Vector2(x + width * 0.5, top))
-		MathArt.px_poly(self, cap, Color(0.120, 0.120, 0.120, 0.65), Color(0.259, 0.259, 0.259, 0.45), 1.0)
+		MathArt.px_poly(self, cap, Color(MathArt.BG_1, 0.65), Color(EDGE, 0.45), 1.0)
 		if bool(column["sigil"]):
 			var sigil := MathArt.ngon(6, width * 0.30, PI / 6.0, Vector2(x + width * 0.5, top + 110.0))
 			MathArt.px_poly(self, sigil, Color(0, 0, 0, 0), Color(AMBER, 0.16), 1.0)
@@ -139,12 +139,12 @@ func _draw_banners() -> void:
 		var width := roundf(22.0 * float(spec[1]))
 		var top := -290.0
 		var bottom := -180.0
-		MathArt.px_rect(self, Rect2(x - width * 0.5, top, width, bottom - top), Color(0.140, 0.140, 0.140, 0.62))
-		MathArt.px_rect(self, Rect2(x - width * 0.5, top, width, 2.0), Color(0.439, 0.439, 0.439, 0.55))
+		MathArt.px_rect(self, Rect2(x - width * 0.5, top, width, bottom - top), Color(MathArt.TACTICS, 0.62))
+		MathArt.px_rect(self, Rect2(x - width * 0.5, top, width, 2.0), Color(AMBER, 0.55))
 		# Pennant point.
 		for i in 4:
 			var w := width * (1.0 - float(i) / 4.0)
-			MathArt.px_rect(self, Rect2(x - w * 0.5, bottom + float(i) * 3.0, w, 3.0), Color(0.140, 0.140, 0.140, 0.62))
+			MathArt.px_rect(self, Rect2(x - w * 0.5, bottom + float(i) * 3.0, w, 3.0), Color(MathArt.TACTICS, 0.62))
 		MathArt.px_poly(self, MathArt.ngon(3, width * 0.24, -PI * 0.5, Vector2(x, top + 40.0)),
 			Color(AMBER, 0.18), Color(AMBER, 0.30), 1.0)
 
@@ -200,4 +200,4 @@ func _draw_fog() -> void:
 		for band in 3:
 			var width := 90.0 - float(band) * 22.0
 			MathArt.px_rect(self, Rect2(roundf(x - width * 0.5), -20.0 + float(band) * 5.0, width, 3.0),
-				Color(0.207, 0.207, 0.207, 0.05))
+				Color(MathArt.CELL, 0.05))

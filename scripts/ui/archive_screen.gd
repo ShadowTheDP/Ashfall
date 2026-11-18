@@ -1,45 +1,45 @@
 class_name ArchiveScreen
 extends CanvasLayer
 ## The codex: bestiary, weapons, armour. Three tabs, one list, one card.
-## Read-only except Enter, which equips an unlocked entry or pays to unlock a
+## Read-only except accept, which equips an unlocked entry or pays to unlock a
 ## record the player has not met yet.
 
 signal closed
 
 const TABS: Array[String] = ["enemy", "weapon", "armor"]
-const LABEL := {"enemy": "BESTIARY", "weapon": "WEAPONS", "armor": "ARMOUR"}
-const ROWS := 10
-const ROW_H := 33.0
-const LIST_RECT := Rect2(40.0, 68.0, 300.0, 344.0)
-const CARD_RECT := Rect2(352.0, 68.0, 376.0, 344.0)
-# Enemies are drawn at one shared zoom so their relative sizes stay true.
-const ZOOM := 2.6
-# One fixed magnification for every weapon, so a 50px blade looks longer than
-# a 38px one. Bigger than 1:1 only because 38px reads as a doodle on a card.
-const BLADE_ZOOM := 1.9
-
-const BG := Color(0.024, 0.024, 0.024, 0.97)
-const PANEL := Color(0.047, 0.047, 0.047, 0.94)
-const ROW_SEL := Color(0.086, 0.086, 0.086, 0.97)
+const ROWS := 5
+const ROW_H := 44.0
+const DETAIL_ROWS := 6
 
 var _canvas: Control
 var _tab := "enemy"
 var _ids: Array[String] = []
 var _index := 0
 var _scroll := 0
+var _detail_scroll := 0
+var _detail_focus := false
 var _open := false
+var _open_frame := -1
 var _t := 0.0
 var _flash_row := -1
 var _flash_t := 0.0
 var _note := ""
 var _note_t := 0.0
+var _locale := ""
 
 
 func _ready() -> void:
 	layer = 60
 	visible = false
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_locale = TranslationServer.get_locale()
+	if not Interface.presentation_changed.is_connected(_on_presentation_changed):
+		Interface.presentation_changed.connect(_on_presentation_changed)
 	_ensure_canvas()
+
+
+func _on_presentation_changed() -> void:
+	_canvas.queue_redraw()
 
 
 func _ensure_canvas() -> void:
@@ -62,13 +62,17 @@ func open(tab: String) -> void:
 	_tab = tab if TABS.has(tab) else "enemy"
 	_index = 0
 	_scroll = 0
+	_detail_scroll = 0
+	_detail_focus = false
 	_note = ""
 	_note_t = 0.0
 	_flash_row = -1
 	_flash_t = 0.0
 	_reload()
 	_open = true
+	_open_frame = Engine.get_process_frames()
 	visible = true
+	MathArt.ui_reveal(_canvas)
 	Sfx.play("ui", -10)
 	_canvas.queue_redraw()
 
@@ -94,36 +98,81 @@ func _process(delta: float) -> void:
 	_t += delta
 	_flash_t = maxf(0.0, _flash_t - delta)
 	_note_t = maxf(0.0, _note_t - delta)
+	if TranslationServer.get_locale() != _locale:
+		_locale = TranslationServer.get_locale()
+		_canvas.queue_redraw()
 	_canvas.queue_redraw()
 
 
 ## _input, not _unhandled_input: the HUD also listens for Esc and it is
 ## later in the tree, so unhandled input reaches it first. A modal panel
-## has to claim the key before the HUD can pause the game under it.
+## has to claim the event before the HUD can pause the game under it.
 func _input(event: InputEvent) -> void:
 	if not _open:
 		return
-	if not (event is InputEventKey) or not event.pressed:
+	if not _is_menu_event(event):
 		return
-	# A modal owns every key while it is up. A key it does not use would
-	# otherwise reach the hub's proximity handler: J re-opened this screen and
-	# reset the cursor, and J by the door started a floor under the panel.
+	# A modal owns every menu event while it is up. An event it does not use
+	# would otherwise reach the hub's proximity handler: J re-opened this
+	# screen and reset the cursor, and J by the door started a floor under it.
 	get_viewport().set_input_as_handled()
-	if event.echo:
+	# Hub may open this page during the same input dispatch that selected the
+	# station. Ignore that frame so the opening/held confirm cannot also buy or
+	# switch a record; the next real press needs its own edge.
+	if Engine.get_process_frames() == _open_frame:
 		return
-	match event.physical_keycode:
-		KEY_ESCAPE:
-			close()
-		KEY_LEFT, KEY_A:
-			_switch_tab(-1)
-		KEY_RIGHT, KEY_D:
-			_switch_tab(1)
-		KEY_UP, KEY_W:
-			_move(-1)
-		KEY_DOWN, KEY_S:
-			_move(1)
-		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
-			_activate()
+	if Interface.pressed(event, &"ui_back"):
+		close()
+		return
+	if Interface.pressed(event, &"ui_tab_prev"):
+		_switch_tab(-1)
+		return
+	if Interface.pressed(event, &"ui_tab_next"):
+		_switch_tab(1)
+		return
+	if Interface.pressed(event, &"ui_secondary"):
+		_toggle_detail_focus()
+		return
+	if event is InputEventJoypadMotion:
+		# The right stick owns the record detail; the left stick still navigates
+		# the list below, so only a matched detail axis returns early.
+		if Interface.pressed(event, &"ui_detail_up"):
+			_scroll_detail(-1)
+			return
+		if Interface.pressed(event, &"ui_detail_down"):
+			_scroll_detail(1)
+			return
+	if _detail_focus:
+		# X moved focus into the detail pane. Up/Down now scroll it; the native
+		# detail pair covers keyboard and right stick, while ui_nav covers the
+		# gamepad D-pad. Without focus the same keys keep moving the record list.
+		if Interface.pressed(event, &"ui_detail_up") or Interface.pressed(event, &"ui_nav_up"):
+			_scroll_detail(-1)
+			return
+		if Interface.pressed(event, &"ui_detail_down") or Interface.pressed(event, &"ui_nav_down"):
+			_scroll_detail(1)
+			return
+	if Interface.pressed(event, &"ui_nav_left"):
+		_switch_tab(-1)
+	elif Interface.pressed(event, &"ui_nav_right"):
+		_switch_tab(1)
+	elif Interface.pressed(event, &"ui_nav_up"):
+		_move(-1)
+	elif Interface.pressed(event, &"ui_nav_down"):
+		_move(1)
+	elif _tab != "enemy" and Interface.pressed(event, &"ui_accept"):
+		_activate()
+
+
+func _is_menu_event(event: InputEvent) -> bool:
+	return event is InputEventKey or event is InputEventJoypadButton or event is InputEventJoypadMotion or event is InputEventAction
+
+
+## A gamepad maps both directions of a pair to the same prompt; show it once.
+func _prompt_pair(first: StringName, second: StringName) -> String:
+	var a := Interface.prompt(first)
+	var b := Interface.prompt(second)
+	return a if a == b else a + "/" + b
 
 
 func _switch_tab(delta_index: int) -> void:
@@ -131,6 +180,8 @@ func _switch_tab(delta_index: int) -> void:
 	_tab = TABS[next]
 	_index = 0
 	_scroll = 0
+	_detail_scroll = 0
+	_detail_focus = false
 	_flash_row = -1
 	_note = ""
 	_note_t = 0.0
@@ -143,10 +194,39 @@ func _move(delta_index: int) -> void:
 	if _ids.is_empty():
 		return
 	_index = clampi(_index + delta_index, 0, _ids.size() - 1)
+	_detail_scroll = 0
+	MathArt.ui_select(_canvas)
 	if _index < _scroll:
 		_scroll = _index
 	elif _index >= _scroll + ROWS:
 		_scroll = _index - ROWS + 1
+	Sfx.play("ui", -14)
+	_canvas.queue_redraw()
+
+
+func _scroll_detail(direction: int) -> void:
+	if _ids.is_empty():
+		return
+	var info := _record_copy(_ids[_index])
+	var details: Array = info.details
+	var limit := maxi(0, details.size() - DETAIL_ROWS)
+	if limit <= 0:
+		return
+	var next := clampi(_detail_scroll + direction, 0, limit)
+	if next == _detail_scroll:
+		return
+	_detail_scroll = next
+	Sfx.play("ui", -14)
+	_canvas.queue_redraw()
+
+
+## X moves the visual focus between the record list and its detail pane. The
+## page stays one modal: no stack, no extra layer, and back still closes it.
+func _toggle_detail_focus() -> void:
+	if _ids.is_empty():
+		return
+	_detail_focus = not _detail_focus
+	MathArt.ui_select(_canvas)
 	Sfx.play("ui", -14)
 	_canvas.queue_redraw()
 
@@ -156,21 +236,26 @@ func _activate() -> void:
 		return
 	var id := _ids[_index]
 	if Profile.is_unlocked(_tab, id):
-		Profile.select(_tab, id)
-		_note = "EQUIPPED: " + _name_of(id)
-		_note_t = 1.6
-		Sfx.play("pickup", -10)
+		if Profile.select(_tab, id):
+			_note = "EQUIPPED: " + id
+			_note_t = 1.6
+			Sfx.play("pickup", -10)
+			return
+	elif _tab == "weapon" and not Profile.gear_blueprint(id).is_empty():
+		_note = "BLUEPRINT: " + id
+		_note_t = 2.5
+		Sfx.play("block", -10)
 		return
-	if Profile.unlock(_tab, id):
+	elif Profile.unlock(_tab, id):
 		Profile.see(_tab, id)
-		_note = "UNLOCKED: " + _name_of(id)
+		_note = "UNLOCKED: " + id
 		_note_t = 1.8
 		Sfx.play("reward", -8)
 		return
 	# Failure is reported by flashing the row, never by a silent no-op.
 	_flash_row = _index
 	_flash_t = 0.45
-	_note = "NEED %d CELLS" % _cost_of(id)
+	_note = "SAVE FAILED: " + Profile.last_save_error if not Profile.last_save_error.is_empty() else "NEED %d CELLS" % _cost_of(id)
 	_note_t = 1.8
 	Sfx.play("block", -10)
 	_canvas.queue_redraw()
@@ -202,8 +287,20 @@ func _cfg(id: String) -> Dictionary:
 	return out if typeof(out) == TYPE_DICTIONARY else {}
 
 
+## Raw data-name accessor used by state/bookkeeping paths. Drawing goes through
+## _name_display() so a player never sees an English name in zh_TW.
 func _name_of(id: String) -> String:
 	return str(_cfg(id).get("name", id))
+
+
+func _name_display(id: String) -> String:
+	var english := _name_of(id)
+	match _tab:
+		"weapon":
+			return ContentText.name("weapon", id, english)
+		"armor":
+			return ContentText.name("armor", id, english)
+	return ContentText.name("enemy", id, english)
 
 
 ## Weapons price the unlock as `unlock_cost`, armour and characters as `cost`.
@@ -213,12 +310,33 @@ func _cost_of(id: String) -> int:
 	return int(cfg.get("cost", cfg.get("unlock_cost", 0)))
 
 
-## A weapon prices its unlock as `unlock_cost`, armour and characters as
-## `cost`; _cost_of() reads both, so this line always quotes the real price.
-## A free entry says so instead of printing "FOR 0 CELLS".
-func _unlock_line(id: String) -> String:
+## A weapon priced by a carried blueprint names the Collector plan instead of
+## pretending the cells can be paid here. Display only: the note keeps the raw
+## "BLUEPRINT: <id>" payload that existing fixtures compare.
+func _unlock_display(id: String) -> String:
+	var blueprint := Profile.gear_blueprint(id) if _tab == "weapon" else ""
+	if not blueprint.is_empty():
+		var cfg: Dictionary = Data.passage.blueprints[blueprint]
+		var biome_id := str(cfg.get("biome", ""))
+		var biome := ContentText.name("biome", biome_id, str(Data.route_graph.nodes.get(biome_id, {}).get("name", biome_id)))
+		return ContentText.of("UI_ARCHIVE_BLUEPRINT", "BLUEPRINT: {biome} / COLLECTOR {cost} C").format({"biome": biome, "cost": cfg.get("cost", 0)})
 	var cost := _cost_of(id)
-	return "ENTER TO UNLOCK FOR %d CELLS" % cost if cost > 0 else "ENTER TO UNLOCK"
+	var accept := Interface.prompt(&"ui_accept")
+	return ContentText.of("UI_ARCHIVE_UNLOCK_FOR", "{accept} TO UNLOCK FOR {cost} CELLS").format({"accept": accept, "cost": cost}) if cost > 0 else ContentText.of("UI_ARCHIVE_UNLOCK_FREE", "{accept} TO UNLOCK").format({"accept": accept})
+
+
+func _note_display() -> String:
+	if _note.begins_with("EQUIPPED: "):
+		return ContentText.of("UI_ARCHIVE_EQUIPPED", "EQUIPPED: {name}").format({"name": _name_display(_note.substr(10))})
+	if _note.begins_with("UNLOCKED: "):
+		return ContentText.of("UI_ARCHIVE_UNLOCKED", "UNLOCKED: {name}").format({"name": _name_display(_note.substr(10))})
+	if _note.begins_with("BLUEPRINT: "):
+		return _unlock_display(_note.substr(11))
+	if _note.begins_with("SAVE FAILED: "):
+		return Hud.save_failed_display(_note.substr(13))
+	if _note.begins_with("NEED ") and _note.ends_with(" CELLS"):
+		return ContentText.of("UI_ARCHIVE_NEED_CELLS", "NEED {cost} CELLS").format({"cost": _note.trim_prefix("NEED ").trim_suffix(" CELLS")})
+	return _note
 
 
 ## A record is readable once it has been met in the field or bought.
@@ -234,510 +352,131 @@ func _equipped(id: String) -> bool:
 	return false
 
 
+func _status_display(id: String) -> String:
+	if _tab == "enemy":
+		return ContentText.of("UI_ARCHIVE_RECORDED", "Recorded")
+	if not Profile.is_unlocked(_tab, id):
+		return _unlock_display(id)
+	if _tab == "weapon":
+		# selected_weapon replaces the formal run's first weapon (game.gd:379);
+		# only armour below stays arena/legacy-only.
+		return ContentText.of("UI_ARCHIVE_WEAPON_EQUIPPED", "Equipped / first weapon in runs") if _equipped(id) else ContentText.of("UI_ARCHIVE_WEAPON_OWNED", "Owned / equip to use in runs")
+	return ContentText.of("UI_ARCHIVE_ARMOR_EQUIPPED", "Equipped / Arena only") if _equipped(id) else ContentText.of("UI_ARCHIVE_ARMOR_OWNED", "Owned / Arena only")
+
+
+func _tab_label(tab: String) -> String:
+	match tab:
+		"weapon": return ContentText.of("UI_ARCHIVE_TAB_WEAPONS", "WEAPONS")
+		"armor": return ContentText.of("UI_ARCHIVE_TAB_ARMOR", "ARMOUR")
+	return ContentText.of("UI_ARCHIVE_TAB_BESTIARY", "BESTIARY")
+
+
 # -------------------------------------------------------------------- painting
 
 func _paint(canvas: Control) -> void:
-	var font := ThemeDB.fallback_font
-	if font == null:
-		return
-	var size := canvas.get_viewport_rect().size
-	MathArt.px_rect(canvas, Rect2(Vector2.ZERO, size), BG)
-	_draw_header(canvas, font, size)
-	_draw_list(canvas, font)
-	_draw_card(canvas, font)
-	_draw_footer(canvas, font, size)
-
-
-## Drop shadow, fill, lit top edge, dark bottom edge. Used by both plates so the
-## list and the detail card sit at the same level above the page.
-func _panel(canvas: CanvasItem, rect: Rect2) -> void:
-	MathArt.px_rect(canvas, Rect2(rect.position + Vector2(3.0, 4.0), rect.size), Color(MathArt.BLACK, 0.55))
-	MathArt.px_rect(canvas, rect, PANEL)
-	MathArt.px_rect(canvas, Rect2(rect.position, Vector2(rect.size.x, 1.0)), Color(MathArt.PALE, 0.8))
-	MathArt.px_rect(canvas, Rect2(rect.position + Vector2(0.0, rect.size.y - 2.0), Vector2(rect.size.x, 2.0)),
-		Color(MathArt.BLACK, 0.9))
-	MathArt.px_rect(canvas, Rect2(rect.position + Vector2(0.0, 1.0), Vector2(1.0, rect.size.y - 3.0)),
-		Color(MathArt.STONE, 0.8))
-	MathArt.px_rect(canvas, Rect2(rect.position + Vector2(rect.size.x - 1.0, 1.0), Vector2(1.0, rect.size.y - 3.0)),
-		Color(MathArt.STONE, 0.8))
-
-
-func _draw_header(canvas: CanvasItem, font: Font, size: Vector2) -> void:
-	MathArt.px_rect(canvas, Rect2(40.0, 18.0, size.x - 80.0, 36.0), Color(MathArt.BG_1, 0.95))
-	_text(canvas, font, Vector2(40.0, 38.0), "ARCHIVES", 11, MathArt.PALE)
-	MathArt.px_rect(canvas, Rect2(40.0, 40.0, 56.0, 1.0), MathArt.PALE_DIM)
-	_text(canvas, font, Vector2(size.x - 168.0, 38.0), "CELLS %d" % Profile.cells,
-		11, MathArt.PALE, 128.0, HORIZONTAL_ALIGNMENT_RIGHT)
-
-	var slot := 132.0
-	var start := size.x * 0.5 - slot * 1.5
+	MathArt.px_rect(canvas, Rect2(0, 0, 768, 480), MathArt.INK)
+	MathArt.ui_panel(canvas, MathArt.UI_PAGE)
+	MathArt.ui_heading(canvas,
+		ContentText.of("UI_ARCHIVE_TITLE", "Archives"),
+		ContentText.of("UI_ARCHIVE_CONTEXT", "Collection / weapons carry into runs · armour is Arena only"),
+		ContentText.of("UI_ARCHIVE_WALLET", "{cells} banked Cells").format({"cells": Profile.cells}))
 	for i in TABS.size():
-		var active := TABS[i] == _tab
-		var x := start + float(i) * slot
-		_text(canvas, font, Vector2(x, 38.0), str(LABEL[TABS[i]]), 11,
-			MathArt.WHITE if active else MathArt.STONE_HI, slot, HORIZONTAL_ALIGNMENT_CENTER)
-		if active:
-			MathArt.px_rect(canvas, Rect2(x + slot * 0.5 - 26.0, 44.0, 52.0, 2.0), MathArt.WHITE)
-
-	MathArt.px_rect(canvas, Rect2(40.0, 54.0, size.x - 80.0, 1.0), Color(MathArt.STONE, 0.9))
-
-
-func _draw_list(canvas: CanvasItem, font: Font) -> void:
-	var rect := LIST_RECT
-	_panel(canvas, rect)
-
-	if _ids.is_empty():
-		_text(canvas, font, Vector2(rect.position.x, rect.position.y + 34.0),
-			"NO RECORDS", 10, MathArt.MID_DIM, rect.size.x, HORIZONTAL_ALIGNMENT_CENTER)
-		return
-
+		var rect := Rect2(52 + i * 226, 110, 212, 28)
+		if TABS[i] == _tab: MathArt.ui_focus(canvas, rect)
+		MathArt.ui_text(canvas, rect.position + Vector2(24, 19), _tab_label(TABS[i]), 13, MathArt.WHITE if TABS[i] == _tab else MathArt.PALE)
 	for row in ROWS:
 		var index := _scroll + row
-		var y := rect.position.y + 4.0 + float(row) * ROW_H
-		var row_rect := Rect2(rect.position.x + 1.0, y, rect.size.x - 2.0, ROW_H - 2.0)
-		if index >= _ids.size():
-			# Keep the empty slots visible: the list length is information.
-			MathArt.px_rect(canvas, Rect2(row_rect.position.x + 10.0, y + ROW_H * 0.5,
-				row_rect.size.x - 20.0, 1.0), Color(MathArt.STONE_DIM, 0.35))
-			continue
-
+		if index >= _ids.size(): break
 		var id := _ids[index]
-		var known := _known(id)
-		var selected := index == _index
-		if selected:
-			MathArt.px_rect(canvas, row_rect, ROW_SEL)
-			# Raised: lit top edge, dark under edge, bright left rail.
-			MathArt.px_rect(canvas, Rect2(row_rect.position, Vector2(row_rect.size.x, 1.0)),
-				Color(MathArt.PALE, 0.22))
-			MathArt.px_rect(canvas, Rect2(row_rect.position.x, y + ROW_H - 4.0, row_rect.size.x, 1.0),
-				Color(MathArt.BLACK, 0.6))
-			MathArt.px_rect(canvas, Rect2(row_rect.position.x, y + 2.0, 2.0, ROW_H - 6.0), MathArt.WHITE)
-		if index == _flash_row and _flash_t > 0.0:
-			MathArt.px_rect(canvas, row_rect, Color(MathArt.WHITE, 0.16 * (_flash_t / 0.45)))
-
-		_text(canvas, font, Vector2(row_rect.position.x + 12.0, y + 21.0),
-			"%02d" % (index + 1), 8, MathArt.STONE_HI)
-		_text(canvas, font, Vector2(row_rect.position.x + 34.0, y + 22.0),
-			_name_of(id) if known else "???", 12,
-			MathArt.WHITE if selected else (MathArt.PALE if known else MathArt.MID_DIM))
-
-		var right := row_rect.position.x + row_rect.size.x - 12.0
-		if not known:
-			_draw_lock(canvas, Vector2(right - 8.0, y + ROW_H * 0.5), 8.0, MathArt.STONE_HI)
-		elif _equipped(id):
-			_text(canvas, font, Vector2(right - 60.0, y + 21.0), "WORN", 8, MathArt.WHITE, 60.0,
-				HORIZONTAL_ALIGNMENT_RIGHT)
-		elif Profile.is_unlocked(_tab, id) and _tab != "enemy":
-			_draw_gem(canvas, Vector2(right - 16.0, y + ROW_H * 0.5), 4.0, MathArt.PALE_DIM)
-		elif _tab != "enemy":
-			_draw_gem(canvas, Vector2(right - 16.0, y + ROW_H * 0.5), 4.0, MathArt.STONE)
+		var rect := Rect2(52, 150 + row * ROW_H, 246, ROW_H - 2)
+		if index == _index:
+			if _detail_focus: MathArt.ui_surface(canvas, rect, false, true)
+			else: MathArt.ui_focus(canvas, rect)
+		var names := MathArt.ui_wrap(_name_display(id) if _known(id) else ContentText.of("UI_ARCHIVE_UNKNOWN", "Unknown record"), 210, 13)
+		for n in mini(2, names.size()): MathArt.ui_text(canvas, rect.position + Vector2(24, 17 + n * MathArt.ui_line_height(13)), names[n], 13, MathArt.WHITE if index == _index else MathArt.PALE)
+	MathArt.line(canvas, Vector2(310, 150), Vector2(310, 362), MathArt.STONE, 1)
+	MathArt.ui_text(canvas, Vector2(52, 390), ContentText.of("UI_ARCHIVE_COUNT", "{index} / {total} · {nav} more records").format({"index": _index + 1 if not _ids.is_empty() else 0, "total": _ids.size(), "nav": _prompt_pair(&"ui_nav_up", &"ui_nav_down")}), 11)
+	if not _ids.is_empty() and _detail_focus:
+		MathArt.ui_surface(canvas, Rect2(322, 166, 378, 196), true, false)
+	if not _ids.is_empty(): _draw_record(canvas, _ids[_index])
+	var lines := MathArt.ui_wrap(_note_display(), 664, 11)
+	for i in mini(2, lines.size()): MathArt.ui_text(canvas, Vector2(52, 407 + i * MathArt.ui_line_height(11)), lines[i], 11, MathArt.WHITE)
+	var x := 52.0
+	x += MathArt.ui_key(canvas, Vector2(x, 432), _prompt_pair(&"ui_tab_prev", &"ui_tab_next"), ContentText.of("UI_ARCHIVE_KEY_CATEGORY", "Category"))
+	x += MathArt.ui_key(canvas, Vector2(x, 432), _prompt_pair(&"ui_nav_up", &"ui_nav_down"), ContentText.of("UI_ARCHIVE_KEY_RECORD", "Record"))
+	if _tab != "enemy": x += MathArt.ui_key(canvas, Vector2(x, 432), Interface.prompt(&"ui_accept"), ContentText.of("UI_ARCHIVE_KEY_EQUIP", "Equip / unlock"))
+	# X enters/leaves the detail pane. Once inside, the same chip shows the real
+	# scroll pair so keyboard (Up/Down) and gamepad (RS) never see a false hint.
+	var detail_key := Interface.prompt(&"ui_secondary")
+	if _detail_focus:
+		detail_key += " / " + _prompt_pair(&"ui_detail_up", &"ui_detail_down")
+	MathArt.ui_key(canvas, Vector2(x, 432), detail_key, ContentText.of("UI_ARCHIVE_KEY_DETAIL", "Details"))
+	MathArt.ui_key(canvas, Vector2(636, 432), Interface.prompt(&"ui_back"), ContentText.of("UI_ARCHIVE_KEY_BACK", "Back"))
 
 
-func _draw_card(canvas: CanvasItem, font: Font) -> void:
-	var rect := CARD_RECT
-	_panel(canvas, rect)
-
-	if _ids.is_empty():
-		_text(canvas, font, Vector2(rect.position.x, rect.position.y + 168.0), "NOTHING RECORDED",
-			10, MathArt.STONE_HI, rect.size.x, HORIZONTAL_ALIGNMENT_CENTER)
-		return
-	var id := _ids[_index]
+## Data-only half of the record pane. Drawing the icon and the copy are split so
+## the right-stick scroll can measure the same wrapped copy without duplicating
+## the per-tab text rules.
+func _record_copy(id: String) -> Dictionary:
+	var known := _known(id)
 	var cfg := _cfg(id)
-	if not _known(id):
-		_draw_unknown(canvas, font, rect, id)
-		return
-	match _tab:
-		"weapon":
-			_draw_weapon(canvas, font, rect, id, cfg)
-		"armor":
-			_draw_armor(canvas, font, rect, id, cfg)
-		_:
-			_draw_enemy(canvas, font, rect, id, cfg)
+	var status := _status_display(id)
+	var lines: Array[String] = []
+	if known:
+		match _tab:
+			"enemy":
+				lines = [
+					ContentText.of("UI_ARCHIVE_ENEMY_HP", "HP {hp} · damage {damage}").format({"hp": "%.0f" % float(cfg.get("hp", 0)), "damage": "%.0f" % float(cfg.get("damage", 0))}),
+					ContentText.of("UI_ARCHIVE_ENEMY_SPEED", "Speed {speed} · range {range}").format({"speed": "%.0f" % float(cfg.get("speed", 0)), "range": "%.0f" % float(cfg.get("attack_range", 0))}),
+					ContentText.of("UI_ARCHIVE_ENEMY_TIMING", "Windup {windup}s · active {active}s").format({"windup": "%.2f" % float(cfg.get("windup", 0)), "active": "%.2f" % float(cfg.get("active", 0))}),
+					ContentText.of("UI_ARCHIVE_ENEMY_RECOVERY", "Recovery {recovery}s · {cells} Cells").format({"recovery": "%.2f" % float(cfg.get("recovery", 0)), "cells": cfg.get("cells", 0)}),
+				]
+			"weapon":
+				var steps: Array = cfg.get("combo", [])
+				var damage: Array[String] = []
+				for step: Dictionary in steps: damage.append(str(step.get("damage", 0)))
+				lines = [
+					ContentText.of("UI_ARCHIVE_WEAPON_COMBO", "Combo damage: {damage}").format({"damage": " → ".join(damage)}),
+					ContentText.of("UI_ARCHIVE_WEAPON_CRIT", "Critical multiplier x{mult}").format({"mult": "%.2f" % float(cfg.get("crit_multiplier", 1))}),
+					ContentText.of("UI_ARCHIVE_WEAPON_STEPS", "{count} combo steps").format({"count": steps.size()}),
+				]
+				if not steps.is_empty():
+					lines.append(ContentText.of("UI_ARCHIVE_WEAPON_BLADE", "Blade {blade} · first lunge {lunge}").format({"blade": "%.0f" % float(steps[0].get("blade", 38)), "lunge": "%.0f" % float(steps[0].get("lunge", 0))}))
+			"armor":
+				lines = [
+					ContentText.of("UI_ARCHIVE_ARMOR_HP", "HP {hp} · speed {speed}").format({"hp": "%+.0f" % float(cfg.get("hp", 0)), "speed": "%+.0f" % float(cfg.get("speed", 0))}),
+					ContentText.of("UI_ARCHIVE_ARMOR_IFRAME", "Invulnerability {ms} ms").format({"ms": "%+.0f" % (float(cfg.get("iframe", 0)) * 1000)}),
+					ContentText.of("UI_ARCHIVE_ARMOR_TAKEN", "Damage taken x{taken}").format({"taken": "%.2f" % float(cfg.get("damage_taken", 1))}),
+					ContentText.of("UI_ARCHIVE_ARMOR_KNIVES", "Kunai capacity {knives}").format({"knives": "%+d" % int(cfg.get("knives", 0))}),
+				]
+	else:
+		status = ContentText.of("UI_ARCHIVE_LOCKED", "Locked / not yet recorded")
+		lines = [ContentText.of("UI_ARCHIVE_MEET", "Meet this entry in the field to reveal its details.")]
+	if not known and _tab != "enemy":
+		lines.append(_unlock_display(id))
+	return {"status": status, "details": MathArt.ui_wrap("\n".join(lines), 372, 13)}
 
 
-func _draw_footer(canvas: CanvasItem, font: Font, size: Vector2) -> void:
-	MathArt.px_rect(canvas, Rect2(40.0, 442.0, size.x - 80.0, 30.0), Color(MathArt.BG_1, 0.9))
-	MathArt.px_rect(canvas, Rect2(40.0, 442.0, size.x - 80.0, 1.0), Color(MathArt.STONE, 0.9))
-	if _note_t > 0.0:
-		_text(canvas, font, Vector2(0.0, 432.0), _note, 10,
-			Color(MathArt.WHITE, clampf(_note_t * 2.0, 0.0, 1.0)), size.x, HORIZONTAL_ALIGNMENT_CENTER)
-	var equip := "ENTER NOTHING" if _tab == "enemy" else "ENTER EQUIP / UNLOCK"
-	_text(canvas, font, Vector2(0.0, 454.0),
-		"LEFT/RIGHT TAB      UP/DOWN SCROLL      %s      ESC CLOSE" % equip,
-		8, MathArt.LIGHT, size.x, HORIZONTAL_ALIGNMENT_CENTER)
-
-
-## A seal behind every preview: a superellipse plate plus one phyllotaxis ring.
-## Drawn from primitives, so the card reads as an emblem, not a picture.
-func _draw_emblem(canvas: CanvasItem, center: Vector2, radius: float, tone: Color) -> void:
-	MathArt.px_poly(canvas, MathArt.superellipse(radius, radius * MathArt.INV_PHI, 4.0, 32, 0.0, center),
-		Color(tone, 0.05), Color(tone, 0.28), 1.0)
-	for i in 13:
-		MathArt.disc(canvas, center + MathArt.phyllotaxis(i, radius / 3.4), 1.2, Color(tone, 0.32))
-
-
-# ---------------------------------------------------------------- detail cards
-
-func _draw_unknown(canvas: CanvasItem, font: Font, rect: Rect2, id: String) -> void:
-	var center := Vector2(rect.position.x + rect.size.x * 0.5, rect.position.y + 130.0)
-	_draw_emblem(canvas, center, 62.0, MathArt.STONE)
-	_draw_lock(canvas, center, 34.0, MathArt.STONE_HI)
-	_text(canvas, font, Vector2(rect.position.x, rect.position.y + 214.0), "???", 24,
-		MathArt.MID, rect.size.x, HORIZONTAL_ALIGNMENT_CENTER)
-	_text(canvas, font, Vector2(rect.position.x, rect.position.y + 240.0),
-		"NO RECORD. MEET IT IN THE FIELD.", 9, MathArt.STONE_HI, rect.size.x,
-		HORIZONTAL_ALIGNMENT_CENTER)
-	if _tab != "enemy":
-		_text(canvas, font, Vector2(rect.position.x, rect.position.y + 330.0),
-			_unlock_line(id), 9, MathArt.PALE, rect.size.x, HORIZONTAL_ALIGNMENT_CENTER)
-
-
-func _draw_enemy(canvas: CanvasItem, font: Font, rect: Rect2, id: String, cfg: Dictionary) -> void:
-	var center := Vector2(rect.position.x + rect.size.x * 0.5, rect.position.y + 80.0)
-	_draw_emblem(canvas, center, 66.0, MathArt.STONE)
-	_draw_enemy_body(canvas, id, cfg, center)
-
-	_text(canvas, font, Vector2(rect.position.x + 16.0, rect.position.y + 170.0),
-		str(cfg.get("name", id)), 16, MathArt.PALE)
-	_draw_title_rule(canvas, font, rect, str(cfg.get("name", id)))
-	var tag := "BOSS" if bool(cfg.get("boss", false)) else "HOSTILE"
-	_text(canvas, font, Vector2(rect.position.x + 16.0, rect.position.y + 184.0), tag, 8, MathArt.MID_DIM)
-	MathArt.px_rect(canvas, Rect2(rect.position.x + 16.0, rect.position.y + 190.0,
-		rect.size.x - 32.0, 1.0), Color(MathArt.STONE, 0.7))
-
-	var lx := rect.position.x + 16.0
-	var rx := rect.position.x + 196.0
-	var y := rect.position.y + 206.0
-	_stat(canvas, font, lx, y, "HP", "%.0f" % float(cfg.get("hp", 0.0)))
-	_stat(canvas, font, rx, y, "WINDUP", "%.2fs" % float(cfg.get("windup", 0.0)))
-	y += 20.0
-	_stat(canvas, font, lx, y, "SPEED", "%.0f" % float(cfg.get("speed", 0.0)))
-	_stat(canvas, font, rx, y, "ACTIVE", "%.2fs" % float(cfg.get("active", 0.0)))
-	y += 20.0
-	_stat(canvas, font, lx, y, "DAMAGE", "%.0f" % float(cfg.get("damage", 0.0)))
-	_stat(canvas, font, rx, y, "RECOVER", "%.2fs" % float(cfg.get("recovery", 0.0)))
-	y += 20.0
-	_stat(canvas, font, lx, y, "RANGE", "%.0f" % float(cfg.get("attack_range", 0.0)))
-	_stat(canvas, font, rx, y, "CELLS", "%d" % int(cfg.get("cells", 0)))
-
-	_draw_timing(canvas, font, rect, cfg)
-
-
-func _draw_timing(canvas: CanvasItem, font: Font, rect: Rect2, cfg: Dictionary) -> void:
-	var parts: Array[float] = [
-		maxf(0.001, float(cfg.get("windup", 0.0))),
-		maxf(0.001, float(cfg.get("active", 0.0))),
-		maxf(0.001, float(cfg.get("recovery", 0.0))),
-	]
-	var tints: Array[Color] = [Color(MathArt.PALE, 0.45), MathArt.WHITE, Color(MathArt.STONE, 0.95)]
-	var total := parts[0] + parts[1] + parts[2]
-	var x := rect.position.x + 16.0
-	var width := rect.size.x - 32.0
-	var y := rect.position.y + 288.0
-	_text(canvas, font, Vector2(x, y), "TELEGRAPH / HIT / RECOVER", 8, MathArt.MID_DIM)
-	var bar := Rect2(x, y + 6.0, width, 9.0)
-	var cursor := bar.position.x
-	for i in parts.size():
-		var segment := width * parts[i] / total
-		MathArt.px_rect(canvas, Rect2(cursor, bar.position.y, segment - 1.0, bar.size.y), tints[i])
-		if segment > 30.0:
-			_text(canvas, font, Vector2(cursor, bar.position.y + bar.size.y + 11.0),
-				"%.2f" % parts[i], 8, MathArt.MID)
-		cursor += segment
-	canvas.draw_rect(bar, Color(MathArt.BLACK, 0.8), false, 1.0)
-
-
-func _draw_weapon(canvas: CanvasItem, font: Font, rect: Rect2, id: String, cfg: Dictionary) -> void:
-	var center := Vector2(rect.position.x + rect.size.x * 0.5, rect.position.y + 92.0)
-	_draw_emblem(canvas, center, 66.0, MathArt.PALE_DIM)
-	_draw_blade(canvas, cfg, center)
-	_text(canvas, font, Vector2(rect.position.x + rect.size.x - 136.0, rect.position.y + 20.0),
-		"BLADE x%.1f" % BLADE_ZOOM, 8, MathArt.STONE_HI, 120.0, HORIZONTAL_ALIGNMENT_RIGHT)
-
-	_text(canvas, font, Vector2(rect.position.x + 16.0, rect.position.y + 170.0),
-		str(cfg.get("name", id)), 16, MathArt.PALE)
-	_draw_title_rule(canvas, font, rect, str(cfg.get("name", id)))
-	_text(canvas, font, Vector2(rect.position.x + 16.0, rect.position.y + 184.0),
-		str(cfg.get("attribute", "melee")).to_upper() + " / " + str(cfg.get("slot", "melee")).to_upper(),
-		8, MathArt.MID_DIM)
-	MathArt.px_rect(canvas, Rect2(rect.position.x + 16.0, rect.position.y + 190.0,
-		rect.size.x - 32.0, 1.0), Color(MathArt.STONE, 0.7))
-
-	var steps: Array = cfg.get("combo", [])
-	var top := 1.0
-	for step in steps:
-		if typeof(step) == TYPE_DICTIONARY:
-			top = maxf(top, float((step as Dictionary).get("damage", 0.0)))
-	var y := rect.position.y + 208.0
-	_text(canvas, font, Vector2(rect.position.x + 16.0, y), "DAMAGE PER COMBO STEP", 8, MathArt.MID_DIM)
-	for i in mini(steps.size(), 4):
-		var step: Dictionary = steps[i]
-		var row_y := y + 16.0 + float(i) * 19.0
-		var damage := float(step.get("damage", 0.0))
-		_text(canvas, font, Vector2(rect.position.x + 16.0, row_y), "STEP %d" % (i + 1), 9, MathArt.MID)
-		_text(canvas, font, Vector2(rect.position.x + 96.0, row_y), "%.0f" % damage, 11,
-			MathArt.PALE, 40.0, HORIZONTAL_ALIGNMENT_RIGHT)
-		var bar_w := 130.0 * damage / top
-		MathArt.px_rect(canvas, Rect2(rect.position.x + 146.0, row_y - 8.0, 130.0, 8.0),
-			Color(MathArt.BG_2, 0.9))
-		MathArt.px_rect(canvas, Rect2(rect.position.x + 146.0, row_y - 8.0, bar_w, 8.0),
-			MathArt.WHITE if i == steps.size() - 1 else MathArt.PALE_DIM)
-
-	var stat_y := y + 16.0 + float(mini(steps.size(), 4)) * 19.0 + 12.0
-	var blade := 38.0
-	var lunge := 0.0
-	if not steps.is_empty() and typeof(steps[0]) == TYPE_DICTIONARY:
-		blade = float((steps[0] as Dictionary).get("blade", 38.0))
-		lunge = float((steps[0] as Dictionary).get("lunge", 0.0))
-	_stat(canvas, font, rect.position.x + 16.0, stat_y, "BLADE LENGTH", "%.0f" % blade)
-	_stat(canvas, font, rect.position.x + 196.0, stat_y, "CRIT", "x%.2f" % float(cfg.get("crit_multiplier", 1.0)))
-	_stat(canvas, font, rect.position.x + 16.0, stat_y + 20.0, "STEPS", "%d" % steps.size())
-	_stat(canvas, font, rect.position.x + 196.0, stat_y + 20.0, "LUNGE", "%.0f" % lunge)
-
-	var note := _unlock_line(id)
-	if _equipped(id):
-		note = "EQUIPPED"
-	elif Profile.is_unlocked(_tab, id):
-		note = "OWNED"
-	_text(canvas, font, Vector2(rect.position.x, rect.position.y + 330.0), note, 9,
-		MathArt.WHITE if _equipped(id) else MathArt.MID, rect.size.x, HORIZONTAL_ALIGNMENT_CENTER)
-
-
-func _draw_armor(canvas: CanvasItem, font: Font, rect: Rect2, id: String, cfg: Dictionary) -> void:
-	var center := Vector2(rect.position.x + rect.size.x * 0.5, rect.position.y + 96.0)
-	_draw_emblem(canvas, center, 66.0, _tone(str(cfg.get("tone", "pale"))))
-	_draw_shell(canvas, id, cfg, center)
-
-	_text(canvas, font, Vector2(rect.position.x + 16.0, rect.position.y + 170.0),
-		str(cfg.get("name", id)), 16, MathArt.PALE)
-	_draw_title_rule(canvas, font, rect, str(cfg.get("name", id)))
-	_text(canvas, font, Vector2(rect.position.x + 16.0, rect.position.y + 184.0),
-		"ARMOUR", 8, MathArt.MID_DIM)
-	MathArt.px_rect(canvas, Rect2(rect.position.x + 16.0, rect.position.y + 190.0,
-		rect.size.x - 32.0, 1.0), Color(MathArt.STONE, 0.7))
-
-	var y := rect.position.y + 208.0
-	_stat(canvas, font, rect.position.x + 16.0, y, "HP BONUS", "%+.0f" % float(cfg.get("hp", 0.0)))
-	_stat(canvas, font, rect.position.x + 196.0, y, "I-FRAMES", "%+.0f ms" % (float(cfg.get("iframe", 0.0)) * 1000.0))
-	y += 22.0
-	_stat(canvas, font, rect.position.x + 16.0, y, "DAMAGE TAKEN", "x%.2f" % float(cfg.get("damage_taken", 1.0)))
-	_stat(canvas, font, rect.position.x + 196.0, y, "KUNAI", "%+d" % int(cfg.get("knives", 0)))
-	y += 22.0
-	_stat(canvas, font, rect.position.x + 16.0, y, "SPEED", "%+.0f" % float(cfg.get("speed", 0.0)))
-
-	var note := _unlock_line(id)
-	if _equipped(id):
-		note = "WORN"
-	elif Profile.is_unlocked(_tab, id):
-		note = "OWNED"
-	_text(canvas, font, Vector2(rect.position.x, rect.position.y + 330.0), note, 9,
-		MathArt.WHITE if _equipped(id) else MathArt.MID, rect.size.x, HORIZONTAL_ALIGNMENT_CENTER)
-
-
-# --------------------------------------------------------------- shared bits
-
-func _text(canvas: CanvasItem, font: Font, at: Vector2, text: String, size: int, color: Color,
-		width := -1.0, align := HORIZONTAL_ALIGNMENT_LEFT) -> void:
-	canvas.draw_string(font, at, text, align, width, size, color)
-
-
-func _stat(canvas: CanvasItem, font: Font, x: float, y: float, label: String, value: String) -> void:
-	# Two fixed 152px columns: label left, number right-aligned to the column
-	# edge, so a long label can never run into the next column.
-	_text(canvas, font, Vector2(x, y), label, 8, MathArt.MID_DIM)
-	_text(canvas, font, Vector2(x + 62.0, y), value, 11, MathArt.PALE, 90.0, HORIZONTAL_ALIGNMENT_RIGHT)
-
-
-## A rule only as wide as the title, sitting under the name: the label block
-## reads as a headed table column, not as floating text.
-func _draw_title_rule(canvas: CanvasItem, font: Font, rect: Rect2, title: String) -> void:
-	var w := font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
-	MathArt.px_rect(canvas, Rect2(rect.position.x + 16.0, rect.position.y + 175.0, w, 1.0),
-		Color(MathArt.PALE_DIM, 0.75))
-
-
-func _draw_lock(canvas: CanvasItem, center: Vector2, radius: float, color: Color) -> void:
-	# A hexagon with a slot cut through it: the shape language says "sealed".
-	# The slot is painted in the page colour so it reads as a hole, not a line.
-	MathArt.px_poly(canvas, MathArt.ngon(6, radius, PI / 6.0, center), color)
-	MathArt.px_rect(canvas, Rect2(center.x - 1.5, center.y - radius * 0.8, 3.0, radius * 1.6), BG)
-	MathArt.disc(canvas, center + Vector2(0.0, radius * 0.22), radius * 0.26, BG)
-	MathArt.ring(canvas, center, radius, Color(MathArt.BLACK, 0.85), 2.0, 6)
-
-
-func _draw_gem(canvas: CanvasItem, center: Vector2, radius: float, color: Color) -> void:
-	MathArt.px_poly(canvas, MathArt.ngon(4, radius, PI * 0.25, center), color)
-
-
-func _draw_enemy_body(canvas: CanvasItem, kind: String, cfg: Dictionary, center: Vector2) -> void:
-	var z := ZOOM
-	var r := (float(cfg.get("body_radius", 12.0)) + 4.0) * z
-	var body := center + Vector2(0.0, -2.0 * z)
-	var edge := Color(MathArt.BLACK, 0.9)
-	match kind:
-		"archer":
-			MathArt.disc(canvas, body, r, MathArt.ENEMY)
-			MathArt.ring(canvas, body, r, edge, 2.0)
-			MathArt.disc(canvas, body, r * 0.55, MathArt.STONE)
-			for i in 16:
-				var theta := TAU * float(i) / 16.0
-				var p := Vector2(cos(theta) * (r + 9.0 * z), sin(theta) * 4.5 * z).rotated(0.24)
-				MathArt.disc(canvas, body + p, 1.4, Color(MathArt.MID, 0.85))
-			MathArt.disc(canvas, body + Vector2(cos(0.7) * (r + 9.0 * z), sin(0.7) * 4.5 * z).rotated(0.24),
-				2.4, MathArt.WHITE)
-			for i in 3:
-				var a := TAU * float(i) / 3.0
-				MathArt.disc(canvas, body + Vector2(cos(a) * (r + 7.0 * z), sin(a) * 7.0 * z),
-					1.6, MathArt.PALE)
-			MathArt.disc(canvas, body + Vector2(r, 0.0), 3.0, MathArt.WHITE)
-		"charger":
-			MathArt.px_poly(canvas, MathArt.ngon(4, r * 1.15, PI * 0.25, body), MathArt.ENEMY, edge, 2.0)
-			MathArt.px_poly(canvas, MathArt.ngon(4, r * 0.65, PI * 0.25, body), MathArt.STONE)
-			for side_sign in [-1.0, 1.0]:
-				var from := body + Vector2(side_sign * r * 0.6, -r * 0.9)
-				MathArt.line(canvas, from,
-					from + Vector2(side_sign * 3.2 * z, -8.0 * z), MathArt.WHITE, 2.0)
-		"bulwark":
-			MathArt.px_poly(canvas, MathArt.ngon(6, r * 1.05, PI / 6.0, body), MathArt.ENEMY, edge, 2.0)
-			MathArt.px_poly(canvas, MathArt.ngon(6, r * 0.62, PI / 6.0, body), MathArt.STONE)
-			var shield := body + Vector2(r * 1.05, 0.0)
-			for i in 3:
-				var radius := 13.0 * z * pow(MathArt.INV_PHI, float(i))
-				MathArt.px_poly(canvas, MathArt.ngon(6, radius, PI / 6.0, shield),
-					Color(MathArt.STONE_HI, 0.5) if i == 0 else Color(0, 0, 0, 0),
-					Color(MathArt.WHITE, 0.55 - float(i) * 0.12), 1.5)
-			MathArt.line(canvas, shield + Vector2(0.0, -11.0 * z), shield + Vector2(0.0, 11.0 * z),
-				Color(MathArt.WHITE, 0.45), 1.0)
-		"warden":
-			var vertices := MathArt.ngon(5, r * 1.15, -PI * 0.5, body)
-			MathArt.px_poly(canvas, vertices, MathArt.BOSS, edge, 2.0)
-			MathArt.px_poly(canvas, MathArt.ngon(5, r * 0.70, -PI * 0.5, body), MathArt.STONE)
-			for i in 5:
-				MathArt.line(canvas, vertices[i], vertices[(i + 2) % 5],
-					Color(MathArt.WHITE, 0.42), 1.0)
-			var hand := body + Vector2(r * 0.965, 2.0 * z)
-			var aim := Vector2.from_angle(0.85)
-			MathArt.disc(canvas, hand, 3.4 * z * 0.8, MathArt.WHITE)
-			MathArt.line(canvas, hand, hand + aim * 32.0 * z, MathArt.WHITE, 3.0)
-			MathArt.line(canvas, hand, hand + aim * 32.0 * z, Color(MathArt.PALE, 0.6), 1.0)
-		_:
-			MathArt.px_poly(canvas, MathArt.ngon(3, r, -PI * 0.5, body), MathArt.ENEMY, edge, 2.0)
-			MathArt.px_poly(canvas, MathArt.ngon(3, r * MathArt.INV_PHI, -PI * 0.5, body), MathArt.STONE)
-			var hand := body + Vector2(11.0, 4.0) * z
-			MathArt.line(canvas, body + Vector2(5.0, 1.0) * z, hand, Color(MathArt.LIGHT_DIM, 0.55), 1.5)
-			MathArt.disc(canvas, hand, 3.0 * z * 0.85, MathArt.WHITE)
-
-
-func _draw_blade(canvas: CanvasItem, cfg: Dictionary, center: Vector2) -> void:
-	var steps: Array = cfg.get("combo", [])
-	var length := 38.0
-	if not steps.is_empty() and typeof(steps[0]) == TYPE_DICTIONARY:
-		length = float((steps[0] as Dictionary).get("blade", 38.0))
-	# One fixed magnification for every weapon, so a 50px blade looks longer
-	# than a 38px one. The grip sits where the player's hand sits: front edge.
-	var scale := BLADE_ZOOM
-	var shape := str(cfg.get("shape", ""))
-	var direction := Vector2.from_angle(-1.30)
-	var side := direction.orthogonal()
-	var reach := length * scale
-	# Centre the blade's bounding box horizontally; the grip stays at y=148 so
-	# every weapon hangs from the same baseline and the lengths compare.
-	var hand := Vector2(center.x - 8.0 - direction.x * reach * 0.5, 148.0)
-	var tip := hand + direction * reach
-	var base := hand + direction * 4.0
-
-	# The grip: hand dot, guard bar, pommel. Same vocabulary as player_visual.
-	MathArt.line(canvas, hand + side * 7.0, hand - side * 7.0, MathArt.MID, 2.0)
-	MathArt.disc(canvas, hand - direction * 5.0, 2.6, MathArt.MID)
-	MathArt.disc(canvas, hand, 4.6, MathArt.WHITE)
-
-	# One tapered quad, never two parallel lines. "shape" only bends the spine.
-	var bow := 6.0 * scale if shape == "curve" else 0.0
-	var mid := (base + tip) * 0.5 + side * bow
-	if shape == "lens":
-		mid = (base + tip) * 0.5 - side * 2.0
-	var tip_half := 0.6
-	if shape == "fractal":
-		tip_half = 3.0
-	elif shape == "orbit":
-		tip_half = 0.0
-	var base_half := 2.1 * scale
-	var blade := PackedVector2Array([
-		base + side * base_half,
-		mid + side * tip_half,
-		tip,
-		mid - side * tip_half,
-		base - side * base_half,
-	])
-	MathArt.px_poly(canvas, blade, MathArt.WHITE, Color(MathArt.WHITE, 0.35), 1.0)
-	# A single bright edge along ONE side, so it reads as a bevel.
-	MathArt.line(canvas, base + side * (base_half - 1.0), mid + side * maxf(tip_half, 0.3),
-		Color(MathArt.WHITE, 0.75), 1.0)
-	MathArt.line(canvas, mid + side * maxf(tip_half, 0.3), tip, Color(MathArt.WHITE, 0.75), 1.0)
-	if shape == "fractal":
-		# Teeth along the spine: still one silhouette, no second blade.
-		for i in 3:
-			var at := base.lerp(tip, 0.3 + float(i) * 0.22)
-			MathArt.line(canvas, at, at + side * 5.0, MathArt.WHITE, 1.5)
-	elif shape == "chain":
-		for i in 6:
-			MathArt.ring(canvas, base.lerp(tip, 0.12 + float(i) * 0.15), 2.6, MathArt.PALE, 1.0)
-	elif shape == "orbit":
-		for i in 3:
-			MathArt.ring(canvas, tip, 4.0 + float(i) * 4.0, Color(MathArt.PALE, 0.6 - float(i) * 0.15), 1.0)
-
-
-func _draw_shell(canvas: CanvasItem, id: String, cfg: Dictionary, center: Vector2) -> void:
-	var half := 15.0
-	var square := Rect2(center - Vector2(half, half), Vector2(half * 2.0, half * 2.0))
-	MathArt.px_rect(canvas, square, MathArt.WHITE)
-	canvas.draw_rect(square, Color(MathArt.BLACK, 0.9), false, 2.0)
-	MathArt.px_rect(canvas, square.grow(-6.0), MathArt.INK)
-	MathArt.disc(canvas, center, 2.8, MathArt.WHITE)
-
-	var tone := _tone(str(cfg.get("tone", "pale")))
-	match id:
-		"none":
-			for i in 12:
-				if i % 2 == 0:
-					var from := center + Vector2.from_angle(TAU * float(i) / 12.0) * 32.0
-					MathArt.line(canvas, from, from + Vector2.from_angle(TAU * float(i) / 12.0) * 8.0,
-						Color(MathArt.STONE_HI, 0.8), 1.0)
-		"plate":
-			MathArt.px_poly(canvas, MathArt.ngon(4, 44.0, PI * 0.25, center),
-				Color(tone, 0.14), tone, 2.0)
-			MathArt.px_poly(canvas, MathArt.ngon(4, 44.0 * MathArt.INV_PHI, PI * 0.25, center),
-				Color(0, 0, 0, 0), Color(tone, 0.45), 1.0)
-		"lattice":
-			MathArt.ring(canvas, center, 42.0, tone, 1.5)
-			MathArt.px_poly(canvas, MathArt.ngon(6, 42.0, 0.0, center), Color(0, 0, 0, 0),
-				Color(tone, 0.45), 1.0)
-			for i in 8:
-				var angle := TAU * float(i) / 8.0
-				MathArt.line(canvas, center + Vector2.from_angle(angle) * 20.0,
-					center + Vector2.from_angle(angle) * 42.0, Color(tone, 0.6), 1.0)
-		"mantle":
-			MathArt.px_poly(canvas, MathArt.star(5, 50.0, 30.0, -PI * 0.5, center),
-				Color(tone, 0.12), tone, 1.5)
-			MathArt.ring(canvas, center, 30.0, Color(tone, 0.5), 1.0)
-		"aegis":
-			MathArt.px_poly(canvas, MathArt.ngon(6, 46.0, PI / 6.0, center),
-				Color(MathArt.STONE_HI, 0.35), tone, 2.0)
-			for i in 3:
-				MathArt.ring(canvas, center, 30.0 + float(i) * 7.0, Color(tone, 0.55 - float(i) * 0.14), 1.0)
-			for i in 6:
-				var angle := TAU * float(i) / 6.0 + _t * 0.4
-				MathArt.disc(canvas, center + Vector2.from_angle(angle) * 46.0, 2.0, tone)
-		_:
-			MathArt.px_poly(canvas, MathArt.ngon(6, 42.0, 0.0, center), Color(0, 0, 0, 0), tone, 1.5)
-
-
-func _tone(name: String) -> Color:
-	match name:
-		"stone":
-			return MathArt.STONE_HI
-		"light":
-			return MathArt.LIGHT
-		"white":
-			return MathArt.WHITE
-	return MathArt.PALE
+func _draw_record(canvas: CanvasItem, id: String) -> void:
+	var known := _known(id)
+	var cfg := _cfg(id)
+	var display_name := ContentText.of("UI_ARCHIVE_UNKNOWN", "Unknown record") if not known else _name_display(id)
+	var names := MathArt.ui_wrap(display_name, 298, 16)
+	for i in mini(2, names.size()): MathArt.ui_text(canvas, Vector2(408, 178 + i * MathArt.ui_line_height(16)), names[i], 16, MathArt.WHITE)
+	if not known:
+		MathArt.ui_service(canvas, Vector2(364, 198), "collector", 28)
+	elif _tab == "enemy":
+		MathArt.poly(canvas, MathArt.ngon(5 if cfg.get("boss", false) else (3 if id == "grunt" else 4 if id == "charger" else 6), 32, -PI * 0.5, Vector2(364, 198)), MathArt.BOSS if cfg.get("boss", false) else MathArt.ENEMY, MathArt.INK, 2)
+	elif _tab == "weapon":
+		MathArt.ui_gear(canvas, Vector2(364, 198), "melee", 32, MathArt.WHITE, id)
+	else:
+		MathArt.ui_gear(canvas, Vector2(364, 198), "shield", 32)
+	var info := _record_copy(id)
+	var status := str(info.status)
+	var details: Array = info.details
+	var states := MathArt.ui_wrap(status, 372, 13)
+	for i in mini(2, states.size()): MathArt.ui_text(canvas, Vector2(328, 246 + i * MathArt.ui_line_height(13)), states[i], 13, MathArt.WHITE)
+	var limit := maxi(0, details.size() - DETAIL_ROWS)
+	_detail_scroll = clampi(_detail_scroll, 0, limit)
+	for i in mini(DETAIL_ROWS, details.size() - _detail_scroll):
+		MathArt.ui_text(canvas, Vector2(328, 286 + i * MathArt.ui_line_height(13)), str(details[_detail_scroll + i]), 13)

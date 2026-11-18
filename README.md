@@ -1,344 +1,152 @@
 # Ashfall（DC-like）
 
-原創 roguelite / metroidvania 的**戰鬥手感原型**，用 Godot 4.7.2 製作。
+原創 roguelite／metroidvania 動作遊戲。只借類型與公開設計概念；不含 Dead Cells 的程式碼、美術、音效、關卡或數值表。角色、場景與特效都由 `scripts/systems/math_art.gd` 即時繪製，音效與音樂由 `tools/` 的 Python 腳本合成。
 
-本專案只借用「類型」（roguelite + 2D 動作 + 房間制）與公開的設計概念，
-**不包含 Dead Cells 的程式碼、美術、音效、關卡或數值表**。
-所有角色、敵人、場景與特效都是**程式即時繪製的數學圖形**；
-所有音效與背景音樂都由 `tools/` 下的 Python 腳本合成。
+產品目標：[GOALS.md](docs/GOALS.md) · 目前狀態與人工 gate：[current-state](docs/agent/current-state.md) · 視覺規格：[ui-system](docs/design/ui-system.md) · 治理與硬約束：[AGENTS.md](AGENTS.md)。本 README 只負責目的、啟動、操作、入口與指令。
 
-> 專案位置：`C:\Users\user\Desktop\DC-like`
-> 獨立專案，不在 `Code-Project/Project/` 之下；治理文件沿用 `Code-Project`
-> 的專案層架構（README / AGENTS / MEMORY / current-state /
-> Changing Description / output）。
+## 目前範圍
 
----
+Delivery A 是合法九訪問、三 Boss 的 0 BSC 主路線，加上同一 Profile 的 Silt Cistern 替代路線與已完成的 UI 成熟度增量。擴充世界、BSC 1–5 玩法、新機制、重平衡、DLC、連線與替換存檔政策都未授權。
 
-## 1. 目前狀態
+已核准且唯一的 UI 執行計畫：[ASHFALL_UI_IMPROVE_PLAN.md](ASHFALL_UI_IMPROVE_PLAN.md)。第 1–4 步（內附 CJK 字型與繁中／英文雙語文字層、原生 InputMap 共用輸入層與鍵盤／手把導覽、設定頁與偏好儲存、戰鬥 HUD 與暫停 Build 摘要）已完成工程與有限視覺驗證；人類美術／理解與實體手把仍待。本輪完成第 4 步即停止，未啟動 5–8；日後使用者要求接續時，沿用此計畫從第 5 步開始。第 1 步含 Collector 鬼影複核；第 2 步的 13 個 `--fast` 組別全數通過；第 3 步含原生匯入、headless／display 擷取與原生視窗；第 4 步以唯讀 `GearPresentation` 投影、正式 HUD 幾何，以及短鍵帽與計時器的實際畫面完成有限視覺驗收。第 5–8 步（比較、服務、地圖與回饋）尚未開始，未完成前不預先宣稱。
 
-**現在跑的是一輪完整的 roguelite：標題 → 大廳 → 第 1–5 層 → 回大廳，永久進度寫在
-`user://ashfall_profile.json`。全部鍵盤操作。**
+人類 UI 美術／理解與真人雙路線驗收仍待完成；自動測試、截圖與模型看圖不能代替。實際進度、證據與限制只看 [current-state](docs/agent/current-state.md)，人工流程見 [delivery-a-human-check](docs/agent/delivery-a-human-check.md)。歷史 UI 看圖入口是 [review-index.html](output/ui-maturity-2026-11-16/review-index.html)；第 4 步最終證據是 [step4-evidence.json](output/ui-product/step4-evidence.json)。兩者都不代替真人驗收。
 
-| 系統 | 內容 |
-|---|---|
-| 啟動路徑 | `scenes/main.tscn` → `scripts/main.gd`。`start_mode` 預設 `""`，沒設 `skip_title` 時解析成 `"hub"`，所以**正式遊戲是標題 → 大廳**，不是競技場。Arena + Encounter + Runes/Braziers/Motes 只在 `start_mode == "arena"` 時建立，今天等於只有測試 harness |
-| 標題畫面 | 玫瑰窗 + Lissajous + phyllotaxis 的數學標題；期間整棵樹暫停，`Enter` / `Space` / `J` 開始 |
-| 大廳（Hub） | 1600 px 可行走大廳，4 座站台 + `x=1560` 的下降門。靠近（REACH 70）+ `J` 開站台：**UPGRADES**（HubUi 列表）、**SKILLS**（技能樹 11 節點）、**ARCHIVES**（3 分頁 bestiary/weapons/armour）、**CHARACTER**（6 種身體）。門：`A`/`D` 在 1..`best_floor+1` 之間切換樓層，`J` 下降。同一時間只開一個面板（`Main._any_panel_open()`） |
-| 關卡生成 | `main.start_floor()` 先釋放上一份地形、開新 `Player`，再 `Level.build(floor, randi())` → `LevelGen.generate()`：垂直多層，連續底邊 + 高 0–96 px 的石板、每層 `TIER = 92` px、2–5 層；單向平台（可往上穿過，虛線底緣）與實心塊並存；6 種房間原型 gate/hall/shaft/vault/bridge/well；房間之間有柱子強迫垂直移動；BFS 驗證可達 |
-| 樓層流程 | 進入房間矩形 → 生成該房敵人；全層敵人清空 → 出口門開啟；走進門柱（`\|dx\| < 62`、`\|dy\| < 260`）→ 發 `cleared` |
-| 結算 | 清層 → `Game.finish_floor()` 立刻入帳 → 大廳；死亡 → `Game.end_run(false)`，未入帳的 cells 消失 → 大廳；清完第 5 層 → `Game.end_run(true)`，入帳 + 1 soul → 大廳 |
-| 戰鬥手感 | 三段正弦劍、攻擊緩衝、翻滾無敵幀、取消窗口、hitstop、擊退、受擊硬直、鏡頭震動；狀態機 IDLE/RUN/AIR/ROLL/ATTACK/HURT/DEAD |
-| 移動 | 300 px/s、跳躍 −630、coyote 0.10 s、jump buffer 0.12 s、翻滾 640→200 px/s 0.30 s、i-frames 0.03–0.24 s |
-| 武器（函數） | **J** 正弦劍（三段，第三段釋放行進波）、**K** 拋物線飛刀（自動解彈道）、**L** Aegis 極座標護盾（格擋 + 反擊波）。6 把武器，每把帶 `attribute`：brutality（紅）或 tactics（紫） |
-| 防禦 | 翻滾無敵幀（首尾各 1 幀白框提示）、Aegis 格擋（實心扇形→擴散環）、受擊 4 射線、**Perfect Dodge**（i-frames 內被命中：8 射線 + 2 幀凍結 + 25% 增傷 2.5 秒 + 返還一把飛刀） |
-| 敵人 | 7 種：Husk（三角，近戰）、Watcher（圓+軌道，拋物線箭）、Ram（方，衝撞）、Bulwark（六角，正面免疫）、Spitter、Leaper、**The Warden**（五角+五芒星 Boss） |
-| 局內 Build | 兩色 build：boon 升自己那色的等級，武器依 `attribute` 縮放（`Damage.ATTR_SCALE = 0.12`／級）。每層的 boon 預算來自 `data/floors.json` 的 `reward`（2/2/3/3/0），**每清一個房間發一次**，鍵盤 `1`/`2`/`3` 或方向鍵+Enter，標題讀 `ROOM CLEARED` |
-| 永久進度 | `Profile`：cells、souls、9 種升級（7 個用 cells、brutality/tactics 用 souls）、11 個技能節點、3 本圖鑑、6 種身體 / 6 把武器 / 5 件護甲的解鎖與選擇、`best_floor`、統計 |
-| HUD | 生命、細胞、飛刀充能、Aegis 冷卻、`FLOOR n / 5` 與剩餘敵人、Boss 血條、連擊環、Perfect Dodge 計數、Build 摘要（真的列出拿過的 boon） |
-| 視覺 | **768×480 單色**（整數 x2 = 1536×960）；零貼圖，全部 `MathArt` 幾何繪製 |
-| 動畫 | 蓄力 → 實心 smear → 2 幀白色 impact → 10–14° overshoot → 二次運動延遲 |
-| 角色 | **玩家是正方形**，每次跳躍翻轉 90° 落在新的一面；敵人全是純多邊形，**沒有手腳**，手是一個點 |
-| 粒子 | Godot 內建 `CPUParticles2D`（`scripts/systems/juice.gd`），9 種預設 |
-| 打擊感 | 四級強度（2/4/6/8 幀 hitstop）、方向性火花、擴張環、1 幀白閃、斷開弧線斬痕（`SlashFx`）、zoom punch、暗角脈衝 |
-| 音效 | 18 個程式合成 SFX + 32 秒無縫數學音樂循環 |
+## 啟動
 
-**刻意還沒有：**
-
-- 匯出 preset（沒有 exe；見 §7）
-- CJK 字型，所以遊戲內文字是英文，沒有中文 UI
-- 第二隻 Boss（只有第 5 層的 The Warden）
-- 無盡模式 / 難度層級
-- metroidvania 閘門（符文門、地圖）
-- 房間插座式拼接生成：`LevelGen` 是「底邊 + 石板 + 房間」的程序生成，不是手工房間模組拼接
-- 多存檔槽（單一 `user://ashfall_profile.json`）
-- 商店、設定選單、手把重綁
-
----
-
-## 2. 快速開始
-
-需求：Godot **4.7.2**（GL Compatibility 渲染器）。引擎放在 `.tools/`
-（已被 `.gitignore` 忽略）。建議螢幕至少 1536×960，因為視窗以整數 ×2 開啟。
+需求：Godot **4.7.2**、GL Compatibility。引擎放在 `.tools/`（gitignored）。初始視窗 1536×960；遊戲以 768×480 邏輯解析度開啟，可拖曳縮放，16:10 以外的比例以黑邊維持。
 
 ```powershell
-# 第一次：下載固定版本的 Godot 到 .tools\
-powershell -ExecutionPolicy Bypass -File tools\fetch_godot.ps1
+# 第一次：從 Godot 官方 4.7.2 release 下載並解壓到 .tools\
+# 啟動、防毒與驗證規範：docs/launching.md
 
-# 雙擊啟動（或從終端機）
 .\play.bat
 
 # 直接跑遊戲
 .\.tools\Godot_v4.7.2-stable_win64.exe --path .
 
-# 或開啟編輯器
+# 開編輯器
 .\.tools\Godot_v4.7.2-stable_win64.exe --editor --path .
 ```
 
-### 操作（完整鍵盤，不需要滑鼠）
+專案根是 `C:\Users\user\Desktop\DC-like`。不要碰其他專案，也不要改 `.tools/`、`.godot/`、`output/` 或 `assets/audio/*.wav` 等生成物。
 
-| 動作 | 鍵盤 | 手把（額外） |
-|---|---|---|
-| 移動 | `A` / `D` 或 `←` / `→` | 左類比 |
-| 跳躍 | `Space` / `W` / `↑` | A |
-| 正弦劍（三段） | `J` / `Z` | X |
-| 拋物線飛刀 | `K` | Y |
-| Aegis 護盾 | `L` | LB |
-| 翻滾 | `Shift` | B |
-| 暫停 | `Esc` | Start |
-| 重來（死亡或暫停時） | `R` | Back |
-| 離開（暫停時） | `Q` | — |
-| 標題畫面開始 | `Enter` / `Space` / `J` | — |
-| 大廳：開站台（靠近時） | `J` / `Enter` | — |
-| 大廳：下降（門口） | `J` / `Enter` | — |
-| 大廳：切換樓層（門口） | `A` / `D` 或 `←` `→` | — |
-| 面板內：移動 / 確認 / 關閉 | 方向鍵或 `WASD` / `J` `Enter` `Space` / `Esc` | — |
-| 選擇 boon | `1` / `2` / `3`，或 `←` `→` + `Enter` | — |
+## 操作（完整鍵盤）
 
-**鍵盤完整保證**：所有操作都有鍵盤綁定，遊戲不綁定也不要求滑鼠。
-`scripts/autoload/game.gd` 的 `_setup_input()` 是唯一註冊點；手把只是附加。
+所有操作都有鍵盤綁定，不需要滑鼠；手把是附加路徑，軟體綁定已就位，但實體手把尚未驗證。實際註冊點是 `project.godot` 的原生 InputMap；`scripts/autoload/interface.gd` 只負責套用 locale／input 覆寫、最後裝置與提示文字，各頁仍自己處理焦點、捲動與確認。
 
----
+| 動作 | 按鍵 |
+|---|---|
+| 移動 | `A` / `D` 或 `←` / `→` |
+| 跳躍 | `Space` / `W` / `↑` |
+| 武器一／二（盾也用武器槽） | `1` / `2`；武器一相容 `J` / `Z` |
+| 技能一／二 | `Q` / `E`，相容 `K` / `L` |
+| 翻滾（每次離地一次） | `Shift` |
+| 互動／治療 | `R`／`F` `H` |
+| 暫停／返回 | `Esc` |
+| 放棄該局 | 暫停：`Enter` 開確認再 `Enter` 提交；死亡：`Enter` 重試 |
+| 暫停詳情／回標題／離開 | `1`–`5` 選裝備、`↑`/`↓` 捲動；`T` 回標題（落在 Saves）、`Q` 離開 |
+| 標題 main 動作 | `W`/`S` 選 Continue／Enter Hub、New run、Saves、Quit；`Enter` 開啟 |
+| 標題 Saves 三槽 | `A`/`D` 或 `W`/`S` 選槽；`Enter` 開啟；`Esc` 返回 main |
+| 覆蓋 checkpoint 的新局 | `N` 後再按 `N` 或 `Enter` 確認；`Esc` 取消 |
+| 大廳站台／下降門 | 靠近按 `J` / `Enter` |
+| 地圖／世界圖 | `Tab` 開關，`←`/`→` 切頁，`Esc` 關閉 |
+| 藤蔓／牆面 | 靠近 `W`/`↑` 攀爬；藤蔓 `S`/`↓` 下降；`Space` 跳離 |
+| 下穿／下砸 | 地面 `S+Space` 下穿 one-way；空中 `S+Space` 下砸 |
+| Checkpoint 傳送 | 近已啟用點按 `R`；地圖 `↑`/`↓` 選點、`Enter` 確認 |
+| Scroll | `1`/`2`/`3` 或 `A`/`D` 預覽，`Enter` 提交；`↑`/`↓` 捲詳情 |
+| 裝備比較／替換 | `R` 開；`1`/`2` 或 `A`/`D` 選槽；`Enter` 替換＋回收；`X` 回收候選；`Esc` 離開 |
+| Passage 服務 | `W`/`S` 或 `↑`/`↓` 選列；`Enter` 提交；`Space`/`Esc` 返回 |
 
-## 3. 目錄結構與檔案角色
+鍵盤焦點與取消語意由各面板常駐按鍵列顯示；不要加 mouse-only 操作。
 
-```text
-DC-like/
-├── project.godot              # 引擎設定、autoload、視窗與渲染器
-├── icon.svg
-├── play.bat                   # 雙擊啟動
-├── AGENTS.md                  # agent 入口 + Ponytail 規則 + 遊戲專案例外
-├── MEMORY.md                  # durable 決策、指令、風險
-├── Changing Description.txt   # 唯一的專案變更紀錄
-├── data/
-│   ├── floors.json            # 5 層：名稱、寬度、房間數、敵人表、reward 預算
-│   ├── weapons.json           # 6 把武器（三段 combo + attribute 顏色）
-│   ├── enemies.json           # 7 種敵人（grunt/archer/charger/bulwark/spitter/leaper/warden）
-│   ├── rewards.json           # 7 種局內 boon
-│   ├── upgrades.json          # 9 種永久升級（7 個 cells + brutality/tactics souls）
-│   ├── skill_nodes.json       # 11 節點技能樹
-│   ├── characters.json        # 6 種可選身體（hp/speed/jump/passive）
-│   └── armor.json             # 5 件護甲
-├── assets/audio/              # tools/make_sfx.py + make_music.py 產生
-├── scenes/
-│   ├── main.tscn              # 唯一入口（只掛 main.gd）
-│   ├── player.tscn            # Actor 根節點；子節點由程式組裝
-│   └── enemy.tscn             # 同上
-├── scripts/
-│   ├── main.gd                # 啟動、標題、大廳/樓層切換、boon 預算、層間轉場
-│   ├── autoload/
-│   │   ├── data.gd            # JSON 資料表載入
-│   │   ├── profile.gd         # ★ 唯一的存檔讀寫：永久解鎖、升級、技能、圖鑑
-│   │   ├── sfx.gd             # 音效池 + 音樂循環
-│   │   ├── combat.gd          # hitstop / shake / FX 生成
-│   │   └── game.gd            # run state、combo、boon、樓層流程、輸入註冊
-│   ├── systems/
-│   │   ├── math_art.gd        # ★ 視覺語言：多邊形/星形/螺線/諧波/拋物線
-│   │   ├── damage.gd          # 唯一的傷害公式（含 ATTR_SCALE）
-│   │   ├── juice.gd           # 粒子預設（包裝 CPUParticles2D）
-│   │   ├── geom3d.gd          # 3D→2D 投影（Warden Boss 用）
-│   │   └── layers.gd          # 物理層 bit
-│   ├── meta/
-│   │   ├── hub.gd             # 大廳：可行走地面、4 站台、下降門、樓層選擇
-│   │   └── hub_ui.gd          # UPGRADES / CHARACTER 面板（列表 + 卡片）
-│   ├── player/
-│   │   ├── player.gd          # 移動、三段劍、飛刀、Aegis、Perfect Dodge、loadout
-│   │   ├── player_visual.gd   # 程序化角色（正弦劍、Lissajous 圍巾）
-│   │   ├── weapon_visual.gd   # 6 種武器幾何（curve/lens/fractal/chain/orbit）
-│   │   └── player_camera.gd   # 跟隨、look-ahead、trauma shake
-│   ├── enemies/
-│   │   ├── enemy.gd           # 七種敵人 + Boss 三種攻擊模式
-│   │   ├── enemy_visual.gd    # 幾何原型 + 真實彈道預覽
-│   │   ├── projectile.gd      # 拋物線投射物 / 震波
-│   │   └── cell_pickup.gd
-│   ├── combat/
-│   │   ├── hitbox.gd          # 近戰 hitbox（每揮只命中一次）
-│   │   └── function_wave.gd   # 第三段釋放的正弦行進波
-│   ├── world/
-│   │   ├── level.gd           # 一層：碰撞、房間觸發、出口門、room_cleared/cleared
-│   │   ├── level_gen.gd       # 純資料關卡生成（(floor, seed) → 佈局，BFS 驗證）
-│   │   ├── arena.gd           # ⚠ 競技場模式專用（手感 fixture）
-│   │   ├── encounter.gd       # ⚠ 競技場模式專用：4 波導演
-│   │   ├── braziers.gd        # 玫瑰線火焰 + phyllotaxis 餘燼（arena 專用）
-│   │   ├── runes.gd           # 漂浮多邊形符文（arena 專用）
-│   │   └── motes.gd           # phyllotaxis 微粒場（arena 專用）
-│   ├── ui/
-│   │   ├── hud.gd             # HUD / 暫停 / 結算 / Boss 血條 / Build 摘要
-│   │   ├── reward_screen.gd   # 鍵盤三選一 boon（ROOM/WAVE CLEARED）
-│   │   ├── archive_screen.gd  # ARCHIVES：bestiary / weapons / armour 三分頁
-│   │   ├── skill_tree.gd      # SKILLS：11 節點、需前置、cells 付費
-│   │   └── title_screen.gd    # 數學標題畫面
-│   └── fx/                    # 火花、斬擊、傷害數字、殘影、粒子、環、碎裂、拋物線
-├── shaders/                   # 背景螺線場、bloom、暗角
-├── tests/                     # 無頭測試與截圖工具
-├── tools/                     # 音效/音樂生成、Godot 下載、檢查腳本
-├── docs/
-│   ├── PRODUCT.md             # 業務文檔：產品定義、架構、循環、數值、驗證
-│   ├── agent/                 # 冷啟動與交接
-│   └── design/                # 五根柱子、手感調參、數學美術
-└── output/                    # 截圖與匯出（gitignored）
-```
-
-### 三個刻意的設計選擇
-
-1. **Actor 由程式組裝**：`player.tscn` / `enemy.tscn` 只有根節點，
-   CollisionShape、Hitbox、Visual、Camera 都在 `_ready()` 建立。
-   好處是沒有序列化資源要同步；代價是編輯器場景樹看不到細節。
-2. **零外部資產**：角色與敵人是 `_draw()` 畫的，音效是 Python 合成的。
-   沒有授權風險，改顏色/形狀不需要開繪圖軟體。
-3. **數學是唯一視覺語言，而且是單色、流暢優先的**：邏輯解析度 768×480、
-   整數 ×2、浮點座標（不做像素吸附）、120 Hz 物理 + 插值、完全沒有色相。
-   見 [`docs/design/math-art.md`](docs/design/math-art.md)。
-
----
-
-## 4. 資料驅動與調參入口
-
-### 樓層：`data/floors.json`
-五層：`name / rooms / width / enemies / boss / palette / reward`。
-`reward` 是該層總共發幾個 boon（2/2/3/3/0），由 `Main` 按「每清一房扣一」花完。
-
-| 層 | 名稱 | 寬度 | 房間 | 敵人 | reward |
-|---|---|---:|---:|---:|---:|
-| 1 | THE ASH GATE | 4200 | 4 | 6 | 2 |
-| 2 | THE HOLLOW STAIR | 5200 | 5 | 10 | 2 |
-| 3 | THE GEAR VAULT | 5600 | 5 | 11 | 3 |
-| 4 | THE QUIET FOUNDRY | 6400 | 6 | 15 | 3 |
-| 5 | THE WARDEN'S THRONE | 2600 | 2 | 5 + Boss | 0 |
-
-### 武器：`data/weapons.json`
-每段攻擊的 `windup / active / recovery / cancel_at / lunge / damage /
-knockback / hitstop / size / offset / tier / blade`；每把武器另外有
-`attribute`（`brutality` 或 `tactics`）與 `crit_multiplier`。
-
-### 敵人：`data/enemies.json`
-`hp / speed / damage / attack_range / windup / active / recovery / lunge /
-knockback / cooldown / cells / color / body_radius / body_height`，外加
-`shield`（Bulwark）、`boss` / `knockback_scale` / `shockwave_*` / `charge_speed`（Warden）、
-`projectile_speed`（Watcher）。
-
-### Boon：`data/rewards.json`
-`name / desc / color`，部分帶 `attribute`（`brutality` / `tactics`）決定它升哪一色；
-效果在 `Game.apply_reward()` 裡（目前 7 種）。
-
-### 永久進度：`data/upgrades.json` / `data/skill_nodes.json`
-升級：`stat / per_level / max / cost / cost_step / currency`（預設 `cells`，
-`brutality` 與 `tactics` 是 `souls`）。技能節點：`stat / per_level / cost / requires / at`。
-兩者都只透過 `Profile.bonus(stat)` 進到戰鬥。
-
-### 身體與護甲：`data/characters.json` / `data/armor.json`
-身體：`hp / speed / jump / knives / passive / cost / unlock_floor`。
-護甲：`hp / damage_taken / speed / iframe / knives / cost`。
-`Player._apply_loadout()` 把兩者加上 `Profile.bonus()` 後寫進 `@export`。
-
-### 角色：`scripts/player/player.gd` 的 `@export`
-跑速、加速度、重力、跳躍、coyote、buffer、翻滾、受擊、飛刀、Aegis。
-這些是**基準值**：實際值由 `_apply_loadout()` 依 body / 護甲 / 永久升級覆寫（可重複呼叫，不會累加）。
-
-### 傷害公式：`scripts/systems/damage.gd`
+## 檔案入口
 
 ```text
-最終傷害 = 基礎傷害 × (1 + 屬性等級 × 0.12) × (暴擊 ? crit_mult : 1)
-
-基礎傷害 = 武器段傷害 × Game.total_damage_mult() × permanent_damage_mult
-屬性等級 = 局內該色 boon 數 + Profile.bonus(colour)（souls 升級）
+project.godot                 引擎、autoload、視窗與渲染設定
+play.bat                      雙擊啟動
+AGENTS.md                     治理、read order、授權與硬約束
+ASHFALL_UI_IMPROVE_PLAN.md    唯一 UI 執行計畫（1–4 完成；5 為下一步）
+MEMORY.md                     持久偏好與可重用實作教訓
+data/*.json                   canonical 武器、敵人、房間、路線與經濟資料
+scenes/main.tscn              唯一產品入口
+scripts/main.gd               標題、Hub、node 轉場、Passage 與結算流程
+scripts/autoload/profile.gd   唯一持久存檔 writer
+scripts/autoload/interface.gd locale／input 覆寫、最後裝置與操作提示
+scripts/autoload/game.gd      run state、路線與資源
+scripts/systems/run_build.gd  局內裝備 UID、charges、三軸與 wallet
+scripts/systems/math_art.gd   唯一視覺語言與幾何 primitive
+scripts/world/biome_gen.gd    正式 biome／room module 組裝
+scripts/world/level.gd        房間啟動、碰撞、掉落、出口與 discovery
+scripts/ui/                   HUD、地圖、標題、獎勵與其他面板
+scripts/ui/settings_screen.gd 設定頁、草稿／預覽與重綁流程
+scripts/ui/gear_presentation.gd 裝備玩法摘要的唯讀顯示投影
+scripts/meta/                 Hub、Passage、Collector 與永久進度
+tests/                        headless checks、fixtures 與 capture probes
+tools/check.py                唯一驗證入口與檢查計畫
+docs/                         GOALS、PRODUCT、design／agent 契約與研究參考
+output/                       gitignored 截圖、報告與匯出
 ```
 
-`Damage.compute(base, attr, crit, crit_mult, scale = 1.0)` 是唯一入口，
-`ATTR_SCALE = 0.12`。暴擊條件：敵人處於預警/攻擊/收招（`is_exposed`），
-**或**玩家在其背後（`is_backstabbed_by`）。Perfect Dodge 期間 `total_damage_mult()`
-額外 ×1.25。飛刀固定算 tactics。
+`data/*.json` 是內容與數值的 canonical 來源；不要在 script 重抄武器表、敵人 stats 或路線契約。資料 schema、生成、存檔與 runtime ownership 見 [PRODUCT.md](docs/PRODUCT.md) 與 `docs/design/*.md`。舊五層 `data/floors.json`／`rooms.json`、`LevelGen` 與 arena 只保留給 legacy fixtures，不是正式完成標準。
 
-### 手感參數與理由
-見 [`docs/design/combat-feel.md`](docs/design/combat-feel.md)。
+畫面與手感：768×480 邏輯、可縮放視窗（初始 1536×960）、120 Hz physics、`physics_interpolation=true`、浮點座標；玩家是正方形，敵人是純多邊形，沒有手腳或臉。詳細理由見 [math-art](docs/design/math-art.md)、[combat-feel](docs/design/combat-feel.md) 與 [impact](docs/design/impact.md)。
 
----
+## 驗證
 
-## 5. 驗證
+`python tools/check.py` 是唯一入口；目前預設是最新路徑的 **13 個檢查**，不是舊的完整清單。`--list` 免 Godot 列出目前計畫與期限；`--only` 以不分大小寫的正則匹配名稱或路徑，零個匹配會失敗。不要用舊的秒數或舊 `ALL CHECKS PASSED` 當現在證據。
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools\check.ps1
+# 看目前檢查與期限（不需 Godot）
+python tools/check.py --list
+
+# 日常 focused / 內圈
+python tools/check.py --only profile_migration_probe
+python tools/check.py --fast
+
+# 目前預設
+python tools/check.py
+
+# Runner 與 Profile 路徑安全
+python tests/check_runner_probe.py
+python tests/profile_path_probe.py
+
+# 重新生成音效／音樂
+python tools\make_sfx.py
+python tools\make_music.py
 ```
 
-依序執行（今天實跑：`ALL CHECKS PASSED`，exit 0）：
+- 其他 probe 用 `--only` opt-in，900s L6 與 focused Passage 也是 opt-in。九個只測退役五層生成器的 probe 已刪除，不再註冊；歷史 bytes 只在 `output/` 的 dated 證據。
+- `--fast` 只把 generation sweep 改成 **4 seeds**（完整預設 **32 seeds**）；其他 probe 是否執行只由 `--only` 決定。
+- 測試使用隔離 Profile；`tools/check.py` 拒絕把 live Profile 當測試目標。不要手動覆寫、刪除或重置 live saves。
+- 腳本／場景錯誤、普通 `ERROR:`、非零退出與 timeout 都不能算通過。已知 WAV 關閉參考與 Camera2D interpolation warning 仍會出現；沒有 zero-warning 主張。
+- 文件變更只需 link／consistency 檢查，不必跑 Godot；改 runtime 或 UI 時只跑受影響的 focused check，再跑適用的整合 gate。
 
-| 階段 | 目標 | 驗證什麼 |
-|---|---|---|
-| import | `--import` | 資源匯入、腳本編譯 |
-| run_tests | `tests/run_tests.gd` | 資料表、傷害公式、數學常數、彈道解（**111 checks**） |
-| combat_probe | `tests/combat_probe.tscn` | 真實輸入的命中、傷害、死亡、i-frames |
-| reward_probe | `tests/reward_probe.tscn` | 鍵盤 boon 選擇器（暫停、1/2/3、方向鍵+Enter） |
-| soak | `tests/soak.tscn` | 競技場模式全流程：全部敵人 + 4 波 + Boss + 勝利 |
-| esc_probe | `tests/esc_probe.tscn` | 大廳面板開/關/購買、Esc 只關一個 panel |
-| floor_probe | `tests/floor_probe.tscn` | 大廳 → 樓層的交接（相機 limits、地形釋放） |
-| run_probe | `tests/run_probe.tscn` | 完整 run：5 層 → 勝利 |
-| audit_a1 | `tests/audit_a1.tscn` | 戰鬥 / 武器 |
-| audit_a2 | `tests/audit_a2.tscn` | 存檔 / 經濟（**123 checks**） |
-| audit_a3 | `tests/audit_a3.tscn` | 層 / 出生點（5 層 × 15 seeds） |
-| audit_a4 | `tests/audit_a4.tscn` | UI / 輸入（**226 checks**） |
-| audit_v1 | `tests/audit_v1.tscn` | 垂直可達性（5 層 × 40 seeds） |
-| audit_v2 | `tests/audit_v2.tscn` | 敵人 / 遭遇 |
-| audit_v3 | `tests/audit_v3.tscn` | run 流程 / 進度（**162 checks**） |
-
-單獨跑某一項：
+視覺截圖需要顯示器，使用隔離存檔，不進 headless gate：
 
 ```powershell
-.\.tools\Godot_v4.7.2-stable_win64_console.exe --headless --path . --script res://tests/run_tests.gd
-.\.tools\Godot_v4.7.2-stable_win64_console.exe --headless --path . tests\run_probe.tscn
+python tools/check.py --capture title
+python tools/check.py --capture scene
+python tools/check.py --capture impact
+python tools/check.py --capture meta
+python tools/check.py --capture bloom
+python tools/check.py --capture l4
+python tools/check.py --capture hud
+python tools/check.py --capture saves
+python tools/check.py --capture l6
+python tools/check.py --capture ui-product
 ```
 
-### 視覺截圖（需要顯示器，不進 headless 驗證）
+輸出在 `output/screenshots/`（mutable；需要凍結證據時看 pass manifest 與 owned captures）。完整 launching、capture alias 與 Profile 隔離規則見 [launching.md](docs/launching.md)。
 
-```powershell
-.\.tools\Godot_v4.7.2-stable_win64_console.exe --path . tests\title_capture.tscn    # 標題
-.\.tools\Godot_v4.7.2-stable_win64_console.exe --path . tests\capture_scene.tscn    # 遊戲畫面
-.\.tools\Godot_v4.7.2-stable_win64_console.exe --path . tests\impact_capture.tscn   # 逐幀打擊
-.\.tools\Godot_v4.7.2-stable_win64_console.exe --path . tests\jump_capture.tscn     # 逐幀翻面
-.\.tools\Godot_v4.7.2-stable_win64_console.exe --path . tests\meta_capture.tscn     # 大廳與 meta 面板
-```
+## 匯出
 
-輸出到 `output/screenshots/`（gitignored）。
+目前沒有 export preset，也沒有 exe；Windows export 尚未驗證。設定時從編輯器 `Editor → Manage Export Templates` 安裝模板，`Project → Export → Add... → Windows Desktop`，輸出到 `output/build/`，不要覆蓋專案根。開發期用 `.exe` + `.pck` 分離；發佈才考慮 embed PCK。Web 版只適合早期試玩，手感仍以原生版為準。
 
----
+## 已知限制
 
-## 6. 目前已知限制
+雙語文字層已接線：首次預設繁體中文、英文為回退，內附 Noto Sans CJK TC，原生翻譯由 `data/localization/ui.csv` 匯入；設定頁、偏好儲存、介面語言切換與重綁已通過 STEP 3 工程驗收（原生匯入、headless／display 擷取與原生視窗），第 4 步 HUD／暫停 Build 摘要已通過工程與有限視覺驗收，但仍無實體手把（含拔除）、真人導覽、音訊關閉參考、motion frames 或 HUD／pause／compare／settings 全表面視窗縮放證據。BSC 1 只解鎖、不能選來玩；沒有無盡模式、任意幀世界存檔或完整擴充世界。Camera2D、audio shutdown、GLES3 MSAA、MbedTLS warning、Windows export 憑證、實體 controller 與 zero-warning 仍未驗證。最新邊界以 [current-state](docs/agent/current-state.md) 為準，不要從舊文件複製狀態。
 
-- **單一存檔槽**：只有 `user://ashfall_profile.json`，沒有多槽、沒有備份回滾。
-- **輸入只能改程式**：綁定在 `game.gd._setup_input()` 執行時註冊，沒有設定選單。
-- **敵人不會為了追擊而跳下平台**（卡牆時只會反向加一次小跳）；弓箭手仍可能走到平台邊緣掉下去。
-- **沒有中文 UI**：Godot 內建字型不含 CJK，遊戲內文字是英文；文件是中文。
-- **沒有第二隻 Boss**：只有第 5 層的 The Warden；也沒有無盡模式 / 難度層級。
-- **匯出 preset 尚未建立**（沒有 exe）。
-- Bloom 是螢幕空間近似，不是真正的 HDR 管線。
+## 工作規則
 
----
-
-## 7. 匯出成 exe（尚未設定）
-
-1. 編輯器 → `Editor → Manage Export Templates → Download and Install`。
-2. `Project → Export → Add... → Windows Desktop`。
-3. 匯出到 `output/build/`（不要覆蓋專案根）。
-4. 發佈時可勾選 `Resources → Embed PCK` 變成單一 exe；開發期建議
-   `.exe` + `.pck` 分離。
-5. Web 匯出適合早期給朋友試玩；手感仍以原生版為準。
-
----
-
-## 8. 工作規則（給人與 agent）
-
-- 先讀 `AGENTS.md`，再讀 `MEMORY.md` 與 `docs/agent/current-state.md`。
-- 只改這個專案；不要碰 `Code-Project/` 的其他專案。
-- 內容 schema（武器/敵人/boon/房間資料）視為「現在就該正確」的範圍，
-  不受 Ponytail 的 YAGNI 裁決。
-- **視覺只能透過 `MathArt`**；不要引入貼圖或 `Sprite2D`。
-- **不要新增色相**；所有顏色必須來自 `MathArt` 的灰階梯度。
-- **不要為角色加手腳或眼睛**；手是一個點，臉不存在。玩家是純正方形。
-- **打擊感規格見 `docs/design/impact.md`**；改動前先讀，改動後跑
-  `tests/impact_capture.tscn` 逐幀檢查。
-- 粒子用 `Juice.*`（包裝 `CPUParticles2D`），不要自己寫粒子模擬。
-- **鍵盤優先**：任何新操作都必須有鍵盤綁定。
-- 手感原型允許拋棄式程式碼，但放在 `tests/` 或明確標記。
-- 設計決策要留下「為什麼選這個、放棄了什麼」兩行，寫進
-  `docs/design/` 或 `MEMORY.md`。
-- 不要引入任何 Dead Cells 的資產、反編譯輸出或數值表。
-- 每次完成一個有意義的階段，更新 `docs/agent/current-state.md`；
-  重要變更才更新 `Changing Description.txt`。
+每次有意義的階段更新 [current-state](docs/agent/current-state.md)；狀態、證據與限制以它為唯一 owner。所有美術走 MathArt，粒子走 `Juice.*`（`ShatterFx` 的輪廓碎片是窄例外），鍵盤存取不可退化，`Profile` 是唯一存檔 writer。不要 reset／revert／commit／push 未經要求，也不要引入 Dead Cells 資產、反編譯輸出或數值表。完整治理、委派與硬約束見 [AGENTS.md](AGENTS.md)。

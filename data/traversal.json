@@ -1,0 +1,7 @@
+{
+  "climb_speed": 180,
+  "wall_slide_speed": 90,
+  "wall_jump_lock": 0.12,
+  "dive_speed": 1000,
+  "interact_reach": 64
+}

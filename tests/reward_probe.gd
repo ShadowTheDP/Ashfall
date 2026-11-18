@@ -6,9 +6,12 @@ extends Node
 
 var _failures := 0
 var _main: Node
+var _capture := false
 
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	_capture = DisplayServer.get_name() != "headless"
 	_main = $Main
 	await get_tree().process_frame
 	await get_tree().create_timer(0.2).timeout
@@ -35,6 +38,7 @@ func _ready() -> void:
 	if not get_tree().paused or not Game.reward_open or not _main.reward_screen.visible:
 		_fail("reward screen did not pause the tree")
 		return
+	await _shot("boon-start")
 	await _press(KEY_1)
 	if get_tree().paused or Game.reward_open:
 		_fail("reward screen did not unpause after picking 1")
@@ -45,7 +49,9 @@ func _ready() -> void:
 	_main.reward_screen.open(["edge", "armory", "swift"])
 	await get_tree().process_frame
 	await _press(KEY_RIGHT)
+	await _shot("boon-focused")
 	await _press(KEY_ENTER)
+	await _shot("boon-confirmed")
 	if not Game.reward_counts.has("armory"):
 		_fail("arrow + enter did not take armory")
 	var knives_before := player.knife_max
@@ -82,6 +88,21 @@ func _ready() -> void:
 	_finish()
 
 
+func _shot(label: String) -> void:
+	if not _capture: return
+	DirAccess.make_dir_recursive_absolute("res://output/screenshots/reward")
+	await get_tree().create_timer(0.12, true).timeout
+	await get_tree().process_frame
+	$Main.hud.queue_redraw()
+	await RenderingServer.frame_post_draw
+	if get_viewport().get_texture().get_image().save_png("res://output/screenshots/reward/" + label + ".png") != OK:
+		_fail("capture " + label)
+
+
+	await _physical_capture(label)
+	print("REWARD_PROBE FRAME %dms %s" % [Time.get_ticks_msec(), label])
+	if OS.get_environment("ASHFALL_CAPTURE_ACK_DIR").is_empty(): await get_tree().create_timer(0.08, true).timeout
+
 func _press(key: Key) -> void:
 	var down := InputEventKey.new()
 	down.physical_keycode = key
@@ -109,3 +130,12 @@ func _finish() -> void:
 		print("REWARD FAILED (%d)" % _failures)
 	await get_tree().create_timer(0.3).timeout
 	get_tree().quit(0 if _failures == 0 else 1)
+
+func _physical_capture(label: String) -> void:
+	var directory := OS.get_environment("ASHFALL_CAPTURE_ACK_DIR")
+	if directory.is_empty(): return
+	var path := directory.path_join(label + ".json")
+	var deadline := Time.get_ticks_msec() + 1500
+	while not FileAccess.file_exists(path) and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+	assert(FileAccess.file_exists(path), "owned physical capture acknowledgement: " + label)

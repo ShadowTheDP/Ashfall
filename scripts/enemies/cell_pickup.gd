@@ -41,7 +41,7 @@ func _physics_process(delta: float) -> void:
 		if distance < 150.0:
 			_velocity = _velocity.lerp(to_player.normalized() * 560.0, clampf(delta * 10.0, 0.0, 1.0))
 			if randf() < delta * 14.0:
-				Combat.burst(global_position, MathArt.WHITE, 1, 40.0)
+				Combat.burst(global_position, 1)
 		else:
 			_velocity = _velocity.lerp(Vector2(0.0, 22.0), delta * 1.5)
 		if distance < 16.0:
@@ -74,7 +74,7 @@ func _collect() -> void:
 	_collected = true
 	Game.add_cells(value)
 	Sfx.play("pickup", -10)
-	Combat.spark(global_position, Vector2.UP, false, MathArt.PALE_DIM)
+	Combat.spark(global_position, Vector2.UP, false, MathArt.CELL)
 	queue_free()
 
 
@@ -82,10 +82,10 @@ func _draw() -> void:
 	var bob := roundf(sin(_t * 8.0) * 1.5)
 	var pulse := 0.65 + 0.35 * sin(_t * 9.0)
 	# Glow.
-	MathArt.px_rect(self, Rect2(-4, -4 + bob, 9, 9), Color(MathArt.PALE_DIM, 0.10 * pulse))
+	MathArt.px_rect(self, Rect2(-4, -4 + bob, 9, 9), Color(MathArt.CELL, 0.10 * pulse))
 	# Diamond.
 	var points := PackedVector2Array([
 		Vector2(0, -5 + bob), Vector2(4, bob), Vector2(0, 5 + bob), Vector2(-4, bob),
 	])
-	MathArt.px_poly(self, points, MathArt.PALE_DIM, MathArt.WHITE, 1.0)
-	MathArt.px_rect(self, Rect2(-1, -2 + bob, 2, 3), MathArt.WHITE)
+	MathArt.px_poly(self, points, MathArt.CELL, MathArt.CELL, 1.0)
+	MathArt.px_rect(self, Rect2(-1, -2 + bob, 2, 3), MathArt.CELL)

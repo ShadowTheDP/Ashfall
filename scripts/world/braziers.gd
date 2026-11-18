@@ -2,9 +2,9 @@ class_name Braziers
 extends Node2D
 ## Pixel braziers: hex plinth, chunky flame, 1px embers on a phyllotaxis drift.
 
-const AMBER := MathArt.PALE_DIM
-const FLAME := MathArt.WHITE
-const EMBER := MathArt.WHITE
+const AMBER := MathArt.FIRE
+const FLAME := MathArt.ACCENT
+const EMBER := MathArt.FIRE
 
 var _t := 0.0
 var _positions := [Vector2(40, 0), Vector2(420, 0), Vector2(820, 0), Vector2(1210, 0), Vector2(1540, 0)]
@@ -50,7 +50,7 @@ func _draw_brazier(base: Vector2, phase: float) -> void:
 			tint = Color(FLAME, 0.55 + 0.12 * float(band))
 		MathArt.px_rect(self, Rect2(roundf(base.x - width * 0.5 + sway), roundf(y), roundf(width), 5.0), tint)
 	# Hot core.
-	MathArt.px_rect(self, Rect2(base.x - 2.0, base.y - 22.0, 4, 6), Color(MathArt.WHITE, 0.55 + 0.2 * flicker))
+	MathArt.px_rect(self, Rect2(base.x - 2.0, base.y - 22.0, 4, 6), Color(MathArt.ACCENT, 0.55 + 0.2 * flicker))
 
 	# Embers: 1px, rising on a phyllotaxis spread.
 	for i in 5:

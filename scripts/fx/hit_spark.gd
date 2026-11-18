@@ -5,7 +5,7 @@ extends Node2D
 ##   frame 2-6  rays shrink, shards fly out
 ## Everything is snapped to whole pixels.
 
-var color := Color.WHITE
+var color := MathArt.FIRE
 var direction := Vector2.RIGHT
 var crit := false
 var _t := 0.0
@@ -74,4 +74,4 @@ func _draw() -> void:
 	if crit:
 		# A tiny 5-point star for crits only.
 		MathArt.px_poly(self, MathArt.star(5, 13.0 * (1.0 - k * 0.5), 5.0 * (1.0 - k * 0.5), _t * 3.0),
-			Color(0, 0, 0, 0), Color(MathArt.WHITE, alpha * 0.7), 1.0)
+			Color.TRANSPARENT, Color(MathArt.ACCENT, alpha * 0.7), 1.0)

@@ -4,11 +4,11 @@ extends Node2D
 
 var _t := 0.0
 var _runes := [
-	{"pos": Vector2(210, -240), "sides": 3, "radius": 20.0, "color": MathArt.PALE_DIM, "speed": 0.20, "phase": 0.4},
-	{"pos": Vector2(560, -290), "sides": 6, "radius": 15.0, "color": MathArt.WHITE, "speed": -0.15, "phase": 1.8},
-	{"pos": Vector2(930, -225), "sides": 4, "radius": 18.0, "color": MathArt.PALE, "speed": 0.17, "phase": 3.1},
-	{"pos": Vector2(1260, -280), "sides": 5, "radius": 17.0, "color": MathArt.PALE_DIM, "speed": -0.13, "phase": 4.4},
-	{"pos": Vector2(1470, -180), "sides": 7, "radius": 14.0, "color": MathArt.WHITE, "speed": 0.19, "phase": 5.2},
+	{"pos": Vector2(210, -240), "sides": 3, "radius": 20.0, "color": MathArt.CELL, "speed": 0.20, "phase": 0.4},
+	{"pos": Vector2(560, -290), "sides": 6, "radius": 15.0, "color": MathArt.ACCENT, "speed": -0.15, "phase": 1.8},
+	{"pos": Vector2(930, -225), "sides": 4, "radius": 18.0, "color": MathArt.CELL, "speed": 0.17, "phase": 3.1},
+	{"pos": Vector2(1260, -280), "sides": 5, "radius": 17.0, "color": MathArt.TACTICS, "speed": -0.13, "phase": 4.4},
+	{"pos": Vector2(1470, -180), "sides": 7, "radius": 14.0, "color": MathArt.ACCENT, "speed": 0.19, "phase": 5.2},
 ]
 
 

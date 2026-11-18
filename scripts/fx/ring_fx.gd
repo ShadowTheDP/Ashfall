@@ -2,7 +2,7 @@ class_name RingFx
 extends Node2D
 ## Expanding pixel ring / shockwave outline.
 
-var tint := MathArt.WHITE
+var tint := MathArt.PICKUP
 var radius := 60.0
 var _t := 0.0
 var _life := 0.34
@@ -30,9 +30,9 @@ func _draw() -> void:
 	var alpha := 1.0 - k
 	if _sides > 2:
 		MathArt.px_poly(self, MathArt.ngon(_sides, current, k * 1.2),
-			Color(0, 0, 0, 0), Color(tint, alpha * 0.55), 1.0)
+			Color.TRANSPARENT, Color(tint, alpha * 0.55), 1.0)
 		MathArt.px_poly(self, MathArt.ngon(_sides, current * MathArt.INV_PHI, -k * 1.2),
-			Color(0, 0, 0, 0), Color(tint, alpha * 0.30), 1.0)
+			Color.TRANSPARENT, Color(tint, alpha * 0.30), 1.0)
 	MathArt.px_ring(self, Vector2.ZERO, current, Color(tint, alpha * 0.8), 2.0)
 	MathArt.px_ring(self, Vector2.ZERO, current * MathArt.INV_PHI, Color(tint, alpha * 0.35), 1.0)
 	for i in 8:

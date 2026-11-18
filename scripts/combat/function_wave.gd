@@ -8,9 +8,10 @@ var damage := 8.0
 var crit_mult := 1.5
 ## Colour-scaling level, set by the player before setup().
 var attr := 0
+var status_id := ""
 var direction := 1
 var speed := 540.0
-var tint := MathArt.WHITE
+var tint := MathArt.TACTICS
 var _t := 0.0
 var _life := 0.42
 var _hit: Array[Node] = []
@@ -40,7 +41,7 @@ func _ready() -> void:
 	shape.shape = rect
 	add_child(shape)
 	body_entered.connect(_on_body_entered)
-	Combat.burst(global_position, MathArt.WHITE, 6, 120.0)
+	Combat.burst(global_position, 6)
 
 
 func _physics_process(delta: float) -> void:
@@ -56,7 +57,7 @@ func _on_body_entered(body: Node) -> void:
 	if body == source:
 		return
 	if not body.has_method("take_hit"):
-		Combat.burst(global_position, tint, 5, 120.0)
+		Combat.burst(global_position, 5)
 		queue_free()
 		return
 	if _hit.has(body):
@@ -68,12 +69,14 @@ func _on_body_entered(body: Node) -> void:
 	body.take_hit({
 		"damage": Damage.compute(damage, attr, crit, crit_mult),
 		"crit": crit,
+		"status": status_id,
+		"status_attr": attr,
 		"knockback": 240.0,
 		"hitstop": 0.03,
 		"source_pos": global_position,
 		"point": body.global_position,
 	})
-	Combat.spark(body.global_position + Vector2(0, -16), Vector2(float(direction), 0), crit, tint)
+	Combat.spark(body.global_position + Vector2(0, -16), Vector2(float(direction), 0), crit, MathArt.FIRE)
 
 
 func _draw() -> void:
@@ -84,8 +87,8 @@ func _draw() -> void:
 		var x := roundf(lerpf(-40.0, 40.0, k))
 		var y := roundf(sin(k * TAU * 1.7 + _t * 26.0) * 10.0)
 		var height := roundf(lerpf(1.0, 5.0, sin(k * PI)) * fade) + 1.0
-		# Two-tone column: cyan body, white crest.
+		# Two-tone column: violet body, cyan crest.
 		MathArt.px_rect(self, Rect2(x, y - height, 1, height * 2.0), Color(tint, 0.55 * fade))
-		MathArt.px_rect(self, Rect2(x, y - 1, 1, 2), Color(MathArt.WHITE, 0.75 * fade))
+		MathArt.px_rect(self, Rect2(x, y - 1, 1, 2), Color(MathArt.PICKUP, 0.75 * fade))
 		if i % 6 == 0:
 			MathArt.px_rect(self, Rect2(x, y - height - 2, 1, 2), Color(tint, 0.45 * fade))

@@ -10,11 +10,12 @@ uniform float intensity : hint_range(0.0, 2.0) = 0.55;
 
 vec3 bright(vec2 uv) {
 	vec3 c = texture(screen_texture, uv).rgb;
-	return max(c - vec3(threshold), vec3(0.0));
+	float peak = max(c.r, max(c.g, c.b));
+	return c * (max(peak - threshold, 0.0) / max(peak, 0.0001));
 }
 
 void fragment() {
-	vec2 px = TEXTURE_PIXEL_SIZE * 2.0;
+	vec2 px = SCREEN_PIXEL_SIZE * 2.0;
 	vec3 sum = vec3(0.0);
 	sum += bright(SCREEN_UV + vec2(-1.0,  0.0) * px) * 0.14;
 	sum += bright(SCREEN_UV + vec2( 1.0,  0.0) * px) * 0.14;

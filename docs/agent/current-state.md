@@ -1,248 +1,159 @@
 # Current State
 
-## Current Objective
+Updated 2026-11-18. This is the single current status and remaining-work owner.
+Product outcomes are in [GOALS](../GOALS.md); visual rules and rationale are in
+[ui-system](../design/ui-system.md); governance and read order are in
+[AGENTS](../../AGENTS.md); the sole UI execution plan is
+[ASHFALL_UI_IMPROVE_PLAN](../../ASHFALL_UI_IMPROVE_PLAN.md).
 
-**Playtest the generated floors.** The map is now a hybrid: `data/rooms.json`
-holds 18 hand-authored room templates, `data/floors.json` carries a per-floor
-`beats` role sequence (8-11 rooms per floor), and the generator only chooses,
-connects and verifies. Reachability is proven (600-layout sweep, `gen_stats`,
-`audit_v1`); what is NOT judged is whether the templates are *fun*, whether the
-annex is worth the climb, and whether 8-11 rooms is the right density.
+## Scope
 
-The next agent should: run `tests/map_capture.tscn` (needs a display), look at
-`output/screenshots/map/`, and tune `data/rooms.json` / `beats` rather than the
-generator. Contract: `docs/design/map-generation.md`.
+Delivery A targets the lawful nine-visit, three-Boss 0 BSC primary route and the
+same-Profile Cistern alternative, with the completed UI maturity work. The
+approved full UI improvement plan: steps 1–4 (bilingual text layer, shared input
+layer, settings/preferences, combat HUD and pause build summary) are
+engineering- and bounded-visual complete, with human review pending; steps 5–8
+are not started. 本輪完成第 4 步即停止，未啟動 5–8；日後使用者要求接續時，沿用已核准計畫從第 5 步開始。 Expanded world content, BSC 1–5 gameplay, new
+mechanics, rebalance, DLC and online work are not authorized. BSC1 being
+unlocked is not BSC1 gameplay.
 
-## Open items (not bugs)
+## Current status
 
-| Item | Why it is open |
-|---|---|
-| Template fun / density | needs a human, not a probe |
-| Beat sheet is still 1-D | a forking beat is the next structural step |
-| Annex has no enemies | deliberate: a body up there makes an optional detour mandatory until a killability filter exists |
-| Souls runway (10 total) | economy design, second boss not built |
-| Export preset | no Godot export templates installed (~1.28 GB) |
+- **UI plan steps 1–3 (2026-11-17): implemented; engineering PASS; human and
+  controller review pending.** Step 1 pins Noto Sans CJK TC Regular as the only
+  external asset, loads it solely through `MathArt.ui_font()`, uses native
+  `TextParagraph` wrapping and ships `data/localization/ui.csv` through Godot's
+  native CSV importer (`zh_TW` default, `en` fallback). Step 2 moves all gameplay
+  bindings into `project.godot`'s native InputMap and migrates raw-key UI owners
+  to the `Interface` autoload; `jump_explicit` keeps a rebound jump usable while
+  climbing. Step 3 adds `SettingsScreen` (layer 62), the title's five actions and
+  the pause action row, plus separate `user://ashfall_settings.cfg`
+  preferences owned by `Profile` (`VERSION=6` and `run_checkpoint` untouched).
+  Step-3 evidence: settings 93 checks, `step3-evidence.json` over 170 source
+  files, 47 fresh capture frames and native-window probe `S3_NATIVE_OK`; live
+  Profile hashes were unchanged. No physical controller, human navigation or
+  motion-sequence claim is made.
+- **UI plan step 4 (combat HUD and pause build summary, 2026-11-18):
+  implemented; engineering and bounded-visual PASS; human/hardware pending.**
+  `GearPresentation.describe()` is the single read-only presentation projection:
+  exactly `name`／`playstyle`／`condition`／`headline` plus `details`, ten items,
+  with no UID, wallet, charge, HP or Profile mutation. The formal combat
+  survival cluster uses flask `Rect2(16,362,42,56)`, slot x
+  `[66,124,190,248]`, charm `Rect2(314,362,36,56)`, axes baseline y434 and HP
+  `Rect2(16,440,334,24)`. The minimap is `Rect2(588,346,164,84)` and the
+  wallet/timer is `Rect2(554,432,198,32)` so two 11px lines at the measured
+  16px line height fit without shrinking. Pause status／axes／Mutation use the
+  same actual 16px pitch at baselines 334／350／366 (axis icons 344, labels
+  350); the Mutation descender ends near 370, below the action row at y376.
+  Full-page modals hide the combat HUD/announce layer; pause reads the
+  presenter directly and its detail tail stays readable. Fresh captures show
+  long `PgDn` unclipped with the timer below at 0.6, and short `LT`／`Y` at
+  0.1／0.6 inside the cards. In 56px HUD space, the finite standard keycap
+  labels `PgUp`／`PgDn`／`Bksp` preserve full 11px key identity without
+  clipping or shrinking; other keys keep the OS fallback, and no separate
+  formatter framework, binding change, InputMap change or Interface API change
+  was introduced.
 
-## What Exists
+  Actual evidence: `output/ui-product/step4-evidence.json` covers 171 source
+  files at SHA-256
+  `fd4e3729bfce46f6b6114775227a3f1320035e95fc749f89adfbcb6218343752`.
+  The narrow run exited 0 with settings 93 checks and product 392 checks in
+  36.94 s; product capture passed 409 checks in 35.25 s with 64 PNGs (62 native
+  768×480 plus 2 text-only 520×96); HUD capture passed 162 checks in 7.16 s
+  with 21 PNGs; the measured long `PgUp` label width is 28 px and the timer
+  sits below it. The L3 288-check result and `step4_narrow5` evidence were
+  reused with the presenter source unchanged; the 6.76 s native import was also
+  reused. Final frames are under `output/ui-product/step4/`; `step4-pre-timer-fix/` and
+  `step4-pre-keylabel/` are retained failed visual history and do not override
+  the accepted result. `data/localization/ui.csv` is unchanged at 798 rows and
+  frozen SHA-256
+  `e75a0594cfa4fe7f2b2642bb00c46f06c7a44b5e04cb3e18c648e7cfc8675bd7`
+  (197 canonical non-UI English rows, 0 duplicate keys, 0 bad columns, 0
+  named-placeholder mismatches). This is software evidence only: physical
+  controller/disconnect, human comprehension/art, motion frames, full-surface
+  HUD/pause/compare/settings resize and Windows export remain pending.
+- **Resizable window (2026-11-17): implemented and real-window validated
+  (title content only).** `project.godot` sets `window/size/resizable=true`,
+  `stretch/aspect=keep` and `scale_mode=fractional`; 1536×960 is only the
+  initial size and the logical viewport stays 768×480. Real OS resizes at
+  1152×720, 1280×720 with side bars, and maximize/restore passed; project and
+  live Profile hashes were unchanged. Evidence:
+  [validation](../../output/window-resize-2026-11-17/validation.md). HUD/pause
+  scaling and manual feel remain unverified.
+- **UI maturity (§§1–9): implemented and focused-engineering verified; human
+  art/comprehension still pending.** Shared surfaces, HUD/pause grouping,
+  Scroll and comparison, screen-space shop tip, Collector true-unlock card,
+  full-width Mutation, title main/saves split, map browse/travel split, 11px hub
+  labels and the formal-route one-way cue are in source and covered by the
+  step-1–4 evidence above.
+- **Project cleanup (2026-11-18):** removed the duplicate Chinese-name
+  UI plan, the root handover/changelog compatibility pointers, `docs/history/`
+  and obsolete research/session snapshots. The canonical plan now carries a
+  dated pre-implementation baseline and defers actual status here. In the same
+  freeze, retired five-floor probes and their archive were deleted (not kept as
+  a second coverage authority), the unused
+  `tests/fixtures/generation_legacy_transition_v1.json` was removed with bytes
+  preserved under `output/`, and retired-path references were corrected in
+  README, AGENTS, PRODUCT, save design and this file. No runtime, gameplay,
+  save-policy or output evidence was changed. Environment checks on the frozen
+  tree passed: Python runner 20 tests, profile-path 36 tests with live
+  profiles/settings unchanged, Pi director probes 86/6/45, Godot `--fast` exit 0
+  with all 13 groups passed in 160.40 s (4 seeds), and focused settings 93 /
+  product 392 exit 0 in 40.71 s. An aggregate of 302 files (project.godot plus
+  scripts/shaders/data/scenes/tests) kept SHA-256
+  `3098c4d7b60e2238a1ef61c79ff0bff71a45eebb32ed3c57dedefdf3c22e2f59`
+  unchanged before/after, and live profiles/preferences were unchanged. Main's
+  final local link scan covered 26 documents / 120 links with 0 broken.
+  Detailed logs and manifests:
+  [RESULT.md](../../output/project-cleanup-2026-11-18/RESULT.md). Human/hardware
+  and known-warning limitations below are unchanged.
+- **Check policy:** the default runner is 13 latest-only checks; extras are
+  `--only` opt-ins, and retired-path probes are deleted rather than archived.
+  `--fast` uses four seeds, not 32. Per-step limits are owned by
+  `python tools/check.py --list`.
 
-- **Title screen** (`TitleScreen`): rose window + Lissajous + phyllotaxis +
-  log spiral; pauses the tree, ENTER starts the run.
-- **Player**: run/air/roll/attack/hurt/dead state machine, 3-hit sine sword,
-  input buffering, cancel windows, coyote time, jump buffer, variable jump
-  height, roll i-frames, post-hit invulnerability, landing squash.
-- **Weapons as functions**:
-  - `J` Sine Edge — 3-hit combo; the blade is a straight line driven by an
-    angle function, and the finisher releases `FunctionWave` (a travelling
-    sine wave drawn as 1px columns, piercing).
-  - `K` Kunai — `MathArt.ballistic_velocity()` solves `v0` for the nearest
-    enemy, `ParabolaFx` previews the arc, `Projectile` integrates gravity.
-  - `L` Aegis — three concentric pixel rings + six orbiting dots; blocks a hit
-    and fires a close-range counter pulse.
-- **Perfect Dodge**: rolling through an attack grants 2.5 s of +25% damage and
-  refunds one kunai; tracked and shown in the run summary.
-- **Enemies** (shape language): Husk (triangle), Watcher (circle + orbit,
-  ballistic arrows with real path preview), Ram (square charge), Bulwark
-  (hexagon, front hits chip 1 hp unless crit/backstab), **The Warden**
-  (pentagon + pentagram boss with cleave / charge / shockwave).
-- **Boons**: 7 keyboard-picked upgrades between waves (`data/rewards.json`),
-  applied in `Game.apply_reward()`.
-- **Loop**: 4 waves (3 normal + boss), between-wave heal, cell drops with
-  magnet, death/victory overlays, R to restart.
-- **HUD**: health, cells, kunai charges, Aegis cooldown, wave, boss bar,
-  combo ring, Perfect Dodge / EDGE timer, build summary.
-- **Visual system**: `MathArt` pixel primitives everywhere (`px_rect`,
-  `px_circle`, `px_ring`, `px_arc`, `px_line`, `px_poly`); no anti-aliased
-  drawing is reachable. Dithered vignette, tight nearest-filtered bloom.
-- **Rendering pipeline**: 768x480 logical, x2 integer upscale, linear filter,
-  120 Hz physics + interpolation, float camera in `_physics_process`, no
-  rounding anywhere in gameplay transforms.
-- **Monochrome**: one greyscale ramp in `MathArt`; no hue anywhere.
-- **Player is a plain square**: white body, black inset face, white core dot,
-  2px keyline. No notch, no pip, no eyes (removed after playtest feedback).
-  Tumble completes in 0.42 s; short hops settle in 70 ms.
-- **Weapon geometry is unified**: grip on the front edge, blade length from
-  `data/weapons.json`, hitbox derived from the same number, slash arc centred
-  on the grip.
-- **Impact is tiered**: `Combat.impact()` with hitstop 2/4/6/8 frames, tiered
-  spark/ring tables, zoom punch, vignette pulse and 2-frame scanline offset.
-  Spec: `docs/design/impact.md`.
-- **No limbs**: enemies are plain polygons; hands are dots.
-- **Particles**: `scripts/systems/juice.gd` wraps `CPUParticles2D` with nine
-  presets (dust, land_dust, jump_burst, hit_sparks, shatter, pickup, block,
-  dodge, telegraph).
-- **Combat animation**: anticipation coil + body squash, one solid smear wedge
-  (two on the finisher), 2-frame white impact silhouette on enemies, 10-14 deg
-  overshoot with a 55/30/15 ease-out, 1-frame secondary lag on tip and body.
-- **Defensive feedback**: `BurstFx` covers perfect dodge (8 rays, 3 frames +
-  2-frame freeze), Aegis block (solid sector then expanding ring) and taking a
-  hit (4 red rays at the contact edge).
-- **Audio**: 18 synthesized SFX + a 32 s mathematically seamless music loop.
+## Remaining work
 
-## Current Decisions
+1. **UI plan steps 5–8 (not started):** 本輪完成第 4 步即停止，未啟動 5–8；日後使用者要求接續時，沿用已核准計畫從第 5 步開始。 Step 5 begins with the
+   build comparison/shop work: retire `BuildScreen.item_details` and
+   `_gear_lines`, and migrate the legacy L3 assertions to the presenter
+   semantics. Steps 5–8 must not be described as implemented now. Steps 1–4 are
+   engineering- and bounded-visual complete, with human/hardware review still
+   pending.
+2. **真人雙路線驗收:** one lawful nine-visit primary victory followed by the
+   lawful same-Profile Cistern victory, with short readability, difficulty and
+   rhythm feedback. Use [delivery-a-human-check](delivery-a-human-check.md);
+   automated play and screenshots cannot sign it.
+3. **Human UI review:** unprompted comprehension of skill readiness, replacement
+   and wallet, Scroll effects, run-scoped versus permanent Passage results,
+   modal cancellation and the save boundary. Aesthetic satisfaction is separate.
+4. **Generated-content dual-route evidence:** complete ordinary-input evidence
+   for the current generation revision; do not treat an earlier slice as proof.
+5. **Known limits:** Camera2D / audio shutdown / GLES3 MSAA / MbedTLS warnings
+   remain; physical controller including disconnect, human art/comprehension,
+   motion-frame evidence, full-surface HUD/pause/compare/settings resize and
+   Windows export are unverified. The retired five-floor `terrain_regression_probe`
+   seam gap was not replaced; `LevelGen` remains a legacy fallback. The exact
+   runtime proof is software only and makes no hardware claim.
 
-- Art must go through `MathArt`; no textures, no `Sprite2D`. Style comes from
-  constraint, not from more elements.
-- Monochrome is a hard rule; readability is engineered through value contrast,
-  keyline weight and motion.
-- Motion fluidity beats pixel snapping: no rounding of gameplay transforms.
-- HUD text sizes 8-38, laid out on a proportional grid at 768x480.
-- Weapons and enemy telegraphs express their actual math (ballistic preview,
-  sine wave, radial field).
-- Keyboard-only is a hard requirement; gamepad is additive.
-- Feel-first order, then breadth: the fight loop was tuned before the map
-  layer, and the map layer before content breadth. Both are now in.
-- Actor scenes are root-only; children are built in code.
-- Damage formula lives only in `Damage`; crits require an exposed enemy or a
-  backstab.
-- HUD renders above bloom so text stays crisp.
-- Boss is immune to stun-lock (`boss` flag).
-- Tests run as scenes when they need autoloads; `--script` has no autoloads.
+## Evidence
 
-## Structure Assumptions
+- Step 4 final manifest and accepted frames:
+  [step4-evidence.json](../../output/ui-product/step4-evidence.json) and
+  `output/ui-product/step4/`; `step4-pre-timer-fix/` and
+  `step4-pre-keylabel/` remain explicit failed visual history.
+- Step 3 manifest and captures: `output/ui-product/step3-evidence.json`,
+  `output/ui-product/settings-window/manifest.json`.
+- Step 1–2 product captures and headless probe evidence: `output/ui-product/`
+  (mutable review output; the dated runs above are the record).
+- Historical UI-maturity review index (user view, not status authority):
+  [review-index.html](../../output/ui-maturity-2026-11-16/review-index.html).
+- Window validation: [validation.md](../../output/window-resize-2026-11-17/validation.md).
 
-- `scripts/autoload/` = cross-scene services.
-- `scripts/systems/` = pure logic, constants, and the `MathArt` visual language.
-- `scripts/player|enemies|world|ui|fx|combat/` = feature code.
-- `data/` = content: numbers (`weapons/enemies/rewards/characters/armor/
-  upgrades/skill_nodes`), floor shape (`floors.json` incl. `beats`), and
-  authored room interiors (`rooms.json`).
-- `tests/` = headless checks and capture harnesses.
-- `output/` = screenshots/builds (ignored).
+## Invariants
 
-## Next Likely Improvements
-
-1. **Playtest the room templates** (`tests/map_capture.tscn`), then tune
-   `data/rooms.json` and `beats`. This is the top item; everything else waits
-   on the answer.
-2. **A forking beat.** `beats` is a 1-D sequence; a beat that splits and
-   rejoins is the next structural step toward a real concept graph.
-3. **Annex enemies**, behind a spawn filter that proves they stay killable.
-4. Real playtest tuning pass on impact: is a light hit distinct enough from a
-   finisher (the four tier signatures are now in), is the zoom punch too
-   strong, do the scanlines read as damage rather than a glitch.
-5. Give souls a longer runway (10 exist today) and add a second boss.
-6. Export presets and a Windows build once templates are installed.
-
-## Latest
-
-- `docs/PRODUCT.md` written: full business overview (product definition,
-  runtime graph, module ownership table, game loop, all combat/enemy numbers,
-  data flow, audio, validation matrix, hard rules, known limits, milestones).
-- Blade geometry: one tapered quad instead of two parallel lines (the L-shape).
-- Smear: three concentric thin arcs with a **0.32 rad gap before the blade**.
-  The gap is load-bearing - if the trail touches the tip, blade + trail read
-  as an L again. Do not reduce it below 0.28.
-- Warden pentagram is now inscribed on the body's own five vertices
-  (`ngon(5, r*1.15, -PI*0.5, Vector2(0,1))`, chord i -> i+2) and drawn
-  **after** the body fill, otherwise the fill hides it. Crown ticks removed.
-- Shadows (player + enemies) are three stacked 20-gons, cumulative centre
-  density ~0.30, no hard rectangle anywhere.
-
-## Session end (maps, impact, hub)
-
-All work committed. **Read `HANDOVER.md` at the repo root before anything
-else.**
-
-State: `tools/check.ps1` green (17 steps). Floors are now large two-tier
-spaces (5600-8200 px, 5-7 rooms, 29-42 surfaces each), the hub is a layered
-room rather than a platform, and combat feedback has a heavier top end.
-
-This session:
-
-1. **Fixed R inside a floor.** `Hud._restart()` called
-   `reload_current_scene()`, which rebuilt Main -> title -> hub, and because
-   `Game.start_floor()` advances `Profile.best_floor` on ENTRY, the door then
-   offered the next floor: a retry banked progression and skipped a floor.
-   `Main.restart_attempt()` now replays the chosen floor through
-   `Game.reset_run()` (Game-only state; Profile untouched), frees the previous
-   body, purges stale projectiles and cancels the pending transition.
-   Regression: `tests/restart_probe.tscn` (paused retry and dead retry).
-2. **Map macro layer** (`level_gen.gd`): `_link_gallery` bridges gaps at the
-   height of each room's own upper deck, `_stack_ladders` adds climbable rungs
-   where a pillar is not, `_caches` puts cell caches on high decks. All three
-   are gated by the same `_reach()` predicate the BFS uses, plus a new
-   `_headroom()` guard (a generated surface may not become a ceiling over
-   another at < 72 px) and a `_inside_any()` spawn filter. Witness:
-   `tests/gen_stats.tscn` (100 layouts).
-3. **Pillar placement** now leaves a 46 px slot on the approach side, flush
-   against the next room: it used to leave a 23 px crack a 28 px body could
-   not enter, which was a real softlock (audit_a3's walk cases caught it).
-4. **Spawn clearance** aligned with the audits' FALLBACK_BOX (`SPAWN_HALF_MIN`
-   25). Generation used the room's own tallest body (21 for grunts) while the
-   audits check 25, so a point 24 px under a deck passed generation and failed
-   the audit.
-5. **Impact** (`impact_fx.gd`, `combat.gd`, `enemy_visual.gd`, `juice.gd`):
-   per-tier shape language, crit halo, kill implosion, directional block
-   shell, boss telegraphs. Eight new `Juice` presets (ember_drift,
-   shaft_motes, debris_poly, kill_implosion, speed_lines, block_shell,
-   boss_slam).
-6. **Hub** (`hub.gd`): far vault + arches, light shaft with motes, hanging
-   chains and censers, rose wheel, floor inlay, a real foreground colonnade,
-   and brighter stations.
-7. **Panels** (`hub_ui.gd`, `skill_tree.gd`, `archive_screen.gd`) and the
-   **HUD** (`hud.gd`) rebuilt on a φ grid with plates, segmented health,
-   tally-based floor progress and timer arcs.
-8. **Cell caches** are pickups that rest in place (`CellPickup.resting`).
-
-Immediate follow-ups:
-1. Playtest the new maps: is the upper route legible, are the caches worth the
-   detour, does the room-by-room boon cadence still feel right at 5-7 rooms?
-2. The far plane of a floor is still dark; the level ambience pass ran out of
-   time there.
-3. Combo / EDGE / boss HUD plates are verified statically only - the capture
-   harness never has a combo or a boss in frame.
-
-## Session (map templates, feedback tiers, flow bugs)
-
-State: `tools/check.ps1` green (17 steps, ~470 s; ~100 s with `-Fast`). The
-generator no longer invents room interiors: `data/rooms.json` holds 18
-hand-authored templates, `data/floors.json` carries a per-floor `beats` role
-sequence and 8-11 rooms per floor, and each floor grows 1-2 **annex** chambers
-above its own top deck holding the biggest cache (and deliberately no enemies).
-Every generated surface obeys two invariants, both checked by `gen_stats` and
-`climb_probe`: one jump between the surface and the surface it is climbed from,
-and 72 px between overlapping surface tops. `tests/map_capture.tscn` renders a
-whole-floor overview plus one shot per room for all five floors.
-
-Feedback: being hit now scales its freeze/shake with damage; a kill pops at the
-tier that landed it; combo milestones announce; the hurt spark is at the contact
-edge instead of the player's centre. Flow: the hub door picker moved to Q/E
-(A/D also move the body), the hub refreshes the body after any purchase, the HUD
-shows the right wallet per scene, and a floor-clear overlay counts down to the hub.
-
-Read `docs/design/map-generation.md` before touching the generator.
-
-## Session (bug hunt on combat + generator, art readability)
-
-State: `tools/check.ps1` green (17 steps, 424 s). Two independent static
-reviews of the combat / enemy / generator code were read and every provable
-finding fixed. New probes: `tests/boss_probe.tscn` (the Warden's slam lands on
-four floor-5 seeds) and `tests/climb_probe.tscn` (grunt / charger / bulwark
-close a 162 px gap to a high deck).
-
-The one that matters: **the final boss could not damage the player on any real
-floor.** `projectile.gd setup_wave()` ended with an absolute `position.y =
--16.0` that overwrote the caller's y, so both shockwaves - the slam's only
-damage source - spawned 10..106 px above the player's head on every generated
-floor. The arena fixture puts its ground at y = 0, which is the one place -16
-is correct, so `soak` passed. Lesson: a fixture that agrees with a hardcoded
-coordinate hides every bug in that coordinate.
-
-Also fixed: finisher waves flew through pillars; the climb and anti-stuck hops
-were gated on a state that untouched bodies never enter (dead code); four of
-six enemy kinds could not follow the player onto the gallery; the Ram
-telegraphed from beyond its own reach; the finisher wave had a hardcoded
-damage; `level_gen` computed a reachability verdict nobody read (a dead floor
-could ship); `_take_point`'s cramped fallback spawned the enemy on top of the
-player; a spitter glob followed the player into the hub; J on a second station
-froze the body; every hub visit leaked two CanvasLayers.
-
-Art: enemies are PALE with an INK core (their old fill was the floor's own
-value, so they dissolved on stone); the slash trail is thick enough to see;
-the floor's far wall reaches the walkable line and carries a value gradient,
-masonry and real niches; chains end inside the frame instead of above it; the
-hub foreground colonnade sits in the gaps between stations.
-
-Next:
-1. Playtest the boss on floor 5 for real - it is still only probe-covered.
-2. The combo / EDGE / boss HUD plates are still verified statically only.
+`Profile` is the sole persistent save writer; `RunBuild` owns run gear/UIDs,
+charges, axes and wallet. Biome entries resume at the entrance; Passage resumes
+committed service/build/claim state. All art uses `MathArt`; the player keeps
+its dark inset and one bright core. Keyboard access is mandatory. Tests use
+isolated Profiles and preserve the inherited dirty tree and live saves.

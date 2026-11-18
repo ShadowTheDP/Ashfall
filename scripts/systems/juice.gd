@@ -22,7 +22,7 @@ static func square_texture() -> Texture2D:
 		for x in size:
 			var edge := minf(minf(float(x) + 0.5, float(size) - float(x) - 0.5), minf(float(y) + 0.5, float(size) - float(y) - 0.5))
 			var alpha := clampf(edge / 1.5, 0.0, 1.0)
-			image.set_pixel(x, y, Color(1, 1, 1, alpha))
+			image.set_pixel(x, y, Color(MathArt.WHITE, alpha))
 	_tex = ImageTexture.create_from_image(image)
 	return _tex
 
@@ -44,7 +44,7 @@ static func make(count: int, lifetime: float, tint: Color) -> CPUParticles2D:
 	return p
 
 
-static func _finish(p: CPUParticles2D, duration: float) -> CPUParticles2D:
+static func _finish(p: CPUParticles2D) -> CPUParticles2D:
 	# The node frees itself once the last particle has died.
 	p.finished.connect(p.queue_free)
 	p.emitting = true
@@ -57,7 +57,7 @@ static func fade_ramp() -> Gradient:
 		return _fade
 	_fade = Gradient.new()
 	_fade.offsets = PackedFloat32Array([0.0, 0.55, 1.0])
-	_fade.colors = PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 0.9), Color(1, 1, 1, 0)])
+	_fade.colors = PackedColorArray([MathArt.WHITE, Color(MathArt.WHITE, 0.9), Color(MathArt.WHITE, 0)])
 	return _fade
 
 
@@ -75,7 +75,7 @@ static func dust(host: Node, at: Vector2, direction: float, strength: float = 1.
 	p.damping_max = 120.0
 	p.scale_amount_min = 0.35
 	p.scale_amount_max = 0.9
-	host.add_child(_finish(p, 0.24))
+	host.add_child(_finish(p))
 
 
 static func land_dust(host: Node, at: Vector2, strength: float = 1.0) -> void:
@@ -90,7 +90,7 @@ static func land_dust(host: Node, at: Vector2, strength: float = 1.0) -> void:
 	p.damping_max = 200.0
 	p.scale_amount_min = 0.5
 	p.scale_amount_max = 1.6
-	host.add_child(_finish(p, 0.3))
+	host.add_child(_finish(p))
 
 
 static func jump_burst(host: Node, at: Vector2) -> void:
@@ -103,11 +103,11 @@ static func jump_burst(host: Node, at: Vector2) -> void:
 	p.gravity = Vector2(0, 380)
 	p.scale_amount_min = 0.35
 	p.scale_amount_max = 1.0
-	host.add_child(_finish(p, 0.22))
+	host.add_child(_finish(p))
 
 
 static func hit_sparks(host: Node, at: Vector2, direction: Vector2, strength: float = 1.0) -> void:
-	var p := make(int(round(8.0 * strength)) + 2, 0.16, MathArt.WHITE)
+	var p := make(int(round(8.0 * strength)) + 2, 0.16, MathArt.FIRE)
 	p.position = at
 	p.direction = direction.normalized()
 	p.spread = 42.0
@@ -118,7 +118,7 @@ static func hit_sparks(host: Node, at: Vector2, direction: Vector2, strength: fl
 	p.damping_max = 260.0
 	p.scale_amount_min = 0.25
 	p.scale_amount_max = 0.8
-	host.add_child(_finish(p, 0.16))
+	host.add_child(_finish(p))
 
 
 static func shatter(host: Node, at: Vector2, tint: Color, count: int = 14) -> void:
@@ -135,11 +135,11 @@ static func shatter(host: Node, at: Vector2, tint: Color, count: int = 14) -> vo
 	p.scale_amount_max = 1.8
 	p.angular_velocity_min = -540.0
 	p.angular_velocity_max = 540.0
-	host.add_child(_finish(p, 0.5))
+	host.add_child(_finish(p))
 
 
-static func pickup(host: Node, at: Vector2) -> void:
-	var p := make(6, 0.26, MathArt.WHITE)
+static func pickup(host: Node, at: Vector2, tint: Color = MathArt.PICKUP) -> void:
+	var p := make(6, 0.26, tint)
 	p.position = at
 	p.direction = Vector2(0, -1)
 	p.spread = 60.0
@@ -148,11 +148,11 @@ static func pickup(host: Node, at: Vector2) -> void:
 	p.gravity = Vector2(0, -90)
 	p.scale_amount_min = 0.3
 	p.scale_amount_max = 0.8
-	host.add_child(_finish(p, 0.26))
+	host.add_child(_finish(p))
 
 
 static func block(host: Node, at: Vector2, facing: int) -> void:
-	var p := make(9, 0.24, MathArt.WHITE)
+	var p := make(9, 0.24, MathArt.FIRE)
 	p.position = at
 	p.direction = Vector2(float(facing), 0)
 	p.spread = 70.0
@@ -163,11 +163,11 @@ static func block(host: Node, at: Vector2, facing: int) -> void:
 	p.damping_max = 300.0
 	p.scale_amount_min = 0.3
 	p.scale_amount_max = 1.0
-	host.add_child(_finish(p, 0.24))
+	host.add_child(_finish(p))
 
 
 static func dodge(host: Node, at: Vector2) -> void:
-	var p := make(10, 0.2, MathArt.WHITE)
+	var p := make(10, 0.2, MathArt.PLAYER)
 	p.position = at
 	p.direction = Vector2(0, 0)
 	p.spread = 180.0
@@ -178,7 +178,7 @@ static func dodge(host: Node, at: Vector2) -> void:
 	p.damping_max = 380.0
 	p.scale_amount_min = 0.3
 	p.scale_amount_max = 1.1
-	host.add_child(_finish(p, 0.2))
+	host.add_child(_finish(p))
 
 
 # --- Mathematical presets ----------------------------------------------------
@@ -203,7 +203,7 @@ static func _structured(host: Node, at: Vector2, points: PackedVector2Array,
 	p.radial_accel_max = accel
 	p.color_ramp = fade_ramp()
 	p.z_index = 7
-	host.add_child(_finish(p, lifetime))
+	host.add_child(_finish(p))
 	return p
 
 
@@ -219,33 +219,6 @@ static func prism_burst(host: Node, at: Vector2, tint: Color, count: int = 22,
 	p.scale_amount_max = 1.3
 	p.angular_velocity_min = -420.0
 	p.angular_velocity_max = 420.0
-	return p
-
-
-## Curling trail: initial velocity follows `direction`, orbit_velocity bends the
-## path into a log spiral. (angular_velocity only spins the quad; orbit is what
-## makes the trail curl.)
-static func spiral_wake(host: Node, at: Vector2, direction: Vector2, tint: Color) -> CPUParticles2D:
-	var dir := direction.normalized() if direction.length() > 0.01 else Vector2.UP
-	var curl := 1.0 if dir.x >= 0.0 else -1.0
-	var p := make(9, 0.42, tint)
-	p.position = at
-	p.direction = dir
-	p.spread = 14.0
-	p.initial_velocity_min = 90.0
-	p.initial_velocity_max = 190.0
-	p.gravity = Vector2.ZERO
-	p.orbit_velocity_min = -2.4 * curl
-	p.orbit_velocity_max = -1.1 * curl
-	p.tangential_accel_min = 240.0
-	p.tangential_accel_max = 430.0
-	p.angular_velocity_min = -360.0
-	p.angular_velocity_max = 360.0
-	p.scale_amount_min = 0.35
-	p.scale_amount_max = 1.0
-	p.color_ramp = fade_ramp()
-	p.z_index = 6
-	host.add_child(_finish(p, 0.42))
 	return p
 
 
@@ -269,37 +242,6 @@ static func rose_bloom(host: Node, at: Vector2, tint: Color, petals: int = 6) ->
 	return p
 
 
-## Ash: rises and wobbles. shortcut: CPUParticles2D has no per-particle path, so
-## the wobble is a Lissajous spawn footprint plus lateral acceleration; give it
-## a real curve only if ash ever has to trace an exact figure.
-static func ash_rise(host: Node, at: Vector2, tint: Color, count: int = 14) -> CPUParticles2D:
-	var points := PackedVector2Array()
-	for i in count:
-		var t := TAU * float(i) / float(maxi(count, 1))
-		points.append(MathArt.lissajous(t, 1.0, 2.0, PI * 0.5) * 7.0)
-	var p := make(count, 1.1, MathArt.with_alpha(tint, 0.55))
-	p.position = at
-	p.emission_shape = CPUParticles2D.EMISSION_SHAPE_POINTS
-	p.emission_points = points
-	p.explosiveness = 1.0
-	p.randomness = 0.0
-	p.direction = Vector2(0, -1)
-	p.spread = 16.0
-	p.initial_velocity_min = 14.0
-	p.initial_velocity_max = 34.0
-	p.gravity = Vector2(0, -18)
-	p.tangential_accel_min = -34.0
-	p.tangential_accel_max = 34.0
-	p.angular_velocity_min = -60.0
-	p.angular_velocity_max = 60.0
-	p.scale_amount_min = 0.3
-	p.scale_amount_max = 0.7
-	p.color_ramp = fade_ramp()
-	p.z_index = 6
-	host.add_child(_finish(p, 1.1))
-	return p
-
-
 ## Critical halo: 12 particles on an exact circle, identical speed, no spread.
 ## Uniformity is the whole point -- any randomness turns it back into sparks.
 static func critical_halo(host: Node, at: Vector2, tint: Color) -> CPUParticles2D:
@@ -311,8 +253,8 @@ static func critical_halo(host: Node, at: Vector2, tint: Color) -> CPUParticles2
 
 
 static func telegraph(host: Node, at: Vector2) -> void:
-	# A short inward-sucking puff so a windup reads even with no colour.
-	var p := make(5, 0.2, MathArt.with_alpha(MathArt.WHITE, 0.5))
+	# A short inward-sucking puff reinforces the hostile windup outline.
+	var p := make(5, 0.2, MathArt.with_alpha(MathArt.DANGER, 0.5))
 	p.position = at
 	p.direction = Vector2(0, 0)
 	p.spread = 180.0
@@ -321,7 +263,7 @@ static func telegraph(host: Node, at: Vector2) -> void:
 	p.gravity = Vector2.ZERO
 	p.scale_amount_min = 0.4
 	p.scale_amount_max = 1.0
-	host.add_child(_finish(p, 0.2))
+	host.add_child(_finish(p))
 
 
 # --- Ambience and weight -----------------------------------------------------
@@ -349,14 +291,14 @@ static func ember_drift(host: Node, at: Vector2, tint: Color, count: int = 10,
 	p.scale_amount_max = 0.5
 	p.color_ramp = fade_ramp()
 	p.z_index = 5
-	host.add_child(_finish(p, life))
+	host.add_child(_finish(p))
 	return p
 
 
 ## A standing column of drifting motes, i.e. a light shaft with volume. The
 ## emission box is the shaft's footprint at the floor, so the particles read as
 ## dust caught in the beam rather than as a fire.
-static func shaft_motes(host: Node, at: Vector2, half_width: float, height: float,
+static func shaft_motes(host: Node, at: Vector2, half_width: float,
 		tint: Color, count: int = 16, life: float = 3.2) -> CPUParticles2D:
 	var p := make(count, life, MathArt.with_alpha(tint, 0.30))
 	p.position = at
@@ -380,7 +322,6 @@ static func shaft_motes(host: Node, at: Vector2, half_width: float, height: floa
 	p.one_shot = false
 	p.explosiveness = 0.0
 	p.emitting = true
-	p.set_meta("shaft_height", height)
 	host.add_child(p)
 	return p
 
@@ -404,7 +345,7 @@ static func debris_poly(host: Node, at: Vector2, direction: float, tint: Color,
 	p.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
 	p.emission_rect_extents = Vector2(9.0, 2.0)
 	p.z_index = 6
-	host.add_child(_finish(p, 0.55))
+	host.add_child(_finish(p))
 	return p
 
 
@@ -427,7 +368,7 @@ static func kill_implosion(host: Node, at: Vector2, tint: Color, count: int = 14
 	p.angular_velocity_max = 300.0
 	p.color_ramp = fade_ramp()
 	p.z_index = 7
-	host.add_child(_finish(p, 0.42))
+	host.add_child(_finish(p))
 	return p
 
 
@@ -449,7 +390,7 @@ static func speed_lines(host: Node, at: Vector2, direction: Vector2, tint: Color
 	p.scale_amount_max = 0.55
 	p.color_ramp = fade_ramp()
 	p.z_index = 8
-	host.add_child(_finish(p, 0.18))
+	host.add_child(_finish(p))
 	return p
 
 

@@ -8,6 +8,10 @@ const CLIPS := [
 	"hurt", "death", "pickup", "shoot", "ui", "wave",
 	"throw", "block", "dodge", "slam", "boss", "reward",
 ]
+## The two generated buses. Each sends to Master, which stays the single
+## master gain stage; per-source volumes and pitches below are untouched.
+const MUSIC_BUS := "Music"
+const SFX_BUS := "SFX"
 
 var streams: Dictionary = {}
 var _pool: Array[AudioStreamPlayer] = []
@@ -16,17 +20,33 @@ var music: AudioStreamPlayer
 
 
 func _ready() -> void:
+	_ensure_buses()
 	for name in CLIPS:
 		var path := "res://assets/audio/%s.wav" % name
 		if ResourceLoader.exists(path):
 			streams[name] = load(path)
 	for i in 16:
 		var player := AudioStreamPlayer.new()
-		player.bus = "Master"
+		player.bus = SFX_BUS
 		player.volume_db = -8.0
 		add_child(player)
 		_pool.append(player)
+	## Interface applied the same committed dictionary in its own _ready, where
+	## the Music/SFX buses did not exist yet. Reapply now that they do, before
+	## the first music frame; this finishes before Sfx.ready, so a fixture that
+	## awaits it may pin its own locale afterwards.
+	Interface.apply_preferences(Profile.preferences)
 	_start_music()
+
+
+func _ensure_buses() -> void:
+	for bus_name in [MUSIC_BUS, SFX_BUS]:
+		var index := AudioServer.get_bus_index(bus_name)
+		if index < 0:
+			index = AudioServer.bus_count
+			AudioServer.add_bus(index)
+			AudioServer.set_bus_name(index, bus_name)
+		AudioServer.set_bus_send(index, "Master")
 
 
 func _start_music() -> void:
@@ -42,7 +62,7 @@ func _start_music() -> void:
 	music = AudioStreamPlayer.new()
 	music.stream = stream
 	music.volume_db = -19.0
-	music.bus = "Master"
+	music.bus = MUSIC_BUS
 	add_child(music)
 	music.play()
 

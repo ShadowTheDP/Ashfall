@@ -1,0 +1,8 @@
+{
+  "thinkingLevel": "inherit",
+  "defaultPlanTools": [
+    "read", "grep", "find", "ls", "tool_search",
+    "web_enable", "web_search", "source_check", "fetch_content", "get_search_content",
+    "compress", "decompress", "search_context", "acp_status", "acp_cache", "acp_read_original_image"
+  ]
+}

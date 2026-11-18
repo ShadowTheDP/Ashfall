@@ -1,14 +1,14 @@
-extends SceneTree
-## Headless data and formula tests. Autoloads are intentionally not required;
-## this script reads the same JSON files and the same Damage class the game uses.
+extends Node
+## Headless data and formula tests.
+## Scene mode loads the project autoloads required by MathArt.
 ##
-## Run: godot --headless --path . --script res://tests/run_tests.gd
+## Run: godot --headless --path . tests/run_tests.tscn
 
 var _failures := 0
 var _checks := 0
 
 
-func _initialize() -> void:
+func _ready() -> void:
 	_test_damage_formula()
 	_test_weapon_data()
 	_test_enemy_data()
@@ -21,7 +21,7 @@ func _initialize() -> void:
 		print("TESTS OK (%d checks)" % _checks)
 	else:
 		print("TESTS FAILED (%d/%d checks failed)" % [_failures, _checks])
-	quit(0 if _failures == 0 else 1)
+	get_tree().quit(0 if _failures == 0 else 1)
 
 
 func _check(condition: bool, message: String) -> void:

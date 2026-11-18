@@ -50,10 +50,11 @@ func _next_wave() -> void:
 		Game.player.heal(25.0)
 
 	if is_boss:
-		Game.announce("THE WARDEN", 2.2)
+		var warden := str((Data.enemies.get("warden", {}) as Dictionary).get("name", "The Warden"))
+		Game.announce(ContentText.name("enemy", "warden", warden).to_upper(), 2.2)
 		Sfx.play("boss", -5, 0.85)
 	else:
-		Game.announce("WAVE %d" % (wave_index + 1), 1.4)
+		Game.announce(ContentText.of("UI_WAVE_N", "Wave {number}").format({"number": wave_index + 1}), 1.4)
 		Sfx.play("wave", -11)
 
 	var ground_points: Array = Arena.GROUND_SPAWNS.duplicate()
@@ -101,11 +102,11 @@ func _on_enemy_died(enemy: Enemy) -> void:
 
 	if wave_index >= WAVES.size() - 1:
 		finished = true
-		Game.announce("FLOOR CLEARED", 2.0)
+		Game.announce(ContentText.of("UI_WORLD_FLOOR_CLEARED", "Floor cleared"), 2.0)
 		Game.end_run(true)
 		return
 
-	Game.announce("WAVE CLEARED", 1.2)
+	Game.announce(ContentText.of("UI_WORLD_WAVE_CLEARED", "Wave cleared"), 1.2)
 	if Game.auto_choose_rewards:
 		Game.grant_random_reward()
 		# Spawning bodies inside a physics signal flush is illegal; defer.

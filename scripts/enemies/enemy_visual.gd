@@ -2,7 +2,7 @@ class_name EnemyVisual
 extends Node2D
 ## Enemies are plain polygons: no legs, no arms, no faces, no eyes.
 ## A "hand" is one dot; the only interior detail is a hollow inner shape.
-## Readability comes from silhouette + motion + value, never from colour.
+## Readability comes from silhouette, motion, value and warm threat accents.
 ##
 ##   Husk    3  triangle   fast, twitchy, points at you
 ##   Ram     4  square     heavy, slow to turn, commits to a charge
@@ -54,8 +54,8 @@ func _spawn_windup_layer() -> void:
 		"slam":
 			# The shockwaves spawn at +-34 px, so the ring is drawn at 34: it is
 			# the floor about to move, and nothing outside it is promised safe.
-			Juice.boss_slam(host, floor_point, MathArt.PALE, 34.0)
-			Juice.ember_drift(host, floor_point, MathArt.MID, 12, 1.1)
+			Juice.boss_slam(host, floor_point, MathArt.DANGER, 34.0)
+			Juice.ember_drift(host, floor_point, MathArt.FIRE, 12, 1.1)
 		"charge":
 			Juice.dust(host, floor_point, -float(e.facing), 1.8)
 
@@ -146,7 +146,7 @@ func _draw_shadow(half_h: float) -> void:
 		var points := PackedVector2Array()
 		for p in MathArt.ngon(20, 1.0):
 			points.append(Vector2(p.x * rx * layer.x, p.y * ry * layer.x) + center)
-		MathArt.px_poly(self, points, Color(0.0, 0.0, 0.0, layer.y))
+		MathArt.px_poly(self, points, Color(MathArt.BLACK, layer.y))
 
 
 func _draw_ground_sigil(half_h: float) -> void:
@@ -163,14 +163,9 @@ func _draw_ground_sigil(half_h: float) -> void:
 	MathArt.px_poly(self, flat, Color(0, 0, 0, 0), Color(MathArt.MID, alpha), 1.0)
 
 
-## The enemy reads as a BRIGHT RING AROUND A DARK CORE.
-## Why not a filled body: the floor is drawn in MathArt.STONE and the hollow
-## interior of every enemy was MathArt.STONE too, so the two were the same
-## value and a grunt walking on stone lost its mass entirely - it read as a
-## faint outline on a flat plane. A light silhouette with an ink core is
-## readable against the floor (#404040), the vault (#1b1b1b) and the player.
+## Warm silhouettes and dark cores separate enemies from cool environments.
 func _body_fill() -> Color:
-	return MathArt.PALE
+	return MathArt.BOSS if bool(e.cfg.get("boss", false)) else MathArt.ENEMY
 
 
 func _draw_husk(flash: bool) -> void:
@@ -186,8 +181,8 @@ func _draw_husk(flash: bool) -> void:
 		hand = Vector2(18, 4)
 	elif e.state == Enemy.EState.WINDUP:
 		hand = Vector2(6, 2)
-	MathArt.disc(self, hand, 3.0, _c(MathArt.WHITE, flash, 0.95))
-	MathArt.line(self, Vector2(5, 1), hand, _c(MathArt.LIGHT_DIM, flash, 0.55), 1.5)
+	MathArt.disc(self, hand, 3.0, _c(MathArt.DANGER, flash, 0.95))
+	MathArt.line(self, Vector2(5, 1), hand, _c(_body_fill(), flash, 0.55), 1.5)
 
 
 func _draw_watcher(flash: bool) -> void:
@@ -200,25 +195,25 @@ func _draw_watcher(flash: bool) -> void:
 	for i in 16:
 		var theta := TAU * float(i) / 16.0
 		var point := Vector2(cos(theta) * (r + 9.0), sin(theta) * 4.5).rotated(orbit_rotation)
-		MathArt.px_rect(self, Rect2(point.x - 1.0, point.y - 2.0 - 2.0, 2.0, 2.0), _c(MathArt.MID, flash, 0.7))
+		MathArt.px_rect(self, Rect2(point.x - 1.0, point.y - 2.0 - 2.0, 2.0, 2.0), _c(_body_fill(), flash, 0.7))
 	var bead_angle := _t * 2.4
 	var bead := Vector2(cos(bead_angle) * (r + 9.0), sin(bead_angle) * 4.5).rotated(orbit_rotation)
-	MathArt.disc(self, bead + Vector2(0, -2), 2.2, _c(MathArt.WHITE, flash))
+	MathArt.disc(self, bead + Vector2(0, -2), 2.2, _c(_body_fill(), flash))
 	# No bow: the circle attacks directly. During windup a ring contracts onto
 	# the edge, which is both a telegraph and a mathematical element.
 	var pull := 0.0
 	if e.state == Enemy.EState.WINDUP:
 		pull = clampf(e.state_t / maxf(0.001, float(e.cfg.get("windup", 0.5))), 0.0, 1.0)
 		MathArt.ring(self, Vector2(0, -2), lerpf(r + 16.0, r + 2.0, pull),
-			_c(MathArt.WHITE, flash, 0.25 + 0.55 * pull), 2.0)
+			_c(MathArt.DANGER, flash, 0.25 + 0.55 * pull), 2.0)
 	# Firing point: a dot on the edge, brightest right before the shot.
 	var hand := Vector2(r, -2)
-	MathArt.disc(self, hand, lerpf(2.4, 4.2, pull), _c(MathArt.WHITE, flash))
+	MathArt.disc(self, hand, lerpf(2.4, 4.2, pull), _c(MathArt.DANGER, flash))
 	# Orbiting satellites: pure geometry, no weapon.
 	for i in 3:
 		var a := _t * 2.0 + TAU * float(i) / 3.0
 		MathArt.disc(self, Vector2(cos(a) * (r + 7.0), -2.0 + sin(a) * 7.0), 1.4,
-			_c(MathArt.PALE, flash, 0.7))
+			_c(_body_fill(), flash, 0.7))
 
 
 func _draw_ram(flash: bool) -> void:
@@ -229,9 +224,9 @@ func _draw_ram(flash: bool) -> void:
 	# Horns: two short ticks that lead the charge.
 	var horn := 8.0 if e.state == Enemy.EState.ATTACK else 5.0
 	MathArt.line(self, Vector2(-r * 0.6, -r * 0.9), Vector2(-r * 0.6 - horn * 0.4, -r * 0.9 - horn),
-		_c(MathArt.WHITE, flash, 0.9), 2.0)
+		_c(MathArt.DANGER, flash, 0.9), 2.0)
 	MathArt.line(self, Vector2(r * 0.6, -r * 0.9), Vector2(r * 0.6 + horn * 0.4, -r * 0.9 - horn),
-		_c(MathArt.WHITE, flash, 0.9), 2.0)
+		_c(MathArt.DANGER, flash, 0.9), 2.0)
 
 
 ## Seven points, slowly counter-rotating: the only body whose silhouette is
@@ -248,14 +243,14 @@ func _draw_spitter(flash: bool) -> void:
 	if e.state == Enemy.EState.WINDUP:
 		pull = clampf(e.state_t / maxf(0.001, float(e.cfg.get("windup", 0.6))), 0.0, 1.0)
 	var hand := Vector2(r * 1.05, -6).rotated(spin * 0.5)
-	MathArt.disc(self, hand, lerpf(2.6, 5.2, pull), _c(MathArt.WHITE, flash))
-	MathArt.ring(self, hand, 6.0 + 8.0 * pull, _c(MathArt.PALE, flash, 0.20 + 0.5 * pull), 1.0)
+	MathArt.disc(self, hand, lerpf(2.6, 5.2, pull), _c(MathArt.DANGER, flash))
+	MathArt.ring(self, hand, 6.0 + 8.0 * pull, _c(MathArt.DANGER, flash, 0.20 + 0.5 * pull), 1.0)
 	# Three beads on a contracting triangle: the glob's mass gathering.
 	for i in 3:
 		var a := TAU * float(i) / 3.0 + _t * 1.4
 		var radius := lerpf(r * 0.85, r * 0.35, pull)
 		MathArt.disc(self, Vector2(cos(a) * radius, -2.0 + sin(a) * radius), 1.5,
-			_c(MathArt.PALE, flash, 0.55))
+			_c(_body_fill(), flash, 0.55))
 
 
 ## Thin is the whole read: a tall narrow triangle, narrower than every other
@@ -275,8 +270,8 @@ func _draw_leaper(flash: bool) -> void:
 		coil = clampf(e.state_t / maxf(0.001, float(e.cfg.get("windup", 0.5))), 0.0, 1.0)
 	for i in 2:
 		MathArt.arc(self, Vector2(0, h * (0.55 + 0.25 * float(i))), r * (1.1 + 0.5 * float(i)) - 3.0 * coil,
-			PI * 0.15, PI * 0.85, _c(MathArt.WHITE, flash, (0.22 + 0.45 * coil) - 0.10 * float(i)), 2.0)
-	MathArt.disc(self, Vector2(0, -h * 0.62), 2.2, _c(MathArt.WHITE, flash, 0.9))
+			PI * 0.15, PI * 0.85, _c(MathArt.DANGER, flash, (0.22 + 0.45 * coil) - 0.10 * float(i)), 2.0)
+	MathArt.disc(self, Vector2(0, -h * 0.62), 2.2, _c(_body_fill(), flash, 0.9))
 
 
 func _draw_bulwark(flash: bool) -> void:
@@ -290,8 +285,8 @@ func _draw_bulwark(flash: bool) -> void:
 		var radius := 13.0 * pow(MathArt.INV_PHI, float(i))
 		var points := MathArt.ngon(6, radius, PI / 6.0 + _t * 0.10 * float(i + 1), shield_center)
 		MathArt.px_poly(self, points, Color(0, 0, 0, 0) if i > 0 else _c(MathArt.STONE_HI, flash, 0.5),
-			_c(MathArt.WHITE, flash, 0.55 - float(i) * 0.12), 1.5)
-	MathArt.line(self, shield_center + Vector2(0, -11), shield_center + Vector2(0, 11), _c(MathArt.WHITE, flash, 0.45), 1.0)
+			_c(_body_fill(), flash, 0.55 - float(i) * 0.12), 1.5)
+	MathArt.line(self, shield_center + Vector2(0, -11), shield_center + Vector2(0, 11), _c(_body_fill(), flash, 0.45), 1.0)
 
 
 ## The boss is the ONLY pseudo-3D body in the game. Everyone else stays a flat
@@ -306,13 +301,12 @@ func _draw_warden(flash: bool) -> void:
 	var pitch := 0.22
 	var projected := Geom3D.project(points, 260.0, Vector2.ZERO, pitch)
 	var depths := Geom3D.depths(points, pitch)
-	# Pre-darken: draw_solid lightens a face by up to +0.275, so a PALE base
-	# would clamp every face to the same value and the solid would go flat.
-	var tone := _c(MathArt.shade(MathArt.PALE, -0.18), flash)
+	# Pre-darken the gold base so facet highlights keep their contrast.
+	var tone := _c(MathArt.shade(_body_fill(), -0.18), flash)
 	# contrast 1.15 is nearly twice the default: five facets on a 40 px body
 	# need a wide value spread or the solid flattens into one grey mass.
 	Geom3D.draw_solid(self, projected, _warden_faces(), tone,
-		_c(MathArt.WHITE, flash), pitch, depths, 1.15)
+		_c(MathArt.BOSS, flash), pitch, depths, 1.15)
 
 	# The pentagram is inscribed on whichever cap faces the camera. Picking by
 	# depth matters: drawing it on a fixed cap puts the lines behind the solid
@@ -335,12 +329,12 @@ func _draw_warden(flash: bool) -> void:
 		angle = -1.05
 	elif e.state == Enemy.EState.ATTACK:
 		angle = 1.05
-	MathArt.disc(self, hand, 3.4, _c(MathArt.WHITE, flash))
+	MathArt.disc(self, hand, 3.4, _c(MathArt.BOSS, flash))
 	var direction := Vector2.from_angle(angle)
-	MathArt.line(self, hand, hand + direction * 32.0, _c(MathArt.WHITE, flash), 3.0)
-	MathArt.line(self, hand, hand + direction * 32.0, _c(MathArt.PALE, flash, 0.6), 1.0)
+	MathArt.line(self, hand, hand + direction * 32.0, _c(MathArt.DANGER, flash), 3.0)
+	MathArt.line(self, hand, hand + direction * 32.0, _c(MathArt.BOSS, flash, 0.6), 1.0)
 	if e.state == Enemy.EState.ATTACK:
-		MathArt.arc(self, hand, 28.0, angle - 1.5, angle, Color(MathArt.WHITE, 0.35), 3.0)
+		MathArt.arc(self, hand, 28.0, angle - 1.5, angle, Color(MathArt.DANGER, 0.35), 3.0)
 
 
 ## Pentagon column, cached: the mesh never changes, only its rotation.
@@ -371,10 +365,10 @@ func _warden_faces() -> Array:
 func _draw_telegraph(half_h: float) -> void:
 	var windup := maxf(0.001, float(e.cfg.get("windup", 0.4)))
 	var progress := clampf(e.state_t / windup, 0.0, 1.0)
-	# No colour: the telegraph is a blinking high-contrast outline.
+	# Keep the existing blinking outline and mark every hostile windup coral.
 	var blink := 0.45 + 0.55 * (0.5 + 0.5 * sin(_t * 34.0))
 	var alpha := (0.35 + 0.55 * progress) * blink
-	var tint := Color(MathArt.WHITE, alpha)
+	var tint := Color(MathArt.DANGER, alpha)
 
 	if e.kind == "warden":
 		match String(e._pending_attack):
@@ -409,7 +403,7 @@ func _draw_cleave_swipe(progress: float) -> void:
 	var radius := 30.0 + 12.0 * progress
 	var head := lerpf(-1.1, 1.1, ease(progress, 1.6))
 	MathArt.arc(self, Vector2(10, -2), radius, head - 0.5, head,
-		Color(MathArt.WHITE, 0.30 + 0.55 * progress), 2.0)
+		Color(MathArt.DANGER, 0.30 + 0.55 * progress), 2.0)
 
 
 ## The charge's own read: the floor in front of the body is dragged flat before
@@ -420,7 +414,7 @@ func _draw_charge_smudge(half_h: float, progress: float) -> void:
 	for i in 4:
 		var reach := lerpf(26.0, 104.0, progress) * (1.0 - float(i) * 0.17)
 		MathArt.px_line(self, Vector2(8.0, floor_y - 6.0 + float(i) * 2.0), Vector2(8.0 + reach, floor_y - 6.0 + float(i) * 2.0),
-			Color(MathArt.MID, 0.10 + 0.22 * progress), 1.0)
+			Color(MathArt.DANGER, 0.10 + 0.22 * progress), 1.0)
 
 
 func _draw_arrow_prediction() -> void:
@@ -436,7 +430,7 @@ func _draw_arrow_prediction() -> void:
 		var local := to_local(world)
 		local.x *= float(e.facing)
 		if i % 2 == 0:
-			MathArt.px_rect(self, Rect2(local.x - 1.0, local.y - 1.0, 2.0, 2.0), Color(MathArt.WHITE, 0.35))
+			MathArt.px_rect(self, Rect2(local.x - 1.0, local.y - 1.0, 2.0, 2.0), Color(MathArt.DANGER, 0.35))
 
 
 ## The glob's real arc plus the pool it will leave. Fair play: the ring is where
@@ -454,7 +448,7 @@ func _draw_glob_prediction(progress: float) -> void:
 		var local := to_local(world)
 		local.x *= float(e.facing)
 		if i % 2 == 0:
-			MathArt.px_rect(self, Rect2(local.x - 1.0, local.y - 1.0, 2.0, 2.0), Color(MathArt.WHITE, 0.30))
+			MathArt.px_rect(self, Rect2(local.x - 1.0, local.y - 1.0, 2.0, 2.0), Color(MathArt.DANGER, 0.30))
 	# Landing point: solve the arc against the player's feet, in world space.
 	var feet := player.global_position.y + 22.0
 	var a := 0.5 * 700.0
@@ -469,7 +463,7 @@ func _draw_glob_prediction(progress: float) -> void:
 	var ring := MathArt.star(7, radius, radius * 0.82, _t * 0.6)
 	for i in ring.size():
 		ring[i] = Vector2(ring[i].x, ring[i].y * 0.34) + centre
-	MathArt.px_poly(self, ring, Color(0, 0, 0, 0), Color(MathArt.WHITE, 0.22 + 0.35 * progress), 2.0)
+	MathArt.px_poly(self, ring, Color.TRANSPARENT, Color(MathArt.DANGER, 0.22 + 0.35 * progress), 2.0)
 
 
 ## The hop lands on the player's x, so the telegraph is a vertical guide to
@@ -481,14 +475,14 @@ func _draw_hop_prediction(progress: float) -> void:
 	if player != null:
 		var dx := (player.global_position.x - e.global_position.x) * float(e.facing)
 		var feet := player.global_position.y - e.global_position.y
-		MathArt.line(self, Vector2(dx, feet - apex), Vector2(dx, feet), Color(MathArt.WHITE, 0.16 + 0.22 * progress), 1.0)
+		MathArt.line(self, Vector2(dx, feet - apex), Vector2(dx, feet), Color(MathArt.DANGER, 0.16 + 0.22 * progress), 1.0)
 		var footprint := MathArt.ngon(12, 26.0 + 10.0 * progress, 0.0, Vector2(dx, feet))
 		for i in footprint.size():
 			footprint[i].y = feet + (footprint[i].y - feet) * 0.30
-		MathArt.px_poly(self, footprint, Color(0, 0, 0, 0), Color(MathArt.WHITE, 0.24 + 0.40 * progress), 2.0)
+		MathArt.px_poly(self, footprint, Color.TRANSPARENT, Color(MathArt.DANGER, 0.24 + 0.40 * progress), 2.0)
 	# The coil also reads as "about to leave the ground".
 	MathArt.arc(self, Vector2(0, 14), 16.0 + 10.0 * progress, PI * 0.1, PI * 0.9,
-		Color(MathArt.WHITE, 0.25 + 0.45 * progress), 2.0)
+		Color(MathArt.DANGER, 0.25 + 0.45 * progress), 2.0)
 
 
 func _draw_hit_outline(half_h: float) -> void:
@@ -507,10 +501,10 @@ func _draw_health_bar(half_h: float) -> void:
 		return
 	var width := 38.0
 	var y := -(half_h + 14.0)
-	MathArt.px_rect(self, Rect2(-width * 0.5 - 1.0, y - 1.0, width + 2.0, 6.0), Color(0.0, 0.0, 0.0, 0.85))
+	MathArt.px_rect(self, Rect2(-width * 0.5 - 1.0, y - 1.0, width + 2.0, 6.0), Color(MathArt.BLACK, 0.85))
 	var ratio := clampf(e.hp / maxf(e.max_hp, 1.0), 0.0, 1.0)
-	MathArt.px_rect(self, Rect2(-width * 0.5, y, width * ratio, 4.0), MathArt.PALE)
-	MathArt.px_rect(self, Rect2(-width * 0.5, y, width * ratio, 1.0), MathArt.WHITE)
+	MathArt.px_rect(self, Rect2(-width * 0.5, y, width * ratio, 4.0), MathArt.ENEMY)
+	MathArt.px_rect(self, Rect2(-width * 0.5, y, width * ratio, 1.0), MathArt.ENEMY)
 
 
 func _draw_spawn_flash(half_h: float) -> void:
@@ -518,4 +512,4 @@ func _draw_spawn_flash(half_h: float) -> void:
 		return
 	var a := clampf(e._spawn_t / 0.4, 0.0, 1.0)
 	var radius := 22.0 + 14.0 * (1.0 - a)
-	MathArt.ring(self, Vector2(0, -2), radius, Color(MathArt.WHITE, a * 0.55), 2.0)
+	MathArt.ring(self, Vector2(0, -2), radius, Color(_body_fill(), a * 0.55), 2.0)

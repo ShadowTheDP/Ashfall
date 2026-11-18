@@ -1,0 +1,34 @@
+{
+  "items": {
+    "rusty_sword": {"name":"Rusty Sword", "kind":"weapon", "action":"melee", "weapon":"rusty_sword", "attribute":"brutality", "price":36, "starter":true},
+    "arc_saber": {"name":"Arc Saber", "kind":"weapon", "action":"melee", "weapon":"arc_saber", "attribute":"tactics", "price":44},
+    "chain_lash": {"name":"Chain Lash", "kind":"weapon", "action":"melee", "weapon":"chain_lash", "attribute":"survival", "price":48},
+    "kiss_precision": {"name":"Kiss Precision", "kind":"weapon", "action":"melee", "weapon":"kiss_precision", "attribute":"tactics", "price":48},
+    "orbit_rings": {"name":"Orbit Rings", "kind":"weapon", "action":"melee", "weapon":"orbit_rings", "attribute":"tactics", "price":48},
+    "fractal_edge": {"name":"Fractal Edge", "kind":"weapon", "action":"melee", "weapon":"fractal_edge", "attribute":"brutality", "price":60},
+    "fold_shield": {"name":"Fold Shield", "kind":"weapon", "action":"shield", "attribute":"survival", "damage":8, "duration":0.30, "cooldown":0.75, "radius":80, "price":32, "starter":true},
+    "kunai": {"name":"Kunai", "kind":"skill", "action":"kunai", "attribute":"tactics", "damage":12, "charges":2, "cooldown":1.5, "speed":820, "price":40, "starter":true},
+    "aegis": {"name":"Aegis", "kind":"skill", "action":"aegis", "attribute":"survival", "damage":10, "duration":0.45, "cooldown":3.45, "radius":118, "price":40, "starter":true},
+    "ash_charm": {"name":"Ash Charm", "kind":"amulet", "hp":12, "price":28, "starter":true}
+  },
+  "start": ["rusty_sword", "fold_shield", "kunai", "aegis", "ash_charm"],
+  "base_hp":120,
+  "qualities": {"plain":{"power":1.0,"price":1.0}, "etched":{"power":1.15,"price":1.5}},
+  "affixes": {"none":{"name":"Unmarked"}, "keen":{"name":"Keen", "power":0.10}, "quick":{"name":"Quick", "cooldown":0.80}, "venom":{"name":"Venom", "status":"poison"}},
+  "scrolls": {"brutality":{"hp":0.10}, "tactics":{"hp":0.08}, "survival":{"hp":0.14}},
+  "statuses": {"poison":{"damage":3,"interval":0.5,"duration":2.0}},
+  "economy": {"recycle_fraction":0.35, "kill_gold":8, "food_heal":0.25},
+  "loot_pools": {
+    "chest":[{"id":"chain_lash","quality":"etched","affix":"venom"},{"id":"arc_saber","quality":"etched","affix":"keen"}],
+    "shop":[{"id":"kunai","quality":"etched","affix":"quick"},{"id":"fold_shield","quality":"etched","affix":"keen"}],
+    "drop":[{"id":"ash_charm","quality":"plain","affix":"none"},{"id":"rusty_sword","quality":"plain","affix":"keen"}]
+  },
+  "placements": [
+    {"room":"entry","kind":"gold","offset":[240,-24],"amount":40},
+    {"room":"split","kind":"scroll","offset":[280,-24]},
+    {"room":"upper","kind":"chest","offset":[390,-24],"pool":"chest"},
+    {"room":"merge","kind":"shop","offset":[340,-24],"pool":"shop"},
+    {"room":"lower","kind":"food","offset":[400,-24]},
+    {"room":"exit_main","kind":"gear","offset":[280,-24],"pool":"drop"}
+  ]
+}

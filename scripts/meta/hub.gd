@@ -27,10 +27,10 @@ const REACH := 70.0
 # ARCHIVES screen: three separate doors into one three-tab panel meant every
 # door could reach all three, which made the hub look broken.
 const STATIONS := [
-	{"id": "upgrade", "name": "UPGRADES", "x": 210.0, "sides": 6, "inner": "star"},
-	{"id": "skill", "name": "SKILLS", "x": 520.0, "sides": 3, "inner": "spiral"},
-	{"id": "archive", "name": "ARCHIVES", "x": 830.0, "sides": 5, "inner": "rose"},
-	{"id": "character", "name": "CHARACTER", "x": 1140.0, "sides": 10, "inner": "lissajous"},
+	{"id": "upgrade", "name": "Upgrades", "x": 210.0, "sides": 6, "inner": "star"},
+	{"id": "skill", "name": "Skills", "x": 520.0, "sides": 3, "inner": "spiral"},
+	{"id": "archive", "name": "Archives", "x": 830.0, "sides": 5, "inner": "rose"},
+	{"id": "character", "name": "Character", "x": 1140.0, "sides": 10, "inner": "lissajous"},
 ]
 
 # --- Composition -------------------------------------------------------------
@@ -55,11 +55,11 @@ const ROSE_R := 50.0
 ## the walkable line instead of as something in front of the camera.
 const FOREGROUND_X := [365.0, 675.0, 985.0, 1350.0]
 
-## Highest floor the player has unlocked (0 = nothing cleared yet).
+## Highest floor the player has unlocked (0 = nothing cleared yet). It gates
+## permanent content only; a new run always starts at floor 1.
 var floor_available := 0
-## Which floor the door will send them to. Starts at the NEXT unvisited floor,
-## not the last one reached: sending the player back to floor 1 forever was the
-## bug that made every run "floor 1 again".
+## The run entry floor is intentionally fixed. There is no floor picker: a run
+## is a five-floor sequence, and choosing a later floor skips its rules.
 var floor_target := 1
 var ui: HubUi
 var player: Player
@@ -85,6 +85,11 @@ var _beam_alpha: PackedFloat32Array = []
 var _pool_x: PackedFloat32Array = []
 var _pool_half: PackedFloat32Array = []
 var _scratch := PackedVector2Array()       # 41 points, reused by the animated figures
+var _far := MathArt.biome_color("hub", "far")
+var _near_color := MathArt.biome_color("hub", "near")
+var _stone := MathArt.biome_color("hub", "stone")
+var _edge := MathArt.biome_color("hub", "edge")
+var _accent := MathArt.biome_color("hub", "accent")
 
 
 func _ready() -> void:
@@ -107,20 +112,7 @@ func _ready() -> void:
 ## How far the player may descend; 0 means a fresh profile (first floor).
 func setup(available: int) -> void:
 	floor_available = maxi(0, available)
-	# best_floor is the deepest floor REACHED, so the next one is +1.
-	floor_target = clampi(floor_available + 1, 1, maxi(1, Data.floors.size()))
-	queue_redraw()
-
-
-## The door is also a floor picker: left/right steps through every floor the
-## player has already unlocked, so a late-game player can farm an earlier one.
-func _step_floor(delta: int) -> void:
-	var top := clampi(floor_available + 1, 1, maxi(1, Data.floors.size()))
-	var next := clampi(floor_target + delta, 1, top)
-	if next == floor_target:
-		return
-	floor_target = next
-	Sfx.play("ui", -16)
+	floor_target = 1
 	queue_redraw()
 
 
@@ -230,16 +222,16 @@ func _bay_near(target: float) -> Vector2:
 ## from _process (never from _draw, which would leak a node per frame).
 func _spawn_ambience() -> void:
 	for i in _pool_x.size():
-		Juice.shaft_motes(self, Vector2(_pool_x[i], -2.0), _pool_half[i] * 0.75, 240.0,
-			MathArt.PALE if i == 0 else MathArt.PALE_DIM, 12 if i == 0 else 8, 3.6)
+		Juice.shaft_motes(self, Vector2(_pool_x[i], -2.0), _pool_half[i] * 0.75,
+			_accent if i == 0 else MathArt.FIRE, 12 if i == 0 else 8, 3.6)
 	# Ash over the whole hall, not only in the beams. The room is 1600 px long and
 	# the only motion in it used to be four swinging braziers, so from the middle
 	# of the floor the hall read as a still image. Four wide, slow, permanent
 	# emitters cost 56 particles and give the air a direction.
 	for i in 4:
 		var x := 180.0 + 400.0 * float(i)
-		Juice.shaft_motes(self, Vector2(x, 26.0), 210.0, 0.0,
-			MathArt.PALE_DIM, 14, 6.5)
+		Juice.shaft_motes(self, Vector2(x, 26.0), 210.0,
+			MathArt.FIRE, 14, 6.5)
 
 
 func _build_player() -> void:
@@ -272,7 +264,7 @@ func _process(delta: float) -> void:
 	if _ember_t <= 0.0:
 		_ember_t = 0.8
 		_ember_slot = (_ember_slot + 1) % _chain_x.size()
-		Juice.ember_drift(self, _chain_tip(_ember_slot), MathArt.PALE_DIM, 4, 2.4)
+		Juice.ember_drift(self, _chain_tip(_ember_slot), MathArt.FIRE, 4, 2.4)
 	if is_open():
 		return
 	var best := REACH
@@ -289,23 +281,7 @@ func _process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if is_open():
 		return
-	if not (event is InputEventKey) or not event.pressed or event.echo:
-		return
-	# Q/E, not A/D. A and D are the movement keys, and movement is polled with
-	# Input.get_axis(): consuming the event here does NOT stop the body from
-	# walking. Stepping the floor picker with A/D therefore also walked the
-	# player out of the door's REACH on the same press, so the second press did
-	# nothing and the picker looked broken. Q/E are unbound, so the picker and
-	# the body can never fight over one key.
-	if _near_door and event.physical_keycode == KEY_Q:
-		_step_floor(-1)
-		get_viewport().set_input_as_handled()
-		return
-	if _near_door and event.physical_keycode == KEY_E:
-		_step_floor(1)
-		get_viewport().set_input_as_handled()
-		return
-	if not (event.physical_keycode in [KEY_J, KEY_ENTER, KEY_KP_ENTER]):
+	if not Interface.pressed(event, &"interact"):
 		return
 	if _near_door:
 		Sfx.play("wave", -12)
@@ -318,8 +294,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _open_station(index: int) -> void:
-	# J is also the attack button: freeze the body and clear the swing so the
-	# player is not frozen mid-windup behind the panel.
+	# Freeze the body and clear any swing so the player is not frozen mid-windup
+	# behind the panel.
 	player.set_physics_process(false)
 	player.state = Player.State.IDLE
 	player.velocity = Vector2.ZERO
@@ -333,6 +309,9 @@ func _open_station(index: int) -> void:
 
 ## Called by the owner when an external screen (archive, skill tree) closes.
 func close_station() -> void:
+	if ui != null and ui.is_open():
+		ui._close()
+		return
 	_on_panel_closed()
 
 
@@ -342,6 +321,7 @@ func _on_panel_closed() -> void:
 	# (HubUi, archive, skill tree) routes through here, so this is the one place
 	# that has to re-read the loadout.
 	if is_instance_valid(player):
+		player.suppress_actions()
 		player._apply_loadout()
 		player.weapon_combo = player.weapon.get("combo", [])
 		player.hp = minf(player.hp, player.max_hp)
@@ -354,7 +334,7 @@ func _on_panel_closed() -> void:
 # ---------------------------------------------------------------------- draw
 
 func _draw() -> void:
-	if ThemeDB.fallback_font == null:
+	if MathArt.ui_font() == null:
 		return
 	_draw_vault()
 	_draw_ceiling()
@@ -372,25 +352,25 @@ func _draw() -> void:
 
 ## Far plane: the vault, its arcade and the rose window.
 func _draw_vault() -> void:
-	MathArt.px_rect(self, Rect2(-400.0, -900.0, WIDTH + 800.0, 1020.0), MathArt.BG_0)
+	MathArt.px_rect(self, Rect2(-400.0, -900.0, WIDTH + 800.0, 1020.0), _far)
 	# Value falls off with height: the vault is the darkest plane on screen.
 	for i in 4:
 		MathArt.px_rect(self, Rect2(-400.0, VAULT_TOP + float(i) * 62.0, WIDTH + 800.0, 62.0),
-			Color(MathArt.INK, 0.55 - float(i) * 0.13))
+			Color(_near_color, 0.55 - float(i) * 0.13))
 	# The wall band the monuments stand against: one lit value between the dark
 	# vault and the lit floor, so the monument row is a plane and not a layer.
-	MathArt.px_rect(self, Rect2(-400.0, ARCADE_BASE, WIDTH + 800.0, -ARCADE_BASE), MathArt.BG_1)
-	MathArt.px_rect(self, Rect2(-400.0, ARCADE_BASE, WIDTH + 800.0, 2.0), Color(MathArt.STONE_DIM, 0.7))
+	MathArt.px_rect(self, Rect2(-400.0, ARCADE_BASE, WIDTH + 800.0, -ARCADE_BASE), _far)
+	MathArt.px_rect(self, Rect2(-400.0, ARCADE_BASE, WIDTH + 800.0, 2.0), Color(_stone, 0.7))
 	_draw_blind_arcade()
 	# Gallery above it: a black recess with lit piers and arch rims, so the dead
 	# 300 px of vault carries a colonnade instead of a flat wash.
-	MathArt.px_rect(self, Rect2(-400.0, PIER_TOP, WIDTH + 800.0, ARCADE_BASE - PIER_TOP), MathArt.INK)
+	MathArt.px_rect(self, Rect2(-400.0, PIER_TOP, WIDTH + 800.0, ARCADE_BASE - PIER_TOP), _near_color)
 	for i in _bay.size():
 		var bay := _bay[i]
-		MathArt.ring(self, Vector2(bay.x, ARCADE_BASE), bay.y, Color(MathArt.STONE_DIM, 0.6), 1.0, 20, PI, TAU)
-		MathArt.ring(self, Vector2(bay.x, ARCADE_BASE), bay.y - 6.0, Color(MathArt.BG_0, 0.95), 1.0, 20, PI, TAU)
+		MathArt.ring(self, Vector2(bay.x, ARCADE_BASE), bay.y, Color(_stone, 0.6), 1.0, 20, PI, TAU)
+		MathArt.ring(self, Vector2(bay.x, ARCADE_BASE), bay.y - 6.0, Color(_far, 0.95), 1.0, 20, PI, TAU)
 	for i in _pier.size():
-		MathArt.px_rect(self, Rect2(_pier[i] - 5.0, PIER_TOP, 10.0, ARCADE_BASE - PIER_TOP), Color(MathArt.STONE_DIM, 0.4))
+		MathArt.px_rect(self, Rect2(_pier[i] - 5.0, PIER_TOP, 10.0, ARCADE_BASE - PIER_TOP), Color(_stone, 0.4))
 		MathArt.px_rect(self, Rect2(_pier[i] - 5.0, PIER_TOP, 2.0, ARCADE_BASE - PIER_TOP), Color(MathArt.MID_DIM, 0.4))
 	_draw_rose()
 
@@ -411,15 +391,15 @@ func _draw_blind_arcade() -> void:
 		var cx := bay.x
 		# Recess: one value below the wall, so it reads as an opening.
 		MathArt.px_rect(self, Rect2(cx - half, spring, half * 2.0, foot - spring),
-			Color(MathArt.BG_0, 0.50))
+			Color(_far, 0.50))
 		# The arch itself: two quarter arcs meeting at the apex.
 		MathArt.arc(self, Vector2(cx - half, spring), half, -PI * 0.5, 0.0,
-			Color(MathArt.STONE_DIM, 0.55), 1.0)
+			Color(_stone, 0.55), 1.0)
 		MathArt.arc(self, Vector2(cx + half, spring), half, PI, PI * 1.5,
-			Color(MathArt.STONE_DIM, 0.55), 1.0)
+			Color(_stone, 0.55), 1.0)
 		# Jambs.
-		MathArt.px_rect(self, Rect2(cx - half, spring, 1.0, foot - spring), Color(MathArt.STONE_DIM, 0.45))
-		MathArt.px_rect(self, Rect2(cx + half, spring, 1.0, foot - spring), Color(MathArt.STONE_DIM, 0.45))
+		MathArt.px_rect(self, Rect2(cx - half, spring, 1.0, foot - spring), Color(_stone, 0.45))
+		MathArt.px_rect(self, Rect2(cx + half, spring, 1.0, foot - spring), Color(_stone, 0.45))
 		# Lit inner lip: the only thing that gives the recess a wall thickness.
 		MathArt.arc(self, Vector2(cx - half, spring), half - 1.5, -PI * 0.5, 0.0,
 			Color(MathArt.PALE_DIM, 0.07), 1.0)
@@ -429,12 +409,12 @@ func _draw_blind_arcade() -> void:
 	for i in _pier.size():
 		var px: float = _pier[i]
 		MathArt.px_rect(self, Rect2(px - 6.0, ARCADE_BASE, 12.0, -ARCADE_BASE),
-			Color(MathArt.BG_2, 0.55))
+			Color(_stone, 0.55))
 		MathArt.px_rect(self, Rect2(px - 6.0, ARCADE_BASE, 1.0, -ARCADE_BASE),
-			Color(MathArt.STONE_DIM, 0.40))
+			Color(_stone, 0.40))
 	# Skirting: the wall has to meet the floor somewhere.
 	MathArt.px_rect(self, Rect2(-400.0, -5.0, WIDTH + 800.0, 2.0), Color(MathArt.STONE, 0.55))
-	MathArt.px_rect(self, Rect2(-400.0, -3.0, WIDTH + 800.0, 1.0), Color(MathArt.INK, 0.6))
+	MathArt.px_rect(self, Rect2(-400.0, -3.0, WIDTH + 800.0, 1.0), Color(_near_color, 0.6))
 
 
 ## The rose window: the one focal point above the monuments and the source of
@@ -442,10 +422,10 @@ func _draw_blind_arcade() -> void:
 func _draw_rose() -> void:
 	# The one focal point above the monuments, and the source of the main beam.
 	var breathe := 0.5 + 0.5 * sin(_t * 0.5)
-	MathArt.glow(self, ROSE_AT, ROSE_R * MathArt.PHI, Color(MathArt.LIGHT_DIM, 0.7 + 0.3 * breathe), 3)
-	MathArt.ring(self, ROSE_AT, ROSE_R, Color(MathArt.STONE_HI, 0.8), 2.0, 40)
+	MathArt.glow(self, ROSE_AT, ROSE_R * MathArt.PHI, Color(_accent, 0.7 + 0.3 * breathe), 3)
+	MathArt.ring(self, ROSE_AT, ROSE_R, Color(_edge, 0.8), 2.0, 40)
 	MathArt.ring(self, ROSE_AT, ROSE_R * MathArt.INV_PHI, Color(MathArt.MID_DIM, 0.6), 1.0, 32)
-	MathArt.ring(self, ROSE_AT, ROSE_R * MathArt.INV_PHI * MathArt.INV_PHI, Color(MathArt.LIGHT_DIM, 0.5), 1.0, 24)
+	MathArt.ring(self, ROSE_AT, ROSE_R * MathArt.INV_PHI * MathArt.INV_PHI, Color(_accent, 0.5), 1.0, 24)
 	for i in 12:
 		var angle := _t * 0.1 + TAU * float(i) / 12.0
 		MathArt.line(self, ROSE_AT + Vector2.from_angle(angle) * 10.0,
@@ -454,10 +434,10 @@ func _draw_rose() -> void:
 
 ## Near-plane ceiling beam plus everything that hangs from it.
 func _draw_ceiling() -> void:
-	MathArt.px_rect(self, Rect2(-400.0, VAULT_TOP, WIDTH + 800.0, BEAM_BOTTOM - VAULT_TOP), MathArt.INK)
-	MathArt.px_rect(self, Rect2(-400.0, BEAM_BOTTOM, WIDTH + 800.0, 2.0), Color(MathArt.STONE_DIM, 0.55))
+	MathArt.px_rect(self, Rect2(-400.0, VAULT_TOP, WIDTH + 800.0, BEAM_BOTTOM - VAULT_TOP), _near_color)
+	MathArt.px_rect(self, Rect2(-400.0, BEAM_BOTTOM, WIDTH + 800.0, 2.0), Color(_stone, 0.55))
 	for i in 9:
-		MathArt.px_rect(self, Rect2(-60.0 + float(i) * 200.0, BEAM_BOTTOM - 4.0, 22.0, 4.0), MathArt.STONE_DIM)
+		MathArt.px_rect(self, Rect2(-60.0 + float(i) * 200.0, BEAM_BOTTOM - 4.0, 22.0, 4.0), _stone)
 	for i in _chain_x.size():
 		_draw_chain(i)
 
@@ -472,20 +452,20 @@ func _draw_chain(index: int) -> void:
 		var k := float(j) / float(CHAIN_SAMPLES - 1)
 		_chain_pts[base + j] = Vector2(anchor + sin(_t * 0.7 + phase) * 16.0 * k * k, CHAIN_TOP + _chain_len[index] * k)
 	for j in CHAIN_SAMPLES - 1:
-		MathArt.line(self, _chain_pts[base + j], _chain_pts[base + j + 1], Color(MathArt.STONE_HI, 0.8), 1.0)
+		MathArt.line(self, _chain_pts[base + j], _chain_pts[base + j + 1], Color(_edge, 0.8), 1.0)
 	_draw_brazier(_chain_tip(index), phase)
 
 
 func _draw_brazier(at: Vector2, phase: float) -> void:
 	var flicker := 0.5 + 0.5 * sin(_t * 6.0 + phase)
-	MathArt.glow(self, at + Vector2(0.0, -9.0), 11.0 + 3.0 * flicker, MathArt.PALE_DIM, 2)
-	MathArt.arc(self, at + Vector2(0.0, -6.0), 6.0, 0.0, PI, Color(MathArt.STONE_HI, 0.9), 1.5)
+	MathArt.glow(self, at + Vector2(0.0, -9.0), 11.0 + 3.0 * flicker, _accent, 2)
+	MathArt.arc(self, at + Vector2(0.0, -6.0), 6.0, 0.0, PI, Color(_edge, 0.9), 1.5)
 	MathArt.line(self, at + Vector2(-6.0, -6.0), at + Vector2(6.0, -6.0), MathArt.MID_DIM, 1.0)
 	for i in 3:
 		var width := 4.5 - float(i) * 1.2
 		var sway := sin(_t * 4.0 + phase + float(i) * 0.9) * 1.4
 		MathArt.px_rect(self, Rect2(at.x - width * 0.5 + sway, at.y - 13.0 - float(i) * 4.0, width, 3.0 + flicker),
-			Color(MathArt.PALE, 0.45 + 0.16 * float(i)))
+			Color(_accent, 0.45 + 0.16 * float(i)))
 
 
 func _chain_tip(index: int) -> Vector2:
@@ -496,7 +476,7 @@ func _chain_tip(index: int) -> Vector2:
 func _draw_beams() -> void:
 	for i in _beam.size():
 		var pulse := 0.85 + 0.15 * sin(_t * 0.5 + float(i / 3) * 1.9)
-		MathArt.poly(self, _beam[i], Color(MathArt.PALE, _beam_alpha[i] * pulse))
+		MathArt.poly(self, _beam[i], Color(_accent, _beam_alpha[i] * pulse))
 
 
 func _draw_motes() -> void:
@@ -504,19 +484,19 @@ func _draw_motes() -> void:
 		var mote := _motes[i]
 		var alpha := 0.10 + 0.16 * (0.5 + 0.5 * sin(_t * 1.1 + mote.z))
 		var point := Vector2(mote.x, mote.y + sin(_t * 0.6 + mote.z) * 4.0)
-		MathArt.px_rect(self, Rect2(point.x, point.y, 1.0, 1.0), Color(MathArt.PALE, alpha))
+		MathArt.px_rect(self, Rect2(point.x, point.y, 1.0, 1.0), Color(_accent, alpha))
 
 
 func _draw_floor() -> void:
 	# Four value bands falling toward the camera: the near floor is dark, which
 	# is what separates it from the lit strip at the walkable line.
-	MathArt.px_rect(self, Rect2(-60.0, 0.0, WIDTH + 120.0, 40.0), MathArt.BG_2)
-	MathArt.px_rect(self, Rect2(-60.0, 40.0, WIDTH + 120.0, 48.0), MathArt.BG_1)
-	MathArt.px_rect(self, Rect2(-60.0, 88.0, WIDTH + 120.0, 76.0), MathArt.BG_0)
-	MathArt.px_rect(self, Rect2(-60.0, 164.0, WIDTH + 120.0, 200.0), MathArt.INK)
+	MathArt.px_rect(self, Rect2(-60.0, 0.0, WIDTH + 120.0, 40.0), _stone)
+	MathArt.px_rect(self, Rect2(-60.0, 40.0, WIDTH + 120.0, 48.0), _far)
+	MathArt.px_rect(self, Rect2(-60.0, 88.0, WIDTH + 120.0, 76.0), _far)
+	MathArt.px_rect(self, Rect2(-60.0, 164.0, WIDTH + 120.0, 200.0), _near_color)
 	# The walkable line: the only hard edge in the frame, so it stays crisp.
-	MathArt.px_rect(self, Rect2(-60.0, 0.0, WIDTH + 120.0, 3.0), MathArt.STONE_HI)
-	MathArt.px_rect(self, Rect2(-60.0, 3.0, WIDTH + 120.0, 1.0), Color(MathArt.BG_0, 0.9))
+	MathArt.px_rect(self, Rect2(-60.0, 0.0, WIDTH + 120.0, 3.0), _edge)
+	MathArt.px_rect(self, Rect2(-60.0, 3.0, WIDTH + 120.0, 1.0), Color(_far, 0.9))
 	for i in _joint.size():
 		MathArt.px_rect(self, Rect2(-60.0, _joint[i], WIDTH + 120.0, 1.0),
 			Color(MathArt.STONE, 0.5 - float(i) * 0.07))
@@ -528,11 +508,11 @@ func _draw_floor() -> void:
 	# a dark band) a line to look along.
 	var dash := 40.0
 	while dash < WIDTH:
-		MathArt.px_rect(self, Rect2(dash, 30.0, 10.0, 1.0), Color(MathArt.STONE_HI, 0.34))
+		MathArt.px_rect(self, Rect2(dash, 30.0, 10.0, 1.0), Color(_edge, 0.34))
 		dash += 24.0
 	var tick := 60.0
 	while tick < WIDTH:
-		MathArt.px_rect(self, Rect2(tick, 27.0, 1.0, 7.0), Color(MathArt.STONE_HI, 0.22))
+		MathArt.px_rect(self, Rect2(tick, 27.0, 1.0, 7.0), Color(_edge, 0.22))
 		tick += 132.0
 
 
@@ -547,7 +527,7 @@ func _draw_floor_inlay() -> void:
 			tint = MathArt.LIGHT_DIM.lerp(MathArt.PALE, 0.4 + 0.4 * pulse)
 		MathArt.poly(self, _medallion[i * 2], Color(tint, 0.05 + (0.06 * pulse if near else 0.0)),
 			Color(tint, 0.35 + (0.35 * pulse if near else 0.0)), 1.0)
-		MathArt.poly(self, _medallion[i * 2 + 1], Color(MathArt.BG_0, 0.35), Color(tint, 0.22), 1.0)
+		MathArt.poly(self, _medallion[i * 2 + 1], Color(_far, 0.35), Color(tint, 0.22), 1.0)
 
 
 func _draw_pools() -> void:
@@ -556,12 +536,12 @@ func _draw_pools() -> void:
 		var x := _pool_x[i]
 		var half := _pool_half[i]
 		var pulse := 0.85 + 0.15 * sin(_t * 0.6 + float(i))
-		MathArt.px_rect(self, Rect2(x - half, 1.0, half * 2.0, 6.0), Color(MathArt.PALE, 0.06 * pulse))
+		MathArt.px_rect(self, Rect2(x - half, 1.0, half * 2.0, 6.0), Color(_accent, 0.06 * pulse))
 		MathArt.px_rect(self, Rect2(x - half * MathArt.INV_PHI, 7.0, half * 2.0 * MathArt.INV_PHI, 4.0),
-			Color(MathArt.PALE, 0.04 * pulse))
-		MathArt.line(self, Vector2(x - half, 1.0), Vector2(x + half, 1.0), Color(MathArt.PALE_DIM, 0.16), 1.0)
+			Color(_accent, 0.04 * pulse))
+		MathArt.line(self, Vector2(x - half, 1.0), Vector2(x + half, 1.0), Color(_accent, 0.16), 1.0)
 	# Sheen: the main beam reflects off the stone under it.
-	MathArt.px_rect(self, Rect2(_pool_x[0] - 9.0, 16.0, 18.0, 22.0), Color(MathArt.PALE, 0.03))
+	MathArt.px_rect(self, Rect2(_pool_x[0] - 9.0, 16.0, 18.0, 22.0), Color(_accent, 0.03))
 
 
 ## The near floor used to be a 280 px band of flat values, i.e. the largest
@@ -582,7 +562,7 @@ func _draw_near_steps() -> void:
 	var depth := 20.0
 	for step in 2:
 		# Lit nose of the step, then the riser falling into shadow.
-		MathArt.px_rect(self, Rect2(left, y, width, 2.0), Color(MathArt.STONE_HI, 0.40))
+		MathArt.px_rect(self, Rect2(left, y, width, 2.0), Color(_edge, 0.40))
 		MathArt.px_rect(self, Rect2(left, y + 2.0, width, 3.0), Color(MathArt.BLACK, 0.55))
 		y += depth
 		depth *= MathArt.PHI
@@ -596,10 +576,10 @@ func _draw_near_steps() -> void:
 	var x := 18.0
 	while x < WIDTH:
 		MathArt.px_rect(self, Rect2(x, rail_y + 6.0, 7.0, 52.0), Color(MathArt.STONE, 0.9))
-		MathArt.px_rect(self, Rect2(x, rail_y + 6.0, 2.0, 52.0), Color(MathArt.STONE_HI, 0.75))
+		MathArt.px_rect(self, Rect2(x, rail_y + 6.0, 2.0, 52.0), Color(_edge, 0.75))
 		MathArt.px_rect(self, Rect2(x + 5.0, rail_y + 6.0, 2.0, 52.0), Color(MathArt.BLACK, 0.6))
 		# Foot: a small flare, so the post is founded and not pasted.
-		MathArt.px_rect(self, Rect2(x - 3.0, rail_y + 54.0, 13.0, 4.0), Color(MathArt.STONE_HI, 0.55))
+		MathArt.px_rect(self, Rect2(x - 3.0, rail_y + 54.0, 13.0, 4.0), Color(_edge, 0.55))
 		x += 132.0
 
 
@@ -615,17 +595,17 @@ func _draw_foreground() -> void:
 		# Narrower than the first pass (16 px read as a wall), and drawn as ink
 		# rather than pure black so the vault behind it is still sensed through
 		# the silhouette: a near plane should occlude, not erase.
-		MathArt.px_rect(self, Rect2(x - 5.5, -168.0, 11.0, 168.0), Color(MathArt.INK, 0.94))
-		MathArt.px_rect(self, Rect2(x + 3.0, -168.0, 2.0, 168.0), Color(MathArt.STONE_DIM, 0.30))
+		MathArt.px_rect(self, Rect2(x - 5.5, -168.0, 11.0, 168.0), Color(_near_color, 0.94))
+		MathArt.px_rect(self, Rect2(x + 3.0, -168.0, 2.0, 168.0), Color(_stone, 0.30))
 		# Fade both ends instead of cut them: a hard cap at the top of the frame
 		# looked like a graphic bar, not like something passing the camera.
 		for step in 4:
 			var t := float(step) / 4.0
 			MathArt.px_rect(self, Rect2(x - 5.5, -168.0 + t * 26.0, 11.0, 26.0),
-				Color(MathArt.INK, 0.30 + t * 0.64))
-		MathArt.px_rect(self, Rect2(x - 8.5, -176.0, 17.0, 8.0), Color(MathArt.INK, 0.90))
-		MathArt.px_rect(self, Rect2(x - 8.5, -176.0, 17.0, 1.0), Color(MathArt.STONE_DIM, 0.40))
-		MathArt.px_rect(self, Rect2(x - 9.5, -12.0, 19.0, 30.0), Color(MathArt.INK, 0.94))
+				Color(_near_color, 0.30 + t * 0.64))
+		MathArt.px_rect(self, Rect2(x - 8.5, -176.0, 17.0, 8.0), Color(_near_color, 0.90))
+		MathArt.px_rect(self, Rect2(x - 8.5, -176.0, 17.0, 1.0), Color(_stone, 0.40))
+		MathArt.px_rect(self, Rect2(x - 9.5, -12.0, 19.0, 30.0), Color(_near_color, 0.94))
 		# Contact shadow in front of the foot, so the column is clearly nearer
 		# than the floor it overlaps.
 		MathArt.px_rect(self, Rect2(x - 18.0, 18.0, 36.0, 2.0), Color(MathArt.BLACK, 0.45))
@@ -638,22 +618,23 @@ func _draw_station(index: int) -> void:
 	# The stations are the only interactive things in the room, so they have to
 	# carry a bigger value step than the stone around them. At STONE_HI they
 	# disappeared into the vault from two screens away.
-	var tint := MathArt.WHITE if bright else MathArt.MID
+	var semantic := MathArt.ACCENT if index == 0 else (MathArt.TACTICS if index == 1 else (MathArt.CELL if index == 2 else MathArt.PLAYER))
+	var tint := semantic if bright else semantic.darkened(0.25)
 	var base := Vector2(x, 0.0)
 	var phase := float(index) * MathArt.GOLDEN_ANGLE
 	if bright:
-		MathArt.glow(self, base + Vector2(0.0, -34.0), 54.0 + 4.0 * sin(_t * 2.6), MathArt.PALE, 5)
+		MathArt.glow(self, base + Vector2(0.0, -34.0), 54.0 + 4.0 * sin(_t * 2.6), tint, 5)
 
 	# Plinth: a prism pedestal, wider than the column it carries.
 	var plinth := PackedVector2Array([
 		base + Vector2(-22.0, 0.0), base + Vector2(-15.0, -8.0),
 		base + Vector2(15.0, -8.0), base + Vector2(22.0, 0.0),
 	])
-	MathArt.px_poly(self, plinth, Color(MathArt.BG_2, 0.9), tint, 1.0)
+	MathArt.px_poly(self, plinth, Color(_stone, 0.9), tint, 1.0)
 
 	# Column: cap polygon plus the two extreme verticals, so any n reads as a prism.
 	var cap := MathArt.ngon(int(station["sides"]), 13.0, 0.0, base + Vector2(0.0, -60.0))
-	MathArt.px_poly(self, cap, Color(MathArt.BG_1, 0.85), tint, 1.0)
+	MathArt.px_poly(self, cap, Color(_far, 0.85), tint, 1.0)
 	var left := 0
 	var right := 0
 	for i in cap.size():
@@ -682,11 +663,9 @@ func _draw_station(index: int) -> void:
 		MathArt.px_rect(self, Rect2(base.x + drift, -66.0 - rise, 1.0, 1.0),
 			Color(tint, (1.0 - rise / 44.0) * 0.55))
 
-	draw_string(ThemeDB.fallback_font, Vector2(x - 70.0, -84.0), str(station["name"]),
-		HORIZONTAL_ALIGNMENT_CENTER, 140.0, 9, MathArt.WHITE if bright else MathArt.LIGHT)
+	MathArt.ui_text(self, Vector2(x - 70.0, -84.0), ContentText.name("station", str(station["id"]), str(station["name"])).to_upper(), 11, MathArt.WHITE if bright else MathArt.LIGHT, 140.0, HORIZONTAL_ALIGNMENT_CENTER)
 	if bright:
-		draw_string(ThemeDB.fallback_font, Vector2(x - 20.0, 22.0), "[J]",
-			HORIZONTAL_ALIGNMENT_CENTER, 40.0, 9, Color(MathArt.WHITE, 0.55 + 0.45 * sin(_t * 4.0)))
+		MathArt.ui_text(self, Vector2(x - 20.0, 22.0), Interface.prompt(&"interact"), 11, Color(MathArt.WHITE, 0.55 + 0.45 * sin(_t * 4.0)), 40.0, HORIZONTAL_ALIGNMENT_CENTER)
 
 
 ## The slowly rotating figure inside each monolith: this is what makes a
@@ -718,7 +697,7 @@ func _draw_inner(kind: String, pivot: Vector2, tint: Color, bright: bool) -> voi
 
 func _draw_door() -> void:
 	var bright := _near_door
-	var tint := MathArt.WHITE if bright else MathArt.STONE_HI
+	var tint := MathArt.ACCENT if bright else _edge
 	var foot := Vector2(DOOR_X, 0.0)
 	# 118 px tall, not 84: at 84 the only exit on the floor was shorter than a
 	# station's plinth and read as another piece of furniture. The stepped lintel
@@ -726,12 +705,12 @@ func _draw_door() -> void:
 	# unmistakably a way out.
 	var h := 118.0
 	if bright:
-		MathArt.glow(self, foot + Vector2(0.0, -h * 0.5), 78.0, MathArt.PALE, 5)
+		MathArt.glow(self, foot + Vector2(0.0, -h * 0.5), 78.0, _accent, 5)
 
 	# Reveal behind the jambs, so the doorway is a depth and not a stripe.
-	MathArt.px_rect(self, Rect2(DOOR_X - 14.0, -h, 28.0, h), Color(MathArt.BG_0, 0.95))
-	MathArt.px_rect(self, Rect2(DOOR_X - 21.0, -h, 7.0, h), Color(MathArt.BG_2, 0.95))
-	MathArt.px_rect(self, Rect2(DOOR_X + 14.0, -h, 7.0, h), Color(MathArt.BG_2, 0.95))
+	MathArt.px_rect(self, Rect2(DOOR_X - 14.0, -h, 28.0, h), Color(_far, 0.95))
+	MathArt.px_rect(self, Rect2(DOOR_X - 21.0, -h, 7.0, h), Color(_stone, 0.95))
+	MathArt.px_rect(self, Rect2(DOOR_X + 14.0, -h, 7.0, h), Color(_stone, 0.95))
 	MathArt.px_poly(self, PackedVector2Array([
 		Vector2(DOOR_X - 21.0, -h), Vector2(DOOR_X - 14.0, -h),
 		Vector2(DOOR_X - 14.0, 0.0), Vector2(DOOR_X - 21.0, 0.0),
@@ -742,34 +721,28 @@ func _draw_door() -> void:
 	]), Color(0, 0, 0, 0), tint, 1.0)
 	MathArt.arc(self, Vector2(DOOR_X, -h), 17.5, PI, TAU, tint, 1.5)
 	# Lintel: two stepped courses over the arch.
-	MathArt.px_rect(self, Rect2(DOOR_X - 30.0, -h - 4.0, 60.0, 4.0), Color(MathArt.BG_2, 0.95))
+	MathArt.px_rect(self, Rect2(DOOR_X - 30.0, -h - 4.0, 60.0, 4.0), Color(_stone, 0.95))
 	MathArt.px_rect(self, Rect2(DOOR_X - 30.0, -h - 4.0, 60.0, 1.0), Color(tint, 0.55))
-	MathArt.px_rect(self, Rect2(DOOR_X - 24.0, -h - 10.0, 48.0, 6.0), Color(MathArt.BG_2, 0.9))
+	MathArt.px_rect(self, Rect2(DOOR_X - 24.0, -h - 10.0, 48.0, 6.0), Color(_stone, 0.9))
 	MathArt.px_rect(self, Rect2(DOOR_X - 24.0, -h - 10.0, 48.0, 1.0), Color(tint, 0.35))
 
 	# Light in the doorway is the only thing on the door that moves.
 	var pulse := 0.5 + 0.5 * sin(_t * 2.2)
-	MathArt.px_rect(self, Rect2(DOOR_X - 3.0, -h + 6.0, 6.0, h - 6.0), Color(MathArt.PALE, 0.08 + pulse * 0.16))
-	MathArt.px_rect(self, Rect2(DOOR_X - 9.0, -h + 10.0, 2.0, h - 10.0), Color(MathArt.PALE, 0.04 + pulse * 0.06))
-	MathArt.px_rect(self, Rect2(DOOR_X + 7.0, -h + 10.0, 2.0, h - 10.0), Color(MathArt.PALE, 0.04 + pulse * 0.06))
+	MathArt.px_rect(self, Rect2(DOOR_X - 3.0, -h + 6.0, 6.0, h - 6.0), Color(_accent, 0.08 + pulse * 0.16))
+	MathArt.px_rect(self, Rect2(DOOR_X - 9.0, -h + 10.0, 2.0, h - 10.0), Color(_accent, 0.04 + pulse * 0.06))
+	MathArt.px_rect(self, Rect2(DOOR_X + 7.0, -h + 10.0, 2.0, h - 10.0), Color(_accent, 0.04 + pulse * 0.06))
 	# Spill on the floor, so the goal is legible from the far end of the hall.
-	MathArt.px_rect(self, Rect2(DOOR_X - 26.0, 1.0, 52.0, 9.0), Color(MathArt.PALE, 0.07 + 0.04 * pulse))
-	MathArt.px_rect(self, Rect2(DOOR_X - 13.0, 1.0, 26.0, 7.0), Color(MathArt.PALE, 0.09 + 0.05 * pulse))
+	MathArt.px_rect(self, Rect2(DOOR_X - 26.0, 1.0, 52.0, 9.0), Color(_accent, 0.07 + 0.04 * pulse))
+	MathArt.px_rect(self, Rect2(DOOR_X - 13.0, 1.0, 26.0, 7.0), Color(_accent, 0.09 + 0.05 * pulse))
 	MathArt.line(self, Vector2(DOOR_X - 26.0, 1.0), Vector2(DOOR_X + 26.0, 1.0),
 		Color(MathArt.WHITE, 0.12 + 0.05 * pulse), 1.0)
 
-	var font := ThemeDB.fallback_font
-	# The picker's ceiling is the unlocked top; the label quotes the whole game,
-	# so a new player reads "FLOOR 1 / 5" and not "FLOOR 1 / 1".
-	var top := maxi(1, Data.floors.size())
-	var floor_data: Dictionary = Data.floors.get(str(floor_target), {})
-	draw_string(font, Vector2(DOOR_X - 70.0, -h - 30.0), "FLOOR %d / %d" % [floor_target, top],
-		HORIZONTAL_ALIGNMENT_CENTER, 140.0, 8, Color(tint, 0.75))
-	draw_string(font, Vector2(DOOR_X - 90.0, -h - 16.0), str(floor_data.get("name", "")),
-		HORIZONTAL_ALIGNMENT_CENTER, 180.0, 9, tint)
+	# The door is a run start, not a level picker.
+	var start_node: Dictionary = Data.route_graph["nodes"].get(str(Data.route_graph["start"]), {})
+	var start_name := ContentText.name("biome", str(Data.route_graph["start"]), str(start_node.get("name", ""))).to_upper()
+	MathArt.ui_text(self, Vector2(DOOR_X - 70.0, -h - 30.0), ContentText.of("UI_HUB_DOOR_TITLE", "{biome} / 0 BSC").format({"biome": start_name}), 11, Color(tint, 0.75), 140.0, HORIZONTAL_ALIGNMENT_CENTER)
+	var second := ContentText.of("UI_HUB_DOOR_BSC_LOCKED", "BSC 1 unlocked / later") if Profile.boss_cells_unlocked >= 1 else start_name
+	MathArt.ui_text(self, Vector2(DOOR_X - 90.0, -h - 16.0), second, 11, tint, 180.0, HORIZONTAL_ALIGNMENT_CENTER)
 	if bright:
-		draw_string(font, Vector2(DOOR_X - 20.0, 22.0), "[J]",
-			HORIZONTAL_ALIGNMENT_CENTER, 40.0, 9, Color(MathArt.WHITE, 0.55 + 0.45 * sin(_t * 4.0)))
-		if floor_available > 0:
-			draw_string(font, Vector2(DOOR_X - 70.0, 36.0), "Q <  FLOOR  > E",
-				HORIZONTAL_ALIGNMENT_CENTER, 140.0, 8, Color(MathArt.LIGHT, 0.6))
+		MathArt.ui_text(self, Vector2(DOOR_X - 20.0, 22.0), Interface.prompt(&"interact"), 11, Color(MathArt.WHITE, 0.55 + 0.45 * sin(_t * 4.0)), 40.0, HORIZONTAL_ALIGNMENT_CENTER)
+		MathArt.ui_text(self, Vector2(DOOR_X - 70.0, 36.0), ContentText.of("UI_HUB_DOOR_START", "Start run: {biome}").format({"biome": start_name}), 11, Color(MathArt.LIGHT, 0.6), 140.0, HORIZONTAL_ALIGNMENT_CENTER)

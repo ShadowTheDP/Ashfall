@@ -1,0 +1,25 @@
+{
+  "investment_step":5,
+  "blueprints": {
+    "chain_lash":{"name":"Chain Lash", "kind":"gear", "target":"chain_lash", "cost":20, "biome":"ash_gate", "room":"upper", "at":[480,-24]},
+    "arc_saber":{"name":"Arc Saber", "kind":"gear", "target":"arc_saber", "cost":20, "biome":"silt_cistern", "room":"upper", "at":[480,-24]},
+    "reaper":{"name":"Reaper", "kind":"mutation", "target":"reaper", "cost":15, "biome":"stone_ramparts", "room":"upper", "at":[480,-24]},
+    "fractal_edge":{"name":"Fractal Edge", "kind":"gear", "target":"fractal_edge", "cost":30, "biome":"stilt_foundry", "room":"upper", "at":[480,-24]}
+  },
+  "mutations": {
+    "edge":{"name":"Edge", "text":"Outgoing damage +12%", "starter":true, "damage":0.12},
+    "flow":{"name":"Flow", "text":"Skill recharge time -20%", "starter":true, "cooldown":-0.20},
+    "shell":{"name":"Shell", "text":"Incoming damage -15%", "starter":true, "damage_taken":-0.15},
+    "reaper":{"name":"Reaper", "text":"Heal 3 HP after an ordinary kill", "heal_kill":3}
+  },
+  "mutation_reset":{"cost":30,"step":15,"capacity":3},
+  "craft":{"upgrade_cost":30,"reforge_cost":18,"reforge_step":6,"qualities":["plain","etched"],"affixes":["keen","quick","venom"]},
+  "forge":{"cost":40,"quality":"etched","thresholds":[{"cells":20,"chance":0.5},{"cells":40,"chance":1.0}]},
+  "challenges": {
+    "time":{"name":"SWIFT DOOR", "text":"Exit within 120 active biome seconds", "seconds":120,"gold":24,"cells":5},
+    "streak":{"name":"STEADY DOOR", "text":"3 ordinary kills without taking damage", "kills":3,"gold":24,"cells":5},
+    "flawless":{"name":"UNTOUCHED DOOR", "text":"Defeat this Boss without taking damage", "gold":40,"cells":10}
+  },
+  "ordinary_challenges":["time","streak"],
+  "boss_challenges":["flawless"]
+}

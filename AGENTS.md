@@ -1,22 +1,130 @@
 # Ashfall AGENTS
 
+## Authority and document ownership
+
+- Latest explicit user instructions determine the authorized task. This file
+  holds standing project rules; old session instructions never override a
+  newer authorization.
+- `docs/GOALS.md` owns product outcomes only; it is not a task plan and does not
+  authorize starting every future outcome now.
+- `docs/agent/current-state.md` is the single owner of current status, evidence,
+  remaining work and human gates. `docs/design/ui-system.md` owns visual rules
+  and rationale. `ASHFALL_UI_IMPROVE_PLAN.md` is the sole approved UI execution
+  plan: steps 1–4 are engineering- and bounded-visual complete, step 5 is next,
+  and steps 5–8 are not implemented. Do not recreate a numbered roadmap, a
+  duplicate plan or a parallel status table.
+- `docs/agent/omp-configuration.md` owns the current OMP role mapping and the
+  project-to-Bili runtime boundary. Dated model, billing and recovery evidence
+  belongs under `docs/research/` only when it is still a useful reference.
+- `MEMORY.md` retains durable decisions and lessons. Dated evidence stays under
+  `docs/research/` and `output/`; it is not an active stop condition, model
+  mandate, deadline or old test result. Consult only the relevant dated note
+  when provenance is needed; do not reread a complete history for each task.
+- Update the owning document when a rule changes, remove superseded instructions
+  from active entry points, and link dated evidence instead of duplicating
+  conflicting rules. Keep dated facts clearly dated.
+
 ## Read Order
 
 0. `docs/PRODUCT.md` — the business overview: what the game is, how the
    runtime is wired, who owns what, where every number lives. Start here if
    you need the whole picture rather than one subsystem.
 1. `README.md` — purpose, setup, structure, validation.
-2. `HANDOVER.md` — the session log: what was built, every bug with its
-   cause, the fragile spots, the next steps. It is the only doc that has
-   stayed current through every milestone; trust it over a contradicting
-   paragraph elsewhere.
-3. `MEMORY.md` — durable decisions, commands, risks.
-4. `docs/agent/current-state.md` — what is being worked on now.
+2. `MEMORY.md` — durable decisions, commands, risks.
+3. `docs/agent/current-state.md` — current status, remaining work and human gates.
+4. `docs/agent/omp-configuration.md` before changing OMP roles, model routing
+   or the Bili-backed runtime.
 5. `docs/design/math-art.md` before adding or changing any visual.
 6. `docs/design/impact.md` before touching hit feedback or the swing trail.
 7. `docs/design/combat-feel.md` before changing any gameplay number.
 8. The target script/scene; actors are assembled in code, so read the root
    script before the `.tscn`.
+9. Dated notes under `docs/research/` are reference material, not owners; read
+   one only when a current document points to it. Research prose never overrides
+   the active owner documents.
+
+## Current authorization
+
+- Delivery A is the lawful nine-visit, three-Boss 0 BSC primary route, the
+  same-Profile Cistern alternative and the completed UI maturity work. Current
+  status, remaining work and the human gates live only in
+  [current-state](docs/agent/current-state.md). The approved UI execution plan
+  is [ASHFALL_UI_IMPROVE_PLAN.md](ASHFALL_UI_IMPROVE_PLAN.md): steps 1–4 are
+  complete, step 5 is next, and steps 5–8 are not authorized to start implicitly.
+- The UI structure may use Dead Cells' observable functional grouping and
+  navigation as reference, but expression is original Ashfall MathArt. The
+  bounded UI maturity increment is implemented; human aesthetics and
+  comprehension remain pending.
+- On 2026-11-15 the user authorized full-game multicolor across world, actors,
+  FX and UI. Preserve geometry, float motion, gameplay, progression, canonical
+  data and saves.
+- Expanded world content, BSC 1–5 gameplay, new mechanics, rebalancing,
+  save-policy replacement, DLC and online work are not authorized. MECH-01
+  remains a separate decision: current maximum-HP growth does not heal.
+
+## Delegation and verification
+
+- Codex exception (2026-11-16): the primary performs project work directly by
+  default. Do not proactively spawn Codex subagents; if delegation is needed,
+  use DeepSeek only. This user instruction supersedes the child-only editing
+  rule below for Codex; Pi and OMP retain their coordinator/child role mapping.
+
+- Project Pi policy, roles and commands are owned by `docs/agent/pi-configuration.md`; project-only main model coordinates and accepts evidence, while children implement.
+
+- Pi/OMP scheduling (2026-11-16): for implementation with independent file
+  ownership, default to three concurrent DeepSeek `ashfall-worker` instances; use four
+  or five when independent work packets exist, leaving room for review. Roles are reusable definitions,
+  not reserved slots. Keep the shared six-child limit and one delegation
+  level; do not add nested agents. Small or tightly coupled work uses one
+  worker. Set shared interfaces and their single owner before parallel edits.
+  Use the remaining slot for review of completed, frozen files; run centralized
+  validation against a frozen integration state. Reuse the same worker for
+  related fixes where supported, and share bounded reconnaissance rather than
+  repeating whole-project reads. This scheduling policy does not change the
+  Codex exception above or require filling idle slots.
+
+
+- In OMP, dispatch project work to the `.omp/agents/` roles: `ashfall-scout`
+  for bounded read-only reconnaissance, `ashfall-worker` for all file changes,
+  `ashfall-reviewer` for independent read-only review, and `ashfall-validator`
+  for centralized tests/captures. The project aliases `scout`, `task` and
+  `reviewer` use the same role definitions and model pins; current values live
+  in `.omp/config.yml` and are explained in `docs/agent/omp-configuration.md`.
+  The primary coordinates and accepts evidence.
+  If the scout lacks evidence or capability, the primary assigns read-only
+  investigation to the worker/reviewer; no quality-based automatic upgrade is
+  configured. OMP may still fall back to the parent model on authentication
+  failure; inspect the resolved model badge and task diagnostics.
+  Reserve bundled agents/workflows for an explicit need these roles do not meet.
+- The primary agent is the coordinator: it plans, assigns bounded work, performs
+  read-only inspection, tracks workers, reviews evidence and accepts results.
+  All project file changes (code, scripts, tests, docs and configuration) must
+  be made by a project subagent. If delegation is unavailable or fails, report
+  the blocker instead of silently taking over implementation. This is an
+  operating rule, not a tool-level write-permission boundary.
+- Delegate necessary research, implementation, tests, captures, independent
+  review and documentation to subagents/workflows whenever supported. The
+  primary agent directs scope, dependencies, ownership and design decisions,
+  inspects critical diffs/images, accepts evidence and reports to the user.
+- Give each worker a bounded task, inputs, exclusive writable files,
+  acceptance criteria and permitted checks. One writer per file at a time;
+  shared interfaces have one owner. Reuse workers and actual concurrency slots;
+  do not manufacture work to keep slots occupied.
+- Centralize expensive validation. One worker owns Godot import/cache,
+  display/keyboard focus and capture at a time unless isolation is proven.
+  Freeze tested sources during integration checks; record source hashes or
+  revision, commands, results and isolated output/profile locations.
+- Preserve inherited dirty changes and live saves. Do not reset/revert or
+  automatically commit/push. Tests use isolated Profiles; no debug clearance,
+  invulnerability or free rewards as normal-input acceptance evidence.
+- Run focused checks for affected behavior and the applicable integration
+  gates. Reuse valid evidence for unchanged sources; never weaken assertions,
+  deadlines, seed coverage or strict diagnostic rules to pass. Documentation-only
+  changes need link/consistency checks, not a new Godot suite.
+- Automated/model/image review cannot replace human art, comprehension or
+  play/feel signoff. Report known warnings and unverified hardware/export work.
+  Disclose delegation limitations; when no worker is available, leave the work
+  clearly blocked for the user rather than implementing it in the primary.
 
 ## Scope
 
@@ -25,26 +133,33 @@
 - This is an **original** game. Never import Dead Cells code, assets, extracted
   data tables, or decompiled output. Mechanics and genre are fair game;
   expression is not.
-- Keep the prototype runnable with the headless checks in `tools/check.ps1`.
+- Keep the prototype runnable with `python tools/check.py`; startup rules are in
+  `docs/launching.md`. Do not restore blocked PowerShell runners, use encoded
+  shell commands, change antivirus settings or add exclusions to run checks.
 - **All art goes through `scripts/systems/math_art.gd`.** No textures, no
   `Sprite2D`, no imported images. If a shape cannot be expressed as a
   primitive (polygon, star, superellipse, Lissajous, rose, phyllotaxis,
   spiral, harmonic, ballistic), add the primitive to `MathArt` first.
-- **Monochrome only.** Never introduce hue. Colours must come from the
-  `MathArt` greyscale ramp or its semantic aliases (`PLAYER`, `ENEMY`, `BOSS`,
-  `PICKUP`). Readability comes from value contrast, outline weight and motion.
+- **Multicolor through MathArt (2026-11-15).** Use the navy/slate/cream tonal
+  ramp, semantic constants, `axis_color(axis)` and `biome_color(id, role)`.
+  Preserve value contrast, outline weight, shape and motion alongside hue.
 - **Motion beats snapping.** Characters and camera use float positions and are
   never rounded. Do not add `roundf()` to gameplay transforms.
 - **No limbs, no faces.** The player is a plain square; enemies are plain
   polygons. A "hand" is a single dot. Do not add legs, arms, feet, eyes or
-  decorative marks on the player square.
+  decorative marks on the player square. The existing dark inset face and its
+  single bright pulsing core are the only narrow exception: they express the
+  square's orientation and turning; keep that established motif.
 - **Hit feedback is tiered.** Use `Combat.impact(point, direction, tier)` rather
   than ad-hoc sparks. Read `docs/design/impact.md` first; verify with
   `tests/impact_capture.tscn`.
 - **Particles use `Juice.*`** (a thin wrapper over Godot's `CPUParticles2D`).
-  Do not hand-write particle simulation.
-- **Pipeline invariants:** 768x480 logical, integer x2 window 1536x960,
-  120 Hz physics with `physics_interpolation=true`, camera in
+  Do not hand-write particle simulation. `ShatterFx` is the narrow exception:
+  it may continue simulating its outline geometry shards so the break follows
+  the struck silhouette. Other particles keep the Juice rule.
+- **Pipeline invariants:** 768x480 logical, resizable window with continuous
+  fractional scaling (initial 1536x960, `aspect=keep` letterboxes other
+  ratios), 120 Hz physics with `physics_interpolation=true`, camera in
   `_physics_process`. Changing any of these breaks the whole feel.
 - Use `PHI`, `INV_PHI` and `GOLDEN_ANGLE` for scale and spacing. Random values
   are only allowed for deliberate noise (cracks, debris).
@@ -59,22 +174,27 @@
 # Play
 .\.tools\Godot_v4.7.2-stable_win64.exe --path .
 
-# Full verification
-powershell -ExecutionPolicy Bypass -File tools\check.ps1
+# Inspect the bounded plan without launching Godot
+python tools/check.py --fast --list
 
-# Inner loop: skips the seed sweeps and the end-to-end run (~77 s instead of ~5 min)
-powershell -ExecutionPolicy Bypass -File tools\check.ps1 -Fast
+# Full / inner-loop verification (isolated saves; one 32/4-seed sweep)
+python tools/check.py
+python tools/check.py --fast
 
-# One step only (substring match on the step name; skips --import)
-powershell -ExecutionPolicy Bypass -File tools\check.ps1 -Only audit
-powershell -ExecutionPolicy Bypass -File tools\check.ps1 -Only probe
+# Matching checks only (display name or test path regex; zero matches fail)
+python tools/check.py --only audit
+python tools/check.py --only profile_migration_probe
 
-# Smoke only: fixed-fps 120, ~120 s, can report false failures. Not a gate.
-powershell -ExecutionPolicy Bypass -File tools\check.ps1 -Turbo
+# Smoke only; never an acceptance gate
+python tools/check.py --turbo
 
-# Visual capture (requires a display)
-.\.tools\Godot_v4.7.2-stable_win64_console.exe --path . tests\title_capture.tscn
-.\.tools\Godot_v4.7.2-stable_win64_console.exe --path . tests\capture_scene.tscn
+# Visual capture (requires a display; isolated save)
+python tools/check.py --capture title
+python tools/check.py --capture scene
+
+# Launcher and direct-path safety
+python tests/check_runner_probe.py
+python tests/profile_path_probe.py
 
 # Regenerate audio
 python tools\make_sfx.py
@@ -84,7 +204,9 @@ python tools\make_music.py
 ## Structure Direction
 
 - `scripts/autoload/` holds only cross-scene services
-  (`Data`, `Sfx`, `Combat`, `Game`).
+  (`Data`, `Profile`, `Interface`, `Sfx`, `Combat`, `Game`). `Profile` is the sole
+  persistent save writer; `Interface` owns locale/input overrides and device
+  prompts; `RunBuild` owns canonical run gear/UIDs, charges, axes and wallet.
 - `scripts/systems/` holds pure logic (`Damage`), constants (`Layers`) and the
   visual language (`MathArt`).
 - `scripts/player/`, `scripts/enemies/`, `scripts/world/`, `scripts/fx/`,
@@ -94,6 +216,9 @@ python tools\make_music.py
 - `scenes/*.tscn` stay root-only on purpose; actors build their children in
   `_ready()`. Do not split them into full node trees without a concrete win.
 - Tests live in `tests/`; generated screenshots and builds in `output/`.
+  Probes that can only exercise a retired path are deleted rather than kept
+  registered; their bytes/evidence remain in dated `output/` artifacts and new
+  coverage targets the latest generator revision.
 
 ## Protected / Generated
 

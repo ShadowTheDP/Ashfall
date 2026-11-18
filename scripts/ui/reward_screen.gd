@@ -1,13 +1,15 @@
 class_name RewardScreen
 extends Control
-## Keyboard-only between-wave boon picker, drawn as three pixel cards.
-
+## Between-wave boon picker, drawn as three pixel cards. Keyboard, gamepad and
+## a numeric quick-pick all drive the same selection.
 signal chosen(id: String)
 
 var _choices: Array = []
 var _index := 0
 var _open := false
+var _open_frame := -1
 var _t := 0.0
+var _locale := ""
 
 
 func _ready() -> void:
@@ -16,14 +18,23 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	visible = false
 	z_index = 100
+	if not Interface.presentation_changed.is_connected(_on_presentation_changed):
+		Interface.presentation_changed.connect(_on_presentation_changed)
+
+
+func _on_presentation_changed() -> void:
+	queue_redraw()
 
 
 func open(choices: Array) -> void:
 	_choices = choices.duplicate()
 	_index = 0
 	_open = true
+	_open_frame = Engine.get_process_frames()
 	_t = 0.0
+	_locale = TranslationServer.get_locale()
 	visible = true
+	MathArt.ui_reveal(self)
 	Game.reward_open = true
 	get_tree().paused = true
 	Combat.cancel_hitstop()
@@ -32,36 +43,73 @@ func open(choices: Array) -> void:
 
 
 func _process(delta: float) -> void:
-	if _open:
-		_t += delta
-		queue_redraw()
-
-
-func _unhandled_input(event: InputEvent) -> void:
 	if not _open:
 		return
-	if not (event is InputEventKey) or not event.pressed or event.echo:
+	_t += delta
+	# Locale changes alter both the wrapping keys and the card copy; one string
+	# compare per frame is cheaper than shaping the page again for no reason.
+	if TranslationServer.get_locale() != _locale:
+		_locale = TranslationServer.get_locale()
+		queue_redraw()
+	queue_redraw()
+
+
+## Full-screen mandatory picker: input must be claimed here so nothing leaks to
+## the world underneath while a boon is pending. Accept confirms, nav moves;
+## Back is swallowed because the picker has no back action by contract.
+func _input(event: InputEvent) -> void:
+	if not _open:
 		return
-	match event.physical_keycode:
-		KEY_1:
-			_pick(0)
-		KEY_2:
-			_pick(1)
-		KEY_3:
-			_pick(2)
-		KEY_LEFT, KEY_A:
-			_index = wrapi(_index - 1, 0, _choices.size())
-			Sfx.play("ui", -12)
-			queue_redraw()
-		KEY_RIGHT, KEY_D:
-			_index = wrapi(_index + 1, 0, _choices.size())
-			Sfx.play("ui", -12)
-			queue_redraw()
-		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
-			_pick(_index)
-		_:
-			return
+	if not _is_menu_event(event):
+		return
 	get_viewport().set_input_as_handled()
+	# A boon can be opened from an interact/clear flow; ignore the frame it
+	# opened on so that press cannot also choose a card.
+	if Engine.get_process_frames() == _open_frame:
+		return
+	# Back is swallowed, not acted on: the reward is mandatory. Without this a
+	# gamepad B would reach the HUD and pause the game under the picker.
+	if Interface.pressed(event, &"ui_back"):
+		return
+	# Numeric quick-pick is a keyboard-only convenience, never the only path.
+	if event is InputEventKey and event.pressed and not event.echo:
+		match event.physical_keycode:
+			KEY_1:
+				_pick(0)
+				return
+			KEY_2:
+				_pick(1)
+				return
+			KEY_3:
+				_pick(2)
+				return
+	if Interface.pressed(event, &"ui_accept"):
+		_pick(_index)
+		return
+	if Interface.pressed(event, &"ui_nav_left"):
+		_focus(-1)
+	elif Interface.pressed(event, &"ui_nav_right"):
+		_focus(1)
+
+
+func _is_menu_event(event: InputEvent) -> bool:
+	return event is InputEventKey or event is InputEventJoypadButton or event is InputEventJoypadMotion or event is InputEventAction
+
+
+## A gamepad maps both directions to the same prompt; show it once.
+func _prompt_pair(first: StringName, second: StringName) -> String:
+	var a := Interface.prompt(first)
+	var b := Interface.prompt(second)
+	return a if a == b else a + "/" + b
+
+
+func _focus(delta_index: int) -> void:
+	if _choices.is_empty():
+		return
+	_index = wrapi(_index + delta_index, 0, _choices.size())
+	MathArt.ui_select(self)
+	Sfx.play("ui", -12)
+	queue_redraw()
 
 
 func _pick(index: int) -> void:
@@ -72,113 +120,44 @@ func _pick(index: int) -> void:
 	visible = false
 	Game.reward_open = false
 	Game.apply_reward(id)
+	if is_instance_valid(Game.player):
+		Game.player.suppress_actions()
 	get_tree().paused = false
 	chosen.emit(id)
 
 
 func _draw() -> void:
-	if not _open:
-		return
-	var font := ThemeDB.fallback_font
-	if font == null:
-		return
-	var size := get_viewport_rect().size
-	MathArt.px_rect(self, Rect2(0, 0, size.x, size.y), Color(0.028, 0.028, 0.028, 0.86))
-	var mid_x := roundf(size.x * 0.5)
-	var title_y := roundf(size.y * 0.17)
-	# One picker serves both directors; the heading has to say which one fired.
-	var heading := "ROOM CLEARED" if Game.floor_index > 0 else "WAVE CLEARED"
-	draw_string(font, Vector2(mid_x - 160.0, title_y), heading,
-		HORIZONTAL_ALIGNMENT_CENTER, 360.0, 26, MathArt.PALE)
-	draw_string(font, Vector2(mid_x - 160.0, title_y + 16.0), "CHOOSE A BOON",
-		HORIZONTAL_ALIGNMENT_CENTER, 320.0, 7, MathArt.LIGHT)
-	MathArt.px_rect(self, Rect2(mid_x - 46.0, title_y + 23.0, 110, 1), Color(MathArt.PALE_DIM, 0.7))
-
-	var card_w := 178.0
-	var card_h := 132.0
-	var gap := 18.0
-	var total_w := card_w * 3.0 + gap * 2.0
-	var start_x := roundf((size.x - total_w) * 0.5)
-	var card_y := roundf(size.y * 0.30)
-
+	if not _open: return
+	MathArt.px_rect(self, Rect2(0, 0, 768, 480), MathArt.INK)
+	MathArt.ui_panel(self, MathArt.UI_PAGE)
+	MathArt.ui_heading(self,
+		ContentText.of("UI_REWARD_TITLE", "Choose a boon"),
+		ContentText.of("UI_REWARD_CONTEXT_ROOM", "Legacy Arena / room cleared") if Game.floor_index > 0 else ContentText.of("UI_REWARD_CONTEXT_WAVE", "Legacy Arena / wave cleared"))
 	for i in _choices.size():
-		_draw_card(font, i, Rect2(start_x + float(i) * (card_w + gap), card_y, card_w, card_h))
-
-	draw_string(font, Vector2(mid_x - 220.0, card_y + card_h + 22.0),
-		"LEFT/RIGHT SELECT      1/2/3 QUICK PICK      ENTER CONFIRM",
-		HORIZONTAL_ALIGNMENT_CENTER, 440.0, 6, MathArt.LIGHT)
-
-
-func _draw_card(font: Font, index: int, rect: Rect2) -> void:
-	var id: String = _choices[index]
-	var data: Dictionary = Data.rewards.get(id, {})
-	var tint := Color(data.get("color", "#e3e3e3"))
-	var selected := index == _index
-	var center := Vector2(roundf(rect.position.x + rect.size.x * 0.5), rect.position.y)
-
-	MathArt.px_rect(self, rect, Color(0.080, 0.080, 0.080, 0.97) if selected else Color(0.053, 0.053, 0.053, 0.94))
-	MathArt.px_rect(self, Rect2(rect.position, Vector2(rect.size.x, 1)), Color(tint, 0.9 if selected else 0.3))
-	MathArt.px_rect(self, Rect2(rect.position + Vector2(0, rect.size.y - 1.0), Vector2(rect.size.x, 1)), Color(tint, 0.55 if selected else 0.2))
-	MathArt.px_rect(self, Rect2(rect.position, Vector2(1, rect.size.y)), Color(tint, 0.55 if selected else 0.2))
-	MathArt.px_rect(self, Rect2(rect.position + Vector2(rect.size.x - 1.0, 0), Vector2(1, rect.size.y)), Color(tint, 0.55 if selected else 0.2))
-	if selected:
-		var pulse := 0.35 + 0.35 * sin(_t * 5.0)
-		draw_rect(Rect2(rect.position.x - 2.0, rect.position.y - 2.0, rect.size.x + 4.0, rect.size.y + 4.0),
-			Color(tint, 0.10 * pulse), false, 1.0)
-
-	draw_string(font, rect.position + Vector2(6, 12), str(index + 1),
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(tint, 0.9))
-
-	var sigil_center := Vector2(center.x, rect.position.y + 52.0)
-	_draw_sigil(id, sigil_center, 22.0, tint)
-
-	draw_string(font, Vector2(rect.position.x, rect.position.y + 84.0), str(data.get("name", id)),
-		HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 14, MathArt.PALE)
-
-	var lines: PackedStringArray = str(data.get("desc", "")).split("\n")
-	for line in lines.size():
-		draw_string(font, Vector2(rect.position.x, rect.position.y + 100.0 + float(line) * 12.0),
-			lines[line], HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 9, Color(0.725, 0.725, 0.725))
-
-	var key_label := str(index + 1)
-	draw_string(font, Vector2(rect.position.x, rect.position.y + rect.size.y - 6.0),
-		"PRESS " + key_label, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 8, Color(tint, 0.7))
-
-
-func _draw_sigil(id: String, center: Vector2, radius: float, tint: Color) -> void:
-	match id:
-		"vitality":
-			# Cardioid: x = 16 sin^3 t, y = 13 cos t - 5 cos 2t - 2 cos 3t - cos 4t
-			var points := PackedVector2Array()
-			var scale := radius / 17.0
-			for i in 32:
-				var theta := TAU * float(i) / 32.0
-				var x := 16.0 * pow(sin(theta), 3.0)
-				var y := 13.0 * cos(theta) - 5.0 * cos(2.0 * theta) - 2.0 * cos(3.0 * theta) - cos(4.0 * theta)
-				points.append(center + Vector2(x, -y) * scale)
-			MathArt.px_poly(self, points, Color(tint, 0.22), tint, 1.0)
-		"edge":
-			MathArt.px_poly(self, MathArt.ngon(3, radius, -PI * 0.5, center), Color(tint, 0.20), tint, 1.0)
-		"swift":
-			for i in 3:
-				var y := center.y - 7.0 + float(i) * 7.0
-				MathArt.px_line(self, Vector2(center.x - 11, y + 4), Vector2(center.x, y - 3), tint, 1.0)
-				MathArt.px_line(self, Vector2(center.x, y - 3), Vector2(center.x + 11, y + 4), tint, 1.0)
-		"ghost":
-			MathArt.px_ring(self, center, radius, tint, 1.0)
-			MathArt.px_ring(self, center, radius * MathArt.INV_PHI, Color(tint, 0.5), 1.0)
-			for i in 6:
-				var angle := _t * 0.9 + TAU * float(i) / 6.0
-				var point := center + Vector2.from_angle(angle) * radius * 0.82
-				MathArt.px_rect(self, Rect2(roundf(point.x), roundf(point.y), 1, 1), tint)
-		"armory":
-			MathArt.px_poly(self, MathArt.ngon(4, radius * 0.8, PI * 0.25, center), Color(tint, 0.20), tint, 1.0)
-			MathArt.px_line(self, center + Vector2(-radius * 0.6, 0), center + Vector2(radius * 0.6, 0), Color(tint, 0.7), 1.0)
-		"leech":
-			var spiral := MathArt.spiral(radius, 1.8, 26, _t * 0.4)
-			for point in spiral:
-				MathArt.px_rect(self, Rect2(roundf(center.x + point.x), roundf(center.y + point.y), 1, 1), tint)
-		"hunter":
-			MathArt.px_poly(self, MathArt.star(5, radius, radius * 0.42, -PI * 0.5, center), Color(tint, 0.20), tint, 1.0)
-		_:
-			MathArt.px_poly(self, MathArt.ngon(6, radius, _t * 0.2, center), Color(0, 0, 0, 0), tint, 1.0)
+		var id := str(_choices[i])
+		var cfg: Dictionary = Data.rewards.get(id, {})
+		var rect := Rect2(52 + i * 226, 116, 212, 262)
+		MathArt.ui_surface(self, rect, i == _index)
+		MathArt.ui_text(self, rect.position + Vector2(16, 24), str(i + 1), 11, MathArt.WHITE)
+		var at := rect.position + Vector2(106, 72)
+		match id:
+			"edge", "armory": MathArt.ui_gear(self, at, "melee" if id == "edge" else "kunai", 32)
+			"vitality", "leech":
+				MathArt.line(self, at + Vector2(-16, 0), at + Vector2(16, 0), MathArt.HEAL, 4)
+				MathArt.line(self, at + Vector2(0, -16), at + Vector2(0, 16), MathArt.HEAL, 4)
+				if id == "leech": MathArt.ring(self, at, 32, MathArt.HEAL, 1)
+			"swift":
+				for n in 3:
+					MathArt.line(self, at + Vector2(-20 + n * 14, -12), at + Vector2(-8 + n * 14, 0), MathArt.TACTICS, 2)
+					MathArt.line(self, at + Vector2(-8 + n * 14, 0), at + Vector2(-20 + n * 14, 12), MathArt.TACTICS, 2)
+			_: MathArt.ui_gear(self, at, "aegis", 32)
+		var names := MathArt.ui_wrap(ContentText.name("reward", id, str(cfg.get("name", id))), 180, 16)
+		for n in mini(2, names.size()): MathArt.ui_text(self, rect.position + Vector2(16, 132 + n * MathArt.ui_line_height(16)), names[n], 16, MathArt.WHITE)
+		var lines := MathArt.ui_wrap(ContentText.text("reward", id, str(cfg.get("desc", ""))), 180, 13)
+		for n in mini(4, lines.size()): MathArt.ui_text(self, rect.position + Vector2(16, 196 + n * MathArt.ui_line_height(13)), lines[n], 13)
+	var nav := _prompt_pair(&"ui_nav_left", &"ui_nav_right")
+	MathArt.ui_text(self, Vector2(52, 408), ContentText.of("UI_REWARD_HELP", "Use {nav} to preview · {accept} chooses · number keys pick immediately").format({"nav": nav, "accept": Interface.prompt(&"ui_accept")}), 11)
+	var x := 52.0
+	x += MathArt.ui_key(self, Vector2(x, 428), nav, ContentText.of("UI_REWARD_KEY_FOCUS", "Focus"))
+	x += MathArt.ui_key(self, Vector2(x, 428), Interface.prompt(&"ui_accept"), ContentText.of("UI_REWARD_KEY_CHOOSE", "Choose"))
+	MathArt.ui_key(self, Vector2(x, 428), "1 2 3", ContentText.of("UI_REWARD_KEY_QUICK", "Quick pick"))

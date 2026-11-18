@@ -30,6 +30,6 @@ func _draw() -> void:
 		var point := _velocity * time + Vector2(0.0, 0.5 * _gravity * time * time)
 		var alpha := fade * (1.0 - float(i) / 28.0)
 		if i % 3 == 0:
-			MathArt.px_rect(self, Rect2(roundf(point.x), roundf(point.y), 2, 2), Color(MathArt.WHITE, alpha * 0.75))
+			MathArt.px_rect(self, Rect2(roundf(point.x), roundf(point.y), 2, 2), Color(MathArt.TACTICS, alpha * 0.75))
 		else:
-			MathArt.px_rect(self, Rect2(roundf(point.x), roundf(point.y), 1, 1), Color(MathArt.WHITE, alpha * 0.40))
+			MathArt.px_rect(self, Rect2(roundf(point.x), roundf(point.y), 1, 1), Color(MathArt.TACTICS, alpha * 0.40))

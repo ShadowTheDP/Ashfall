@@ -8,7 +8,7 @@ var _points := PackedVector2Array()
 var _links := PackedInt32Array()   # flat pairs of point indices
 var _t := 0.0
 var _life := 0.7
-var _tint := MathArt.WHITE
+var _tint := MathArt.ACCENT
 
 
 func setup(at: Vector2, radius: float, tint: Color, points: int = 9,
@@ -67,5 +67,5 @@ func _draw() -> void:
 				Color(_tint, line_alpha * 0.35), 1.0)
 	if dot_alpha > 0.0:
 		for point in _points:
-			MathArt.px_circle(self, point, 1.8, Color(MathArt.WHITE, dot_alpha * 0.85))
+			MathArt.px_circle(self, point, 1.8, Color(_tint, dot_alpha * 0.85))
 			MathArt.px_ring(self, point, 3.6, Color(_tint, dot_alpha * 0.3), 1.0)

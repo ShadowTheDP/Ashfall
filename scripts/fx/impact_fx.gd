@@ -16,8 +16,8 @@ extends Node2D
 ## A crit adds the rotating ngon inscribed in the ring (`mark_crit`): the crit
 ## bit arrives one call later than the impact, from Combat.damage_number.
 ##
-## All numbers follow docs/design/impact.md. Monochrome only: sparks are white
-## lines, the ring is a white arc, the flash is a white square.
+## Impact geometry and timing follow docs/design/impact.md. Amber sparks and
+## colored rings surround the unchanged white contact flash.
 
 enum Tier { LIGHT, MEDIUM, HEAVY, FINISHER }
 
@@ -32,7 +32,7 @@ const FLASH_SIZE := [10.0, 13.0, 18.0, 24.0]
 
 var tier := Tier.LIGHT
 var direction := Vector2.RIGHT
-var tint := MathArt.WHITE
+var tint := MathArt.FIRE
 var _t := 0.0
 var _life := 0.2
 var _sparks: Array[Dictionary] = []
@@ -40,7 +40,7 @@ var _crack := PackedVector2Array()
 var _crit_sides := 0
 
 
-func setup(hit_direction: Vector2, p_tier: int, p_tint: Color = MathArt.WHITE) -> void:
+func setup(hit_direction: Vector2, p_tier: int, p_tint: Color = MathArt.FIRE) -> void:
 	tier = clampi(p_tier, 0, 3)
 	direction = hit_direction.normalized() if hit_direction.length() > 0.01 else Vector2.RIGHT
 	tint = p_tint
@@ -82,7 +82,7 @@ func setup(hit_direction: Vector2, p_tier: int, p_tint: Color = MathArt.WHITE) -
 				"width": 1.0,
 				"delay": randf_range(0.006, 0.018),
 				"alpha": 0.55,
-				"color": MathArt.PALE,
+				"color": MathArt.ACCENT,
 			})
 
 	# Heavy and up: a short tear under the contact. The joints are drawn once
@@ -150,7 +150,7 @@ func _draw_signature() -> void:
 			for i in 33:
 				var theta := TAU * float(i) / 32.0 + spin
 				points.append(MathArt.rose(theta, 5.0, r))
-			MathArt.px_poly(self, points, Color(0, 0, 0, 0), Color(MathArt.WHITE, alpha), 1.0)
+			MathArt.px_poly(self, points, Color.TRANSPARENT, Color(tint, alpha), 1.0)
 		Tier.MEDIUM:
 			# r=28, rho=9, d=15: three lobes, drawn as one broken sweep so it reads
 			# as a direction rather than a badge.
@@ -158,11 +158,11 @@ func _draw_signature() -> void:
 			for i in loop.size() - 1:
 				if i % 3 == 2:
 					continue
-				MathArt.line(self, loop[i], loop[i + 1], Color(MathArt.PALE, alpha), 1.5)
+				MathArt.line(self, loop[i], loop[i + 1], Color(tint, alpha), 1.5)
 		Tier.HEAVY:
 			var gear := MathArt.superformula(8.0, 2.2, 7.0, 7.0, base * lerpf(0.45, 0.95, ease(k, 1.6)),
 				48, spin + k * 0.9)
-			MathArt.px_poly(self, gear, Color(0, 0, 0, 0), Color(MathArt.WHITE, alpha), 2.0)
+			MathArt.px_poly(self, gear, Color.TRANSPARENT, Color(tint, alpha), 2.0)
 		Tier.FINISHER:
 			# 3:2 Lissajous, rotating with the blade: the finisher's own function
 			# released as a shape, one frame longer than the ring.
@@ -171,12 +171,12 @@ func _draw_signature() -> void:
 			for i in 41:
 				var theta := TAU * float(i) / 40.0 + k * 0.8
 				knot.append(MathArt.lissajous(theta, 3.0, 2.0, PI * 0.5) * scale)
-			MathArt.px_poly(self, knot, Color(0, 0, 0, 0), Color(MathArt.WHITE, alpha), 2.0)
+			MathArt.px_poly(self, knot, Color.TRANSPARENT, Color(tint, alpha), 2.0)
 			var inner := PackedVector2Array()
 			for i in 41:
 				var theta := TAU * float(i) / 40.0 - k * 1.2
 				inner.append(MathArt.lissajous(theta, 3.0, 2.0, PI * 0.5) * scale * MathArt.INV_PHI)
-			MathArt.px_poly(self, inner, Color(0, 0, 0, 0), Color(MathArt.PALE, alpha * 0.55), 1.0)
+			MathArt.px_poly(self, inner, Color.TRANSPARENT, Color(MathArt.ACCENT, alpha * 0.55), 1.0)
 
 
 func _draw_polygon() -> void:
@@ -194,9 +194,9 @@ func _draw_polygon() -> void:
 	var alpha := (1.0 - k) * 0.55
 	var spin := direction.angle() + k * 1.6
 	var points := MathArt.ngon(_crit_sides, radius, spin)
-	MathArt.px_poly(self, points, Color(0, 0, 0, 0), Color(MathArt.WHITE, alpha), 2.0)
+	MathArt.px_poly(self, points, Color.TRANSPARENT, Color(MathArt.ACCENT, alpha), 2.0)
 	var inner := MathArt.ngon(_crit_sides, radius * MathArt.INV_PHI, -spin)
-	MathArt.px_poly(self, inner, Color(0, 0, 0, 0), Color(MathArt.PALE, alpha * 0.6), 1.0)
+	MathArt.px_poly(self, inner, Color.TRANSPARENT, Color(MathArt.ACCENT, alpha * 0.6), 1.0)
 
 
 func _draw_flash() -> void:
@@ -230,7 +230,7 @@ func _draw_crack() -> void:
 	var reach := minf(1.0, k * 4.0)
 	for i in _crack.size() - 1:
 		MathArt.line(self, _crack[i] * reach, _crack[i + 1] * reach,
-			Color(MathArt.PALE, alpha * (1.0 - float(i) * 0.22)), 1.5 - float(i) * 0.35)
+			Color(MathArt.FIRE, alpha * (1.0 - float(i) * 0.22)), 1.5 - float(i) * 0.35)
 
 
 func _draw_blade_path() -> void:
@@ -249,7 +249,7 @@ func _draw_blade_path() -> void:
 		for i in 2:
 			var from_angle := axis + float(side) * (0.22 + float(i) * 0.52)
 			MathArt.arc(self, Vector2.ZERO, radius, from_angle, from_angle + float(side) * 0.34,
-				Color(MathArt.WHITE, alpha * (0.9 - float(i) * 0.35)), 2.0 - float(i) * 0.5)
+				Color(MathArt.PICKUP, alpha * (0.9 - float(i) * 0.35)), 2.0 - float(i) * 0.5)
 
 
 func _draw_ring() -> void:
@@ -261,9 +261,9 @@ func _draw_ring() -> void:
 	var alpha := 1.0 - k
 	# Ring thickness tapers from 2px to 0.75px.
 	var width := lerpf(2.0, 0.75, k)
-	MathArt.ring(self, Vector2.ZERO, radius, Color(MathArt.WHITE, alpha * 0.85), width)
+	MathArt.ring(self, Vector2.ZERO, radius, Color(tint, alpha * 0.85), width)
 	if tier >= Tier.HEAVY:
-		MathArt.ring(self, Vector2.ZERO, radius * MathArt.INV_PHI, Color(MathArt.PALE, alpha * 0.45), 1.0)
+		MathArt.ring(self, Vector2.ZERO, radius * MathArt.INV_PHI, Color(MathArt.ACCENT, alpha * 0.45), 1.0)
 
 
 func _draw_sparks() -> void:

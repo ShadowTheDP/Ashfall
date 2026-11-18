@@ -3,7 +3,8 @@ param(
 )
 
 # Downloads the pinned Godot build used by this project into .tools/.
-# Usage: powershell -ExecutionPolicy Bypass -File tools\fetch_godot.ps1
+# Optional manual installer; inspect first and follow the local execution policy.
+# Prefer extracting the official release into .tools/; see docs/launching.md.
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot

@@ -1,12 +1,14 @@
 class_name Level
 extends Node2D
-## One generated floor: builds the collision and the stone for a LevelGen
+## A playable biome from authored modules, or a legacy generator fixture.
 ## layout, then runs it (room-by-room spawning, the exit gate, death).
 ##
 ## The class is self-contained: everything comes from build(), so the
 ## foundation can create it, drop it in the tree and connect two signals.
 
 signal cleared
+signal exit_chosen(destination: String)
+signal map_requested(teleport_mode: bool)
 signal player_died
 ## One room's last enemy died. The boon budget in data/floors.json is spent
 ## here, room by room: a reward handed out at the exit gate would land after
@@ -14,6 +16,22 @@ signal player_died
 signal room_cleared(index: int)
 
 const ENEMY_SCENE: PackedScene = preload("res://scenes/enemy.tscn")
+const BIOME_GEN := preload("res://scripts/world/biome_gen.gd")
+const REACH_CHECK := preload("res://scripts/systems/surface_reach.gd")
+const GATE_SCRIPT := preload("res://scripts/world/traversal_gate.gd")
+const PICKUP_SCRIPT := preload("res://scripts/world/progress_pickup.gd")
+
+## English display content for traversal ids that no canonical table names. The
+## CSV row replaces it once loaded; it is a fallback, never a translation.
+const KEY_NAME_EN := {
+	"cask_key": "Cask Key", "clock_key": "Clock Key", "foundry_key": "Foundry Key",
+	"grave_key": "Grave Key", "rampart_key": "Rampart Key",
+}
+const RUNE_NAME_EN := {
+	"canopy_rune": "Canopy Rune", "climb_rune": "Climb Rune", "clock_rune": "Clock Rune",
+	"ground_rune": "Ground Rune", "homunculus_rune": "Homunculus Rune",
+	"lens_rune": "Lens Rune", "pathfinder_rune": "Pathfinder Rune", "phase_rune": "Phase Rune",
+}
 
 const WALL_W := 24.0
 const WALL_TOP := -560.0
@@ -22,10 +40,7 @@ const DOOR_REACH := 62.0
 const DOOR_HEIGHT := 260.0
 const SAFE_DISTANCE := 160.0
 
-# Palette 0-4 varies density, crack lean and how each depth plane is built,
-# never hue. Edge stays a lighter value than the STONE fill so the walkable line
-# is always readable; every palette keeps that same edge/fill pair, so a floor
-# changes its character without changing where the ground is.
+# Geometry density remains legacy-compatible; color comes only from MathArt.
 #
 #   vault   far-wall base value        course  first course offset on a terrace
 #   niche   recessed niches per room   shaft   light-shaft alpha on the gallery
@@ -75,10 +90,10 @@ class VaultHang extends Node2D:
 		_slot += 1
 		if _slot % 2 == 0 and not niches.is_empty():
 			_niche_index = (_niche_index + 1) % niches.size()
-			Juice.ember_drift(self, niches[_niche_index], MathArt.PALE_DIM, 3, 2.2)
+			Juice.ember_drift(self, niches[_niche_index], MathArt.FIRE, 3, 2.2)
 		elif not chains.is_empty():
 			_chain_index = (_chain_index + 1) % chains.size()
-			Juice.ember_drift(self, _sample(chains[_chain_index], 1.0), MathArt.PALE_DIM, 3, 2.4)
+			Juice.ember_drift(self, _sample(chains[_chain_index], 1.0), MathArt.FIRE, 3, 2.4)
 
 	## Pendulum sway off the node's own clock: the tip circles on a Lissajous
 	## instead of sliding sideways, and k² keeps the anchor perfectly still.
@@ -98,10 +113,10 @@ class VaultHang extends Node2D:
 
 	func _draw_brazier(at: Vector2, phase: float) -> void:
 		var flicker := 0.5 + 0.5 * sin(t * 6.0 + phase)
-		MathArt.glow(self, at + Vector2(0.0, -7.0), 10.0 + 3.0 * flicker, MathArt.PALE_DIM, 2)
+		MathArt.glow(self, at + Vector2(0.0, -7.0), 10.0 + 3.0 * flicker, MathArt.FIRE, 2)
 		MathArt.arc(self, at + Vector2(0.0, -5.0), 5.0, 0.0, PI, Color(MathArt.STONE_HI, 0.9), 1.5)
 		MathArt.px_rect(self, Rect2(at.x - 2.0, at.y - 12.0, 4.0, 6.0),
-			Color(MathArt.WHITE, 0.45 + 0.35 * flicker))
+			Color(MathArt.FIRE, 0.45 + 0.35 * flicker))
 
 
 ## The exit gate. Closed it turns slowly and dim; open it spins faster and
@@ -117,7 +132,7 @@ class Door extends Node2D:
 	func _draw() -> void:
 		var h := 108.0
 		var half := 30.0
-		var edge := MathArt.PALE if open else MathArt.STONE_HI
+		var edge := MathArt.ACCENT if open else MathArt.STONE_HI
 		MathArt.px_rect(self, Rect2(-half - 7.0, -h, 7.0, h), MathArt.STONE)
 		MathArt.px_rect(self, Rect2(half, -h, 7.0, h), MathArt.STONE)
 		MathArt.px_rect(self, Rect2(-half - 7.0, -h - 7.0, half * 2.0 + 14.0, 7.0), MathArt.STONE)
@@ -126,17 +141,27 @@ class Door extends Node2D:
 
 		var center := Vector2(0.0, -h * 0.5)
 		var spin := t * (1.6 if open else 0.4)
-		var tint := MathArt.WHITE if open else MathArt.MID_DIM
+		var tint := MathArt.ACCENT if open else MathArt.MID_DIM
 		MathArt.px_poly(self, MathArt.ngon(6, 17.0, spin, center),
 			Color(0, 0, 0, 0), Color(tint, 0.85 if open else 0.35), 1.5)
 		MathArt.px_poly(self, MathArt.ngon(3, 17.0 * MathArt.INV_PHI, -spin * MathArt.PHI, center),
 			Color(0, 0, 0, 0), Color(tint, 0.55 if open else 0.20), 1.0)
 		if open:
-			MathArt.glow(self, center, 34.0, Color(MathArt.WHITE, 0.5))
+			MathArt.glow(self, center, 34.0, Color(MathArt.ACCENT, 0.5))
 
 
 var data: Dictionary = {}
+var route_node := ""
+var rune_pickup: Node2D = null
+var _rune_room := -1
+var _gates: Dictionary = {}
+var _active_pads: Dictionary = {}
+var _near_hint := ""
+var _hint_label: Label
 var _seed := 0
+# Floor number this layout was built for: used only to name a legacy floor at
+# display time, never to change generation.
+var _floor_index := 0
 var _rooms: Array = []
 var _ground_sorted: Array = []
 var _room_pending: Array = []
@@ -161,12 +186,50 @@ var _niches: Array = []
 # y where the near plane starts: below every terrace, so the foreground mass can
 # never cover a walkable edge.
 var _near_y := 0.0
+var _stone := MathArt.STONE
+var _edge := MathArt.STONE_HI
+var _far := MathArt.BG_1
+var _near := MathArt.BG_2
+var _accent := MathArt.FIRE
+var _visual_palette: Dictionary = {}
 
 
-func build(floor_index: int, seed_value: int) -> void:
-	data = LevelGen.generate(floor_index, seed_value)
-	_seed = seed_value
+static func route_layout(id: String, seed_value: int, revision: String = BIOME_GEN.LATEST_REVISION) -> Dictionary:
+	var generated := BIOME_GEN.generate_checked(id, seed_value, Data.biomes, Data.room_modules, Data.route_graph, revision, Data.generation_spatial)
+	var layout: Dictionary = generated.layout
+	if layout.is_empty():
+		print("ROUTE GENERATION REJECTED ", JSON.stringify({"biome": id, "seed": seed_value, "revision": revision, "variant": generated.variant, "attempts": generated.attempts, "errors": generated.errors}))
+	if layout.is_empty():
+		return {}
+	layout["reachable"] = REACH_CHECK.verify(layout, Profile.unlocked_runes, Data.enemies)
+	if not bool(layout["reachable"]["ok"]):
+		print("ROUTE REACH REJECTED ", JSON.stringify({"biome": id, "seed": seed_value, "revision": revision, "result": layout["reachable"]}))
+		return {}
+	return layout
+
+
+func build(floor_index: int, seed_value: int, prepared: Dictionary = {}) -> void:
+	data = prepared if not prepared.is_empty() else (LevelGen.generate(floor_index, seed_value) if route_node.is_empty() else route_layout(route_node, seed_value, Game.generator_revision))
+	if data.is_empty():
+		push_error("Level: no verified layout: " + route_node)
+		return
+	_seed = int(data.get("seed", seed_value))
+	_floor_index = floor_index
+	var palette_id := route_node if not route_node.is_empty() else "legacy_%d" % floor_index
+	_stone = MathArt.biome_color(palette_id, "stone")
+	_edge = MathArt.biome_color(palette_id, "edge")
+	_far = MathArt.biome_color(palette_id, "far")
+	_near = MathArt.biome_color(palette_id, "near")
+	_accent = MathArt.biome_color(palette_id, "accent")
+	_visual_palette = PALETTE[clampi(int(data.get("palette", 0)), 0, PALETTE.size() - 1)].duplicate()
+	_visual_palette["edge"] = _edge
+	_visual_palette["vault"] = _far
+	_visual_palette["near"] = _near
 	_rooms = data["rooms"]
+	if not route_node.is_empty():
+		Profile.runes_changed.connect(queue_redraw)
+		if not str(data["rune"]).is_empty() and not Profile.unlocked_runes.has(str(data["rune"])):
+			_rune_room = int(data["rune_room"])
 	for room in _rooms:
 		_room_pending.append((room["enemies"] as Array).duplicate())
 		_room_entered.append(false)
@@ -185,25 +248,89 @@ func build(floor_index: int, seed_value: int) -> void:
 		var oneway: Array = room["oneway"]
 		for i in platforms.size():
 			_make_body(platforms[i], bool(oneway[i]))
-	_make_body(Rect2(-WALL_W, WALL_TOP, WALL_W, WALL_H))
-	_make_body(Rect2(float(data["width"]), WALL_TOP, WALL_W, WALL_H))
-
-	_build_decoration()
-
+	if route_node.is_empty():
+		_make_body(Rect2(-WALL_W, WALL_TOP, WALL_W, WALL_H))
+		_make_body(Rect2(float(data["width"]), WALL_TOP, WALL_W, WALL_H))
+		_build_decoration()
+		_door = Door.new()
+		_door.position = data["exit"]
+		add_child(_door)
+	else:
+		var bounds: Rect2 = data["bounds"]
+		_make_body(Rect2(-WALL_W, bounds.position.y - 120, WALL_W, bounds.size.y + 280))
+		_make_body(Rect2(bounds.end.x, bounds.position.y - 120, WALL_W, bounds.size.y + 280))
+		_make_body(Rect2(0, bounds.position.y - 120, bounds.size.x, WALL_W))
+		for spec: Dictionary in data["gates"]:
+			var gate := GATE_SCRIPT.new()
+			gate.spec = spec
+			gate.opened.connect(queue_redraw)
+			add_child(gate)
+			_gates[str(spec["id"])] = gate
+		for key: Dictionary in data["keys"]:
+			var pickup := PICKUP_SCRIPT.new()
+			pickup.tree_exiting.connect(queue_redraw)
+			pickup.item_type = "key"
+			pickup.item_id = str(key["id"])
+			pickup.position = key["pos"]
+			add_child(pickup)
+		_hint_label = Label.new()
+		_hint_label.size = Vector2(400, 20)
+		_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_hint_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_hint_label.z_index = 4
+		_hint_label.add_theme_font_override("font", MathArt.ui_font())
+		_hint_label.add_theme_font_size_override("font_size", 11)
+		_hint_label.add_theme_color_override("font_color", MathArt.WHITE)
+		_hint_label.add_theme_color_override("font_outline_color", MathArt.INK)
+		_hint_label.add_theme_constant_override("outline_size", 2)
+		_hint_label.visible = false
+		add_child(_hint_label)
 	_spawn_caches()
-
-	_door = Door.new()
-	_door.position = data["exit"]
-	add_child(_door)
-
+	_spawn_run_loot()
 	var player := _player()
 	if player != null:
-		player.global_position = data["start"]
+		player.traversal_world = self if not route_node.is_empty() else null
+		player.relocate(data["start"])
 	queue_redraw()
 
 
+func _spawn_run_loot() -> void:
+	if Game.build == null:
+		return
+	for id in Data.passage.blueprints:
+		var cfg: Dictionary = Data.passage.blueprints[id]
+		if cfg.biome != route_node or not data.get("room_ids", {}).has(cfg.room) or Profile.delivered_blueprints.has(id) or Game.carried_blueprints.has(id):
+			continue
+		var pickup := PICKUP_SCRIPT.new()
+		pickup.item_type = "blueprint"
+		pickup.item_id = str(id)
+		pickup.position = data.rooms[data.room_ids[cfg.room]].rect.position + Vector2(float(cfg.at[0]), float(cfg.at[1]))
+		add_child(pickup)
+	for spec: Dictionary in Data.gear["placements"]:
+		if not data.get("room_ids", {}).has(spec["room"]):
+			continue
+		var room: Dictionary = data["rooms"][data["room_ids"][spec["room"]]]
+		var loot := RunLoot.new()
+		loot.kind = str(spec["kind"])
+		loot.amount = int(spec.get("amount", 0))
+		loot.position = room["rect"].position + Vector2(float(spec["offset"][0]), float(spec["offset"][1]))
+		if spec.has("pool"):
+			loot.item = Game.create_loot(str(spec["pool"]), int(data.get("seed", 0)) + str(spec["room"]).hash())
+			if loot.kind == "shop":
+				loot.cost = Game.build.price(loot.item)
+		add_child(loot)
+
+
+## Route floors name their biome; the legacy arena floor keeps its own label,
+## which belongs to the arena fixture and is not a route name.
 func floor_name() -> String:
-	return str(data.get("name", ""))
+	if not route_node.is_empty():
+		var node: Dictionary = Data.route_graph["nodes"].get(route_node, {})
+		return ContentText.name("biome", route_node, str(node.get("name", route_node))).to_upper()
+	var canonical := str(data.get("name", ""))
+	if _floor_index <= 0:
+		return canonical
+	return ContentText.of("FLOOR_%d_NAME" % _floor_index, canonical)
 
 
 func start_point() -> Vector2:
@@ -282,9 +409,7 @@ func _physics_process(_delta: float) -> void:
 	var player := _player()
 	if player == null:
 		return
-	# A death is always reported. What must NOT happen after the gate has fired
-	# is the run being recorded as lost - that is Main's call, because only Main
-	# knows the floor's cells are already banked.
+	# Main settles every death, including one during the clear transition.
 	if not _dead and player.hp <= 0.0:
 		_dead = true
 		player_died.emit()
@@ -295,8 +420,19 @@ func _physics_process(_delta: float) -> void:
 		if _room_entered[i]:
 			continue
 		var rect: Rect2 = _rooms[i]["rect"]
-		if x >= rect.position.x and x < rect.end.x:
+		if (route_node.is_empty() and x >= rect.position.x and x < rect.end.x) or (not route_node.is_empty() and (_rooms[i]["bounds"] as Rect2).has_point(player.global_position)):
 			_enter_room(i)
+	if not route_node.is_empty():
+		for pad: Dictionary in data["pads"]:
+			if str(pad["kind"]) == "checkpoint" and player.global_position.distance_to(pad["pos"]) < float(Data.traversal["interact_reach"]) and not _active_pads.has(str(pad["id"])):
+				_active_pads[str(pad["id"])] = true
+				queue_redraw()
+		var hint := _interaction_hint(player.global_position)
+		if hint != _near_hint:
+			_near_hint = hint
+			_hint_label.text = hint
+			_hint_label.visible = not hint.is_empty()
+		_hint_label.global_position = player.global_position + Vector2(-200, -76)
 	_update_door(player)
 
 
@@ -351,7 +487,7 @@ func _take_point(points: Array, from: Vector2, room: Rect2) -> Vector2:
 
 
 func _spawn(kind: String, at: Vector2, room_index: int) -> void:
-	var enemy := ENEMY_SCENE.instantiate() as Enemy
+	var enemy: Enemy = RouteBoss.new() if kind in RouteBoss.KINDS else ENEMY_SCENE.instantiate() as Enemy
 	enemy.configure(kind, Data.enemies.get(kind, {}), 1.0)
 	enemy.position = at
 	enemy.set_meta("room", room_index)
@@ -366,15 +502,65 @@ func _spawn(kind: String, at: Vector2, room_index: int) -> void:
 
 
 func _on_enemy_died(enemy: Enemy) -> void:
+	queue_redraw()
 	_alive.erase(enemy)
 	var index := int(enemy.get_meta("room", 0))
 	_room_alive[index] = maxi(0, _room_alive[index] - 1)
 	if _room_alive[index] == 0 and (_room_pending[index] as Array).is_empty():
 		_room_cleared[index] = true
 		room_cleared.emit(index)
+		if index == _rune_room and not Game.run_over and not Profile.unlocked_runes.has(str(data["rune"])) and not is_instance_valid(rune_pickup):
+			rune_pickup = PICKUP_SCRIPT.new()
+			rune_pickup.item_id = str(data["rune"])
+			# A fixed landing prevents an airborne kill leaving the Rune in stone.
+			rune_pickup.position = (_rooms[index]["rect"] as Rect2).position + Vector2(320, -24)
+			add_child(rune_pickup)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if route_node.is_empty() or _cleared_emitted or Game.run_over or Game.run_phase != "biome":
+		return
+	if not Interface.pressed(event, &"interact"):
+		return
+	var player := _player()
+	if player == null or player.hp <= 0.0:
+		return
+	var at := player.global_position
+	var reach := float(Data.traversal["interact_reach"])
+	for gate: Node in _gates.values():
+		var rect: Rect2 = gate.spec["rect"]
+		if not gate.unlocked and str(gate.spec["kind"]) == "key" and absf(at.x - rect.get_center().x) < reach and at.y >= rect.position.y and at.y < rect.end.y:
+			get_viewport().set_input_as_handled()
+			player.suppress_actions()
+			if not gate.try_open():
+				Game.announce(ContentText.of("UI_WORLD_NEED_KEY", "Need {key}").format({"key": key_name(str(gate.spec["key"]))}), 1.2)
+			return
+	for pad: Dictionary in data["pads"]:
+		if at.distance_to(pad["pos"]) < reach:
+			get_viewport().set_input_as_handled()
+			player.suppress_actions()
+			if str(pad["kind"]) == "checkpoint":
+				map_requested.emit(true)
+			else:
+				if not teleport_to(str(pad["pair"]), str(pad["id"])):
+					Game.announce(ContentText.of("UI_WORLD_PHASE_LANDING", "Phase Rune / safe landing required"), 1.2)
+			return
+	for exit: Dictionary in data["exits"]:
+		if at.distance_to(exit["pos"]) < reach:
+			get_viewport().set_input_as_handled()
+			player.suppress_actions()
+			var reason := Game.exit_reason(str(exit["to"]))
+			if not reason.is_empty():
+				Game.announce(ContentText.of("UI_WORLD_EXIT_LOCKED", "Locked") + ": " + ContentText.lock_reason(reason), 1.2)
+				return
+			_cleared_emitted = true
+			exit_chosen.emit(str(exit["to"]))
+			return
 
 
 func _update_door(player: Player) -> void:
+	if not route_node.is_empty():
+		return
 	if not _door.open:
 		_door.open = enemies_remaining() == 0
 	if not _door.open or _cleared_emitted:
@@ -390,10 +576,201 @@ func _update_door(player: Player) -> void:
 		cleared.emit()
 
 
+func vine_at(at: Vector2, descending := false) -> Rect2:
+	for vine: Dictionary in data.get("vines", []):
+		var rect: Rect2 = vine["rect"]
+		if rect.has_point(at) and ((descending and at.y < rect.end.y - 24) or (not descending and at.y > rect.position.y + 36)):
+			return rect
+	return Rect2()
+
+
+func checkpoint_near_player() -> String:
+	var player := _player()
+	if player == null:
+		return ""
+	for pad: Dictionary in data.get("pads", []):
+		if str(pad["kind"]) == "checkpoint" and _active_pads.has(str(pad["id"])) and player.global_position.distance_to(pad["pos"]) < float(Data.traversal["interact_reach"]):
+			return str(pad["id"])
+	return ""
+
+
+func safe_landing(at: Vector2) -> bool:
+	var player := _player()
+	if player == null:
+		return false
+	var query := PhysicsShapeQueryParameters2D.new()
+	var shape := CapsuleShape2D.new()
+	shape.radius = 14
+	shape.height = 46
+	query.shape = shape
+	query.transform = Transform2D(0, at)
+	query.collision_mask = Layers.WORLD | Layers.ONEWAY
+	query.exclude = [player.get_rid()]
+	if not get_world_2d().direct_space_state.intersect_shape(query, 1).is_empty():
+		return false
+	var ray := PhysicsRayQueryParameters2D.create(at + Vector2(0, 23), at + Vector2(0, 42), Layers.WORLD | Layers.ONEWAY, [player.get_rid()])
+	return not get_world_2d().direct_space_state.intersect_ray(ray).is_empty()
+
+
+func teleport_to(id: String, source_id: String) -> bool:
+	var player := _player()
+	if player == null or player.hp <= 0 or Game.run_over or Game.run_phase != "biome" or _cleared_emitted:
+		return false
+	var source: Dictionary = {}
+	var target: Dictionary = {}
+	for pad: Dictionary in data.get("pads", []):
+		if str(pad["id"]) == source_id:
+			source = pad
+		if str(pad["id"]) == id:
+			target = pad
+	if source.is_empty() or target.is_empty() or source_id == id or player.global_position.distance_to(source["pos"]) >= float(Data.traversal["interact_reach"]):
+		return false
+	if str(source["kind"]) == "phase":
+		if not Profile.unlocked_runes.has("phase_rune") or str(source["pair"]) != id:
+			return false
+	elif not _active_pads.has(source_id) or not _active_pads.has(id) or str(target["kind"]) != "checkpoint":
+		return false
+	if not safe_landing(target["pos"]):
+		return false
+	player.relocate(target["pos"])
+	return true
+
+
+func map_snapshot() -> Dictionary:
+	var rooms: Array = []
+	var ids: Array = []
+	for i in _rooms.size():
+		if _room_entered[i]:
+			rooms.append({"id": str(_rooms[i]["id"]), "bounds": _rooms[i]["bounds"], "cleared": bool(_room_cleared[i])})
+			ids.append(str(_rooms[i]["id"]))
+	var edges: Array = []
+	for edge: Dictionary in data.get("graph", []):
+		if ids.has(str(edge["from"])) and ids.has(str(edge["to"])):
+			edges.append({"from": str(edge["from"]), "to": str(edge["to"])})
+	var pads: Array = []
+	for pad: Dictionary in data.get("pads", []):
+		if str(pad["kind"]) == "checkpoint" and _active_pads.has(str(pad["id"])):
+			pads.append(pad.duplicate(true))
+	var markers: Array = []
+	for exit: Dictionary in data.get("exits", []):
+		if ids.has(str(exit["room"])):
+			markers.append({"pos": exit["pos"], "kind": "exit", "label": _exit_label(exit), "reason": Game.exit_reason(str(exit["to"]))})
+	for pad: Dictionary in data.get("pads", []):
+		if ids.has(str(pad["room"])) and (str(pad["kind"]) == "phase" or _active_pads.has(str(pad["id"]))):
+			markers.append({"pos": pad["pos"], "kind": "phase" if str(pad["kind"]) == "phase" else "teleport", "label": _pad_label(str(pad["kind"])), "reason": ""})
+	for gate: Node in _gates.values():
+		if not gate.unlocked and ids.has(str(gate.spec["room"])):
+			markers.append({"pos": (gate.spec["rect"] as Rect2).get_center(), "kind": "gate", "label": _gate_label(str(gate.spec["kind"])), "reason": _gate_reason(gate.spec)})
+	if is_instance_valid(rune_pickup):
+		markers.append({"pos": rune_pickup.position, "kind": "rune", "label": ContentText.of("UI_WORLD_MARK_RUNE_PICKUP", "Rune pickup").to_upper(), "reason": ""})
+	return {"rooms": rooms, "edges": edges, "pads": pads, "markers": markers, "player": _player().global_position if _player() != null else Vector2.ZERO, "name": floor_name()}
+
+
+## Display name of a world key, never its id. Shared with the pickup prompt.
+static func key_name(id: String) -> String:
+	return ContentText.name("key", id, str(KEY_NAME_EN.get(id, "")))
+
+
+## Display name of a Rune, never its id.
+static func rune_name(id: String) -> String:
+	return ContentText.name("rune", id, str(RUNE_NAME_EN.get(id, "")))
+
+
+## Map legend for a traversal pad.
+func _pad_label(kind: String) -> String:
+	return ContentText.of("UI_WORLD_MARK_PHASE", "Phase").to_upper() if kind == "phase" else ContentText.of("UI_WORLD_MARK_TELEPORT", "Teleport").to_upper()
+
+
+## Map legend for a locked traversal gate.
+func _gate_label(kind: String) -> String:
+	return ContentText.of("UI_WORLD_MARK_KEY_DOOR", "Key door").to_upper() if kind == "key" else ContentText.of("UI_WORLD_MARK_BREAK_FLOOR", "Break floor").to_upper()
+
+
+## The gate's reason is the Rune or key it wants, named for the player. A gate
+## with neither stays empty rather than showing an id.
+func _gate_reason(spec: Dictionary) -> String:
+	var id := str(spec.get("key", spec.get("rune", "")))
+	if id.is_empty():
+		return ""
+	return (key_name(id) if str(spec.get("kind")) == "key" else rune_name(id)).to_upper()
+
+
+func _exit_label(exit: Dictionary) -> String:
+	var id := str(exit["to"])
+	if id.is_empty():
+		return ContentText.of("UI_WORLD_MARK_VICTORY", "Victory").to_upper()
+	var node: Dictionary = Data.route_graph["nodes"][id]
+	return ContentText.name("biome", id, str(node["name"])).to_upper()
+
+
+func _interaction_hint(at: Vector2) -> String:
+	for gate: Node in _gates.values():
+		if gate.unlocked or not (gate.spec["rect"] as Rect2).grow(float(Data.traversal["interact_reach"])).has_point(at):
+			continue
+		if str(gate.spec["kind"]) == "key":
+			var key := str(gate.spec["key"])
+			var key_label := key_name(key)
+			return ContentText.of("UI_WORLD_HINT_OPEN_KEY", "{action} open / {key}").format({"action": Interface.prompt(&"interact"), "key": key_label}) if Game.run_keys.has(key) else ContentText.of("UI_WORLD_HINT_LOCKED_KEY", "Locked / {key}").format({"key": key_label})
+		return ContentText.of("UI_WORLD_HINT_BREAK_FLOOR", "{jump}, then {drop} + {jump} to break").format({"jump": Interface.prompt(&"jump"), "drop": Interface.prompt(&"drop")}) if Profile.unlocked_runes.has(str(gate.spec["rune"])) else ContentText.of("UI_WORLD_HINT_GROUND_RUNE", "Ground Rune required")
+	for exit: Dictionary in data.get("exits", []):
+		if at.distance_to(exit["pos"]) < float(Data.traversal["interact_reach"]):
+			var reason := Game.exit_reason(str(exit["to"]))
+			return ContentText.of("UI_WORLD_HINT_ENTER_EXIT", "{action} to {target}").format({"action": Interface.prompt(&"interact"), "target": _exit_label(exit)}) if reason.is_empty() else ContentText.of("UI_WORLD_EXIT_LOCKED", "Locked") + ": " + ContentText.lock_reason(reason)
+	for pad: Dictionary in data.get("pads", []):
+		if at.distance_to(pad["pos"]) < float(Data.traversal["interact_reach"]):
+			return ContentText.of("UI_WORLD_HINT_MAP", "{action} teleport map").format({"action": Interface.prompt(&"interact")}) if str(pad["kind"]) == "checkpoint" else ContentText.of("UI_WORLD_HINT_PHASE", "{action} phase / Phase Rune").format({"action": Interface.prompt(&"interact")})
+	for vine: Dictionary in data.get("vines", []):
+		if (vine["rect"] as Rect2).has_point(at):
+			return ContentText.of("UI_WORLD_HINT_CLIMB", "{up} / {down} climb, {jump} leave").format({"up": Interface.prompt(&"climb_up"), "down": Interface.prompt(&"climb_down"), "jump": Interface.prompt(&"jump")}) if Profile.unlocked_runes.has("canopy_rune") else ContentText.of("UI_WORLD_HINT_CANOPY_RUNE", "Canopy Rune required")
+	return ""
+
+
+func _draw_biome() -> void:
+	var font := MathArt.ui_font()
+	for room: Dictionary in _rooms:
+		var bounds: Rect2 = room["bounds"]
+		MathArt.px_rect(self, bounds, _far)
+		for i in 5:
+			var x := bounds.position.x + float(i + 1) * bounds.size.x / (5.0 + MathArt.INV_PHI)
+			MathArt.line(self, Vector2(x, bounds.position.y + 24), Vector2(x, bounds.end.y - 16), _near, 3)
+		MathArt.line(self, bounds.position, Vector2(bounds.end.x, bounds.position.y), Color(_accent, 0.45), 2)
+		# Diagnostic room-id label: untranslated on purpose, slated for deletion in
+		# step 7. Never a source of player-facing names.
+		draw_string(font, bounds.position + Vector2(24, 28), str(room["id"]).replace("_", " ").to_upper(), HORIZONTAL_ALIGNMENT_LEFT, 570, 11, MathArt.MID_DIM)
+		for rect: Rect2 in room["ground"]:
+			MathArt.px_rect(self, rect, _stone.darkened(0.20))
+			MathArt.line(self, rect.position, Vector2(rect.end.x, rect.position.y), _edge, 3)
+		var oneway: Array = room["oneway"]
+		for i in (room["platforms"] as Array).size():
+			_draw_platform(room["platforms"][i], bool(oneway[i]))
+	for vine: Dictionary in data["vines"]:
+		var rect: Rect2 = vine["rect"]
+		var x := rect.get_center().x
+		MathArt.line(self, Vector2(x, rect.position.y), Vector2(x, rect.end.y), MathArt.SURVIVAL, 2)
+		for n in int(rect.size.y / (12.0 * MathArt.PHI)):
+			var y := rect.position.y + float(n) * 12.0 * MathArt.PHI
+			MathArt.line(self, Vector2(x - 10, y - 5), Vector2(x + 10, y + 5), MathArt.SURVIVAL, 2)
+	for pad: Dictionary in data["pads"]:
+		var at: Vector2 = pad["pos"]
+		var shade := MathArt.TACTICS if str(pad["kind"]) == "phase" else (MathArt.CELL if _active_pads.has(str(pad["id"])) else MathArt.CELL.darkened(0.40))
+		MathArt.ring(self, at, 24, shade, 2)
+		MathArt.poly(self, MathArt.ngon(4 if str(pad["kind"]) == "phase" else 6, 24 * MathArt.INV_PHI, -PI * 0.5, at), Color.TRANSPARENT, shade, 2)
+		draw_string(font, at + Vector2(-80, -42), _pad_label(str(pad["kind"])), HORIZONTAL_ALIGNMENT_CENTER, 160, 11, shade)
+	for exit: Dictionary in data["exits"]:
+		var at: Vector2 = exit["pos"]
+		var reason := Game.exit_reason(str(exit["to"]))
+		var shade := MathArt.ACCENT if reason.is_empty() else MathArt.DANGER
+		MathArt.poly(self, MathArt.superellipse(24, 44, 4, 24, 0.0, at + Vector2(0, -20)), MathArt.INK, shade, 2)
+		MathArt.line(self, at + Vector2(-18, -16), at + Vector2(18, -16), shade, 2)
+		draw_string(font, at + Vector2(-150, -82), _exit_label(exit), HORIZONTAL_ALIGNMENT_CENTER, 300, 11, shade)
+		if not reason.is_empty():
+			draw_string(font, at + Vector2(-150, -64), ContentText.lock_reason(reason), HORIZONTAL_ALIGNMENT_CENTER, 300, 11, MathArt.MID)
+
+
 # --- decoration -------------------------------------------------------------
 
 func _palette() -> Dictionary:
-	return PALETTE[clampi(int(data.get("palette", 0)), 0, PALETTE.size() - 1)]
+	return _visual_palette
 
 
 func _build_decoration() -> void:
@@ -563,7 +940,7 @@ func _build_shafts() -> void:
 		_shafts.append(shaft)
 		# Permanent emitter, spawned once with the level, never from _draw().
 		Juice.shaft_motes(self, Vector2(float(shaft["x"]), float(shaft["bottom"]) - 2.0),
-			float(shaft["half"]) * 0.85, float(shaft["bottom"]) - float(shaft["top"]),
+			float(shaft["half"]) * 0.85,
 			MathArt.PALE if _shafts.size() == 1 else MathArt.PALE_DIM,
 			10 if _shafts.size() == 1 else 7, 3.4)
 
@@ -601,6 +978,9 @@ func _build_chains() -> void:
 
 
 func _draw() -> void:
+	if not route_node.is_empty():
+		_draw_biome()
+		return
 	_draw_vault()
 	_draw_monoliths()
 	_draw_rose_window()
@@ -650,14 +1030,14 @@ func _draw_strata(index: int) -> void:
 			"course":
 				MathArt.px_rect(self, op["r"], Color(MathArt.INK, 0.30))
 			"joint":
-				MathArt.px_rect(self, op["r"], Color(MathArt.STONE_DIM, 0.55))
+				MathArt.px_rect(self, op["r"], Color(_stone.darkened(0.20), 0.55))
 			"recess":
 				MathArt.px_rect(self, op["r"], Color(MathArt.BLACK, 0.42))
 			"lit":
-				MathArt.px_rect(self, op["r"], Color(MathArt.STONE_HI, 0.22))
+				MathArt.px_rect(self, op["r"], Color(_edge, 0.22))
 			"poly":
 				MathArt.px_poly(self, op["p"], Color(MathArt.BLACK, 0.42),
-					Color(MathArt.STONE_DIM, 0.5), 1.0)
+					Color(_stone.darkened(0.20), 0.5), 1.0)
 
 
 ## Where a shaft meets its gallery deck. Drawn after the decks so the light
@@ -668,8 +1048,8 @@ func _draw_shaft_pools() -> void:
 		var at := Vector2(float(shaft["x"]), float(shaft["bottom"]))
 		var half: float = shaft["half"]
 		MathArt.px_rect(self, Rect2(at.x - half * 1.5, at.y + 1.0, half * 3.0, 2.0),
-			Color(MathArt.PALE, alpha * 0.6))
-		MathArt.glow(self, at - Vector2(0.0, 2.0), half * 1.3, Color(MathArt.PALE, alpha), 3)
+			Color(_accent, alpha * 0.6))
+		MathArt.glow(self, at - Vector2(0.0, 2.0), half * 1.3, Color(_accent, alpha), 3)
 
 
 ## The third plane: the mass closest to the camera. It gives the terraces
@@ -681,8 +1061,8 @@ func _draw_near_plane() -> void:
 		return
 	var left := -120.0
 	var width := float(data.get("width", 0.0)) + 240.0
-	MathArt.px_rect(self, Rect2(left, _near_y, width, 42.0), Color(MathArt.BG_2, 0.35))
-	MathArt.px_rect(self, Rect2(left, _near_y + 42.0, width, 52.0), Color(MathArt.BG_1, 0.55))
+	MathArt.px_rect(self, Rect2(left, _near_y, width, 42.0), Color(_near, 0.35))
+	MathArt.px_rect(self, Rect2(left, _near_y + 42.0, width, 52.0), Color(_far, 0.55))
 	MathArt.px_rect(self, Rect2(left, _near_y + 94.0, width, 300.0), Color(MathArt.INK, 0.88))
 	# Parapet: teeth on a φ walk, so the silhouette never metronomes.
 	var x := left
@@ -690,7 +1070,7 @@ func _draw_near_plane() -> void:
 		var t := fposmod(x * MathArt.INV_PHI * 0.01, 1.0)
 		var h := 16.0 + 20.0 * t
 		MathArt.px_rect(self, Rect2(x, _near_y - h, 22.0, h + 6.0), Color(_palette()["near"], 0.85))
-		MathArt.px_rect(self, Rect2(x, _near_y - h, 22.0, 1.0), Color(MathArt.STONE_DIM, 0.45))
+		MathArt.px_rect(self, Rect2(x, _near_y - h, 22.0, 1.0), Color(_stone.darkened(0.20), 0.45))
 		x += 30.0 + 14.0 * fposmod(t * MathArt.PHI, 1.0)
 
 
@@ -747,9 +1127,9 @@ func _draw_vault() -> void:
 	var x := 30.0
 	while x < width:
 		MathArt.px_rect(self, Rect2(x, foot - depth, 11.0, depth),
-			Color(MathArt.BG_2, 0.80))
+			Color(_near, 0.80))
 		MathArt.px_rect(self, Rect2(x, foot - depth, 1.0, depth),
-			Color(MathArt.STONE_HI, 0.20))
+			Color(_edge, 0.20))
 		MathArt.px_rect(self, Rect2(x + 10.0, foot - depth, 1.0, depth),
 			Color(MathArt.INK, 0.5))
 		var half := (step - 11.0) * 0.5
@@ -771,13 +1151,13 @@ func _draw_vault() -> void:
 				Color(MathArt.BLACK, panel * 0.55))
 			# Lit top lip: the surface the light in the room would catch.
 			MathArt.px_rect(self, Rect2(cx - pw * 0.5, ptop, pw, 2.0),
-				Color(MathArt.PALE_DIM, 0.10 + panel * 0.06))
+				Color(_accent, 0.10 + panel * 0.06))
 			# Inner side shadows, so the niche has a wall thickness.
 			MathArt.px_rect(self, Rect2(cx - pw * 0.5, ptop, 2.0, ph), Color(MathArt.BLACK, 0.30))
 			MathArt.px_rect(self, Rect2(cx + pw * 0.5 - 2.0, ptop, 2.0, ph), Color(MathArt.BLACK, 0.30))
 			# Sill.
 			MathArt.px_rect(self, Rect2(cx - pw * 0.5 - 2.0, foot - 27.0, pw + 4.0, 2.0),
-				Color(MathArt.STONE_DIM, 0.55))
+				Color(_stone.darkened(0.20), 0.55))
 			MathArt.px_rect(self, Rect2(cx - pw * 0.5 - 2.0, foot - 25.0, pw + 4.0, 1.0),
 				Color(MathArt.BLACK, 0.45))
 		# Two quarter-arcs meeting at the apex, then the jambs down to the floor.
@@ -794,7 +1174,7 @@ func _draw_vault() -> void:
 			Color(MathArt.MID, 0.16))
 		# Keystone: the one lit point per bay, so the colonnade has rhythm.
 		MathArt.px_rect(self, Rect2(cx - 2.0, top - 1.0, 5.0, 3.0),
-			Color(MathArt.PALE_DIM, 0.14))
+			Color(_accent, 0.14))
 		x += step
 
 	# Light shafts through the height of the room: three nested trapezoids a 1/φ
@@ -810,7 +1190,7 @@ func _draw_vault() -> void:
 			MathArt.poly(self, PackedVector2Array([
 				Vector2(sx - half * MathArt.INV_PHI, stop), Vector2(sx + half * MathArt.INV_PHI, stop),
 				Vector2(sx + half, sbot), Vector2(sx - half, sbot)]),
-				Color(MathArt.PALE, float(pal["shaft"]) * (1.0 + float(tier) * 0.5)))
+				Color(_accent, float(pal["shaft"]) * (1.0 + float(tier) * 0.5)))
 
 	# One landmark per floor, keyed off the palette, so no two floors read alike.
 	var center := Vector2(width * 0.5, foot - rise - 150.0)
@@ -849,16 +1229,16 @@ func _draw_monoliths() -> void:
 		var height := bottom - top
 		if height <= 4.0:
 			continue
-		MathArt.px_rect(self, Rect2(x, top, width, height), Color(MathArt.BG_2, 0.72))
+		MathArt.px_rect(self, Rect2(x, top, width, height), Color(_near, 0.72))
 		MathArt.px_rect(self, Rect2(x + width - 3.0, top, 3.0, height), Color(MathArt.INK, 0.72))
-		MathArt.px_rect(self, Rect2(x + 2.0, top, 1.0, height), Color(MathArt.STONE_HI, 0.24))
+		MathArt.px_rect(self, Rect2(x + 2.0, top, 1.0, height), Color(_edge, 0.24))
 		var cap := MathArt.ngon(6, width * 0.5, 0.0, Vector2(x + width * 0.5, top))
-		MathArt.px_poly(self, cap, Color(MathArt.BG_1, 0.85), Color(MathArt.STONE_HI, 0.45), 1.0)
+		MathArt.px_poly(self, cap, Color(_far, 0.85), Color(_edge, 0.45), 1.0)
 		if bool(column["sigil"]):
 			var center := Vector2(x + width * 0.5, top + 110.0)
 			MathArt.px_poly(self, MathArt.ngon(6, width * 0.30, PI / 6.0, center),
-				Color(0, 0, 0, 0), Color(MathArt.PALE_DIM, 0.16), 1.0)
-			MathArt.px_ring(self, center, width * 0.46, Color(MathArt.PALE_DIM, 0.09), 1.0)
+				Color(0, 0, 0, 0), Color(_accent, 0.16), 1.0)
+			MathArt.px_ring(self, center, width * 0.46, Color(_accent, 0.09), 1.0)
 
 
 func _draw_rose_window() -> void:
@@ -880,7 +1260,7 @@ func _draw_rose_window() -> void:
 func _draw_ground(rect: Rect2, specks: Array, cracks: Array) -> void:
 	var pal := _palette()
 	var edge: Color = pal["edge"]
-	MathArt.px_rect(self, rect, MathArt.STONE)
+	MathArt.px_rect(self, rect, _stone)
 	MathArt.px_rect(self, Rect2(rect.position, Vector2(rect.size.x, 3.0)), edge)
 	MathArt.px_rect(self, Rect2(rect.position + Vector2(0, 3), Vector2(rect.size.x, 1.0)),
 		Color(MathArt.MID_DIM, 0.35))
@@ -888,7 +1268,7 @@ func _draw_ground(rect: Rect2, specks: Array, cracks: Array) -> void:
 	for speck in specks:
 		var shade: float = speck.z
 		if shade > 0.80:
-			MathArt.px_rect(self, Rect2(speck.x, speck.y, 1, 1), Color(MathArt.STONE_HI, 0.45))
+			MathArt.px_rect(self, Rect2(speck.x, speck.y, 1, 1), Color(_edge, 0.45))
 		elif shade > 0.55:
 			MathArt.px_rect(self, Rect2(speck.x, speck.y, 1, 1), Color(MathArt.INK, 0.35))
 		elif shade > 0.30:
@@ -903,7 +1283,7 @@ func _draw_ground(rect: Rect2, specks: Array, cracks: Array) -> void:
 				Vector2(crack.x + crack.z + 3.0, rect.position.y + crack.y + 6.0), color, 1.0)
 
 	MathArt.px_rect(self, Rect2(rect.position.x, rect.position.y + 5.0, rect.size.x, 1.0),
-		Color(MathArt.PALE_DIM, 0.10))
+		Color(_accent, 0.10))
 
 
 ## A pass-through deck: thin, bright top edge, and a dashed under-edge. The
@@ -912,7 +1292,7 @@ func _draw_ground(rect: Rect2, specks: Array, cracks: Array) -> void:
 func _draw_deck(rect: Rect2) -> void:
 	var pal := _palette()
 	MathArt.px_rect(self, Rect2(rect.position, Vector2(rect.size.x, rect.size.y)),
-		Color(MathArt.STONE_HI, 0.92))
+		Color(_edge, 0.92))
 	MathArt.px_rect(self, Rect2(rect.position, Vector2(rect.size.x, 2.0)), pal["edge"])
 	# Dashed underside: 6 on, 5 off.
 	var x := rect.position.x
@@ -923,19 +1303,19 @@ func _draw_deck(rect: Rect2) -> void:
 		x += 11.0
 	for fraction in [0.0, MathArt.INV_PHI * MathArt.INV_PHI, 1.0]:
 		MathArt.px_rect(self, Rect2(roundf(rect.position.x + rect.size.x * float(fraction)),
-			rect.position.y + 2.0, 1, 3.0), Color(MathArt.PALE_DIM, 0.20))
+			rect.position.y + 2.0, 1, 3.0), Color(_accent, 0.20))
 
 
 ## A thick solid mass: a pillar, a lip or a vault floor. Reads as stone, not as
 ## something you can slip through.
 func _draw_mass(rect: Rect2) -> void:
 	var pal := _palette()
-	MathArt.px_rect(self, rect, Color(MathArt.STONE, 0.96))
+	MathArt.px_rect(self, rect, Color(_stone, 0.96))
 	MathArt.px_rect(self, Rect2(rect.position, Vector2(rect.size.x, 3.0)), pal["edge"])
 	MathArt.px_rect(self, Rect2(rect.position + Vector2(rect.size.x - 3.0, 0), Vector2(3.0, rect.size.y)),
 		Color(MathArt.INK, 0.55))
 	MathArt.px_rect(self, Rect2(rect.position + Vector2(1.0, 3.0), Vector2(1.0, rect.size.y - 3.0)),
-		Color(MathArt.STONE_HI, 0.22))
+		Color(_edge, 0.22))
 	var y := rect.position.y + 14.0
 	var row := 0
 	while y < rect.end.y - 6.0:
@@ -943,7 +1323,7 @@ func _draw_mass(rect: Rect2) -> void:
 		var x := rect.position.x + 8.0 + offset
 		while x < rect.end.x - 10.0:
 			MathArt.px_rect(self, Rect2(roundf(x), roundf(y), 1.0, 1.0),
-				Color(MathArt.STONE_DIM, 0.5))
+				Color(_stone.darkened(0.20), 0.5))
 			x += 36.0
 		y += 16.0
 		row += 1
@@ -975,26 +1355,38 @@ func _draw_annex_floor(rect: Rect2) -> void:
 	# language as a station plinth in the hub, so "this is somewhere" is already
 	# learned before the player reaches one.
 	MathArt.px_rect(self, Rect2(rect.position.x, rect.position.y + rect.size.y - 1.0,
-		rect.size.x, 4.0), Color(MathArt.STONE_HI, 0.85))
+		rect.size.x, 4.0), Color(_edge, 0.85))
 	MathArt.px_rect(self, Rect2(rect.position.x, rect.position.y + 2.0, rect.size.x, 1.0),
-		Color(MathArt.WHITE, 0.55))
+		Color(_accent, 0.55))
 	for side in 2:
 		var bx := rect.position.x + 3.0 if side == 0 else rect.end.x - 5.0
 		MathArt.px_rect(self, Rect2(bx, rect.position.y + rect.size.y, 2.0, 8.0),
-			Color(MathArt.STONE_HI, 0.7))
+			Color(_edge, 0.7))
 
 
-func _draw_platform(rect: Rect2) -> void:
+func _draw_platform(rect: Rect2, oneway := false) -> void:
 	var pal := _palette()
-	MathArt.px_rect(self, rect, MathArt.STONE)
+	MathArt.px_rect(self, rect, _stone)
 	MathArt.px_rect(self, Rect2(rect.position, Vector2(rect.size.x, 2.0)), pal["edge"])
 	MathArt.px_rect(self, Rect2(rect.position + Vector2(0, 2), Vector2(rect.size.x, 1.0)),
 		Color(MathArt.MID_DIM, 0.25))
-	MathArt.px_rect(self, Rect2(rect.position + Vector2(0, rect.size.y - 2.0), Vector2(rect.size.x, 2.0)),
-		Color(MathArt.INK, 0.8))
+	if oneway:
+		# A broken underside against a solid stone body is the shape cue; colour
+		# only reinforces it. The bright top edge still reads as standable.
+		var x := rect.position.x
+		var bottom := rect.position.y + rect.size.y - 1.0
+		while x < rect.end.x:
+			var run := minf(7.0, rect.end.x - x)
+			MathArt.px_rect(self, Rect2(roundf(x), bottom, run, 1.0), Color(MathArt.INK, 0.85))
+			MathArt.px_rect(self, Rect2(roundf(x), rect.position.y + rect.size.y, run, 1.0),
+				Color(_accent, 0.22))
+			x += 13.0
+	else:
+		MathArt.px_rect(self, Rect2(rect.position + Vector2(0, rect.size.y - 2.0), Vector2(rect.size.x, 2.0)),
+			Color(MathArt.INK, 0.8))
 	for fraction in [0.0, MathArt.INV_PHI * MathArt.INV_PHI, MathArt.INV_PHI, 1.0]:
 		MathArt.px_rect(self, Rect2(roundf(rect.position.x + rect.size.x * float(fraction)),
-			rect.position.y + 2.0, 1, 4.0), Color(MathArt.PALE_DIM, 0.16))
+			rect.position.y + 2.0, 1, 4.0), Color(_accent, 0.16))
 	var seam := rect.position.x + 24.0
 	while seam < rect.end.x - 10.0:
 		MathArt.px_rect(self, Rect2(roundf(seam), rect.position.y + 3.0, 1, rect.size.y - 5.0),
@@ -1005,9 +1397,9 @@ func _draw_platform(rect: Rect2) -> void:
 func _draw_bounds() -> void:
 	var right := float(data.get("width", 0.0))
 	for x in [-WALL_W, right]:
-		MathArt.px_rect(self, Rect2(x, WALL_TOP, WALL_W, WALL_H), MathArt.STONE)
-		MathArt.px_rect(self, Rect2(x, WALL_TOP, 2.0, WALL_H), Color(MathArt.STONE_HI, 0.22))
-		MathArt.px_rect(self, Rect2(x, WALL_TOP, WALL_W, 2.0), Color(MathArt.STONE_HI, 0.45))
+		MathArt.px_rect(self, Rect2(x, WALL_TOP, WALL_W, WALL_H), _stone)
+		MathArt.px_rect(self, Rect2(x, WALL_TOP, 2.0, WALL_H), Color(_edge, 0.22))
+		MathArt.px_rect(self, Rect2(x, WALL_TOP, WALL_W, 2.0), Color(_edge, 0.45))
 
 
 func _draw_fog() -> void:
@@ -1019,5 +1411,5 @@ func _draw_fog() -> void:
 			for band in bands:
 				var width := 90.0 - float(band) * 22.0
 				MathArt.px_rect(self, Rect2(x - width * 0.5, rect.position.y - 20.0 + float(band) * 5.0, width, 3.0),
-					Color(MathArt.STONE_DIM, 0.05))
+					Color(_stone.darkened(0.20), 0.05))
 			x += 420.0

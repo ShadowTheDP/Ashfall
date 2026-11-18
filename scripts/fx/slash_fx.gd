@@ -8,7 +8,7 @@ extends Node2D
 ## blade + trail can never fuse into an L.
 
 var facing := 1
-var color := MathArt.WHITE
+var color := MathArt.PICKUP
 var radius := 38.0
 var arc := 1.05
 var _t := 0.0
@@ -64,11 +64,11 @@ func _draw() -> void:
 		# thick stroke reads as the blade's own heat rather than as more trail.
 		if i == 0:
 			MathArt.arc(self, Vector2.ZERO, radius, a0 + span * t0, a0 + span * t1,
-				Color(MathArt.WHITE, tone), 1.0)
+				Color(MathArt.PICKUP, tone), 1.0)
 	# Three shed sparks behind the trail, well clear of the dashes.
 	for i in 3:
 		var a := a0 - 0.10 - float(i) * 0.16
 		var dir := Vector2.from_angle(a)
 		var from := dir * (radius + 2.0)
 		MathArt.line(self, from, from + dir * (5.0 + float(i)), 
-			Color(MathArt.WHITE, alpha * (0.50 - float(i) * 0.13)), 1.0)
+			Color(MathArt.FIRE, alpha * (0.50 - float(i) * 0.13)), 1.0)

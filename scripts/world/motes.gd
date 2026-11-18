@@ -19,7 +19,7 @@ func _ready() -> void:
 			"vel": Vector2(randf_range(-5.0, 5.0), randf_range(-14.0, -4.0)),
 			"alpha": randf_range(0.10, 0.40),
 			"phase": randf() * TAU,
-			"color": MathArt.WHITE if i % 5 != 0 else MathArt.PALE_DIM,
+			"color": MathArt.CELL if i % 5 != 0 else MathArt.FIRE,
 		})
 
 

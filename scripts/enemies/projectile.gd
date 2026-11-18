@@ -9,11 +9,12 @@ var direction := Vector2.RIGHT
 var speed := 320.0
 var damage := 7.0
 var knockback := 150.0
-var tint := MathArt.PALE
+var tint := MathArt.DANGER
 var source: Node2D = null
 var crit_mult := 1.0
 ## Colour-scaling level, set by the owner before setup_player().
 var attr := 0
+var status_id := ""
 var spin := false
 var ballistic := false
 var gravity_accel := 0.0
@@ -26,7 +27,6 @@ var _life := 2.6
 var _radius := 4.0
 var _velocity := Vector2.ZERO
 var _trail: Array[Vector2] = []
-var _hit_bodies: Array[Node] = []
 
 
 func setup(aim: Vector2, p_speed: float, p_damage: float, p_tint: Color) -> void:
@@ -103,7 +103,7 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	_t += delta
 	if _t >= _life:
-		Combat.burst(global_position, MathArt.LIGHT, 4, 80.0)
+		Combat.burst(global_position, 4)
 		queue_free()
 		return
 	if ballistic:
@@ -138,11 +138,13 @@ func _on_body_entered(body: Node) -> void:
 			"hitstop": hitstop_time,
 			"source_pos": global_position - direction * 20.0,
 			"point": global_position,
+			"status": status_id,
+			"status_attr": attr,
 		})
-		Combat.spark(global_position, -direction, crit, tint)
+		Combat.spark(global_position, -direction, crit, MathArt.FIRE)
 		queue_free()
 		return
-	Combat.burst(global_position, tint, 5, 110.0)
+	Combat.burst(global_position, 5)
 	queue_free()
 
 
@@ -162,7 +164,7 @@ func _draw_bolt() -> void:
 		var alpha := 0.35 * (1.0 - float(index) / 7.0)
 		MathArt.px_rect(self, Rect2(roundf(point.x), roundf(point.y), 1, 1), Color(tint, alpha))
 	MathArt.px_rect(self, Rect2(-2, -2, 4, 4), Color(tint, 0.95))
-	MathArt.px_rect(self, Rect2(-1, -1, 2, 2), Color(MathArt.WHITE, 0.9))
+	MathArt.px_rect(self, Rect2(-1, -1, 2, 2), Color(MathArt.DANGER, 0.9))
 
 
 func _draw_kunai() -> void:
@@ -171,7 +173,7 @@ func _draw_kunai() -> void:
 		MathArt.px_rect(self, Rect2(roundf(point.x), roundf(point.y), 1, 1), Color(tint, 0.30 * (1.0 - float(index) / 7.0)))
 	# A 4px diamond blade on a 1px grip.
 	MathArt.px_poly(self, PackedVector2Array([Vector2(6, 0), Vector2(0, -3), Vector2(-3, 0), Vector2(0, 3)]),
-		Color(tint, 0.95), Color(MathArt.WHITE, 0.8), 1.0)
+		Color(tint, 0.95), Color(MathArt.PICKUP, 0.8), 1.0)
 	MathArt.px_rect(self, Rect2(-6, -1, 4, 1), MathArt.PALE_DIM)
 	MathArt.px_rect(self, Rect2(-7, -1, 1, 2), MathArt.MID_DIM)
 
@@ -183,4 +185,4 @@ func _draw_wave() -> void:
 		var x := roundf(lerpf(-20.0, 20.0, k))
 		var y := roundf(sin(k * TAU * 1.6 + phase) * 5.0)
 		MathArt.px_rect(self, Rect2(x, y - 3, 1, 7), Color(tint, 0.45))
-		MathArt.px_rect(self, Rect2(x, y - 1, 1, 2), Color(MathArt.WHITE, 0.5))
+		MathArt.px_rect(self, Rect2(x, y - 1, 1, 2), Color(MathArt.DANGER, 0.5))

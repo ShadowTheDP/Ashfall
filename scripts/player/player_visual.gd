@@ -3,21 +3,20 @@ extends Node2D
 ## The player is a SQUARE. No legs. No arms. The hand is a single dot.
 ##
 ## All character is carried by motion:
-##   run      lean + footfall squash (2 frames on contact)
-##   jump     takeoff squash, one 90-degree tumble, apex hang
-##   land     squash 2 frames, then a 4-frame settle
+##   run      lean, footfall bob and a soft shadow
+##   jump     one 90-degree tumble and apex hang
 ##   roll     360-degree spin with afterimages
-##   attack   anticipation coil, solid smear, overshoot, one-frame lag
-##   hurt     12-degree tilt + squash
+##   attack   anticipation coil, solid smear and overshoot
+##   hurt     12-degree tilt
 ##
-## The square is deliberately plain: no notch, no pip, no eyes. The tumble
-## itself is what communicates the face change.
+## The square stays fixed. Its dark inset face and single pulsing core carry
+## orientation; no other pip, eye or decorative mark is added.
 
-const BODY := MathArt.WHITE
+const BODY := MathArt.PLAYER
 const FACE := MathArt.INK
 const RIM := MathArt.BLACK
-const HAND := MathArt.WHITE
-const BLADE := MathArt.WHITE
+const HAND := MathArt.PLAYER
+const BLADE := MathArt.PICKUP
 
 const HALF := 13.0
 # The sword rests pointing UP and slightly forward. Godot's +y is down, so an
@@ -29,11 +28,7 @@ var _t := 0.0
 var _shadow_y := 24.0
 var _shadow_alpha := 0.0
 var _shadow_scale := 1.0
-var _prev_blade_angle := REST_ANGLE
-var _blade_lag_angle := REST_ANGLE
 var weapon_visual: Node2D = null
-var _body_lag := Vector2.ZERO
-var _body_lag_target := Vector2.ZERO
 
 
 func _ready() -> void:
@@ -51,14 +46,12 @@ func _build_weapon() -> void:
 	weapon_visual.z_index = 3
 	add_child(weapon_visual)
 	if weapon_visual.has_method("setup"):
-		weapon_visual.setup(Profile.selected_weapon)
+		weapon_visual.setup(str(Game.build.slots[p.weapon_slot]["id"]) if Game.build != null else Profile.selected_weapon)
 
 
 func _process(delta: float) -> void:
 	_t += delta
 	_update_shadow()
-	_body_lag = _body_lag.lerp(_body_lag_target, 1.0 - exp(-24.0 * delta))
-	_blade_lag_angle = lerp_angle(_blade_lag_angle, _prev_blade_angle, 1.0 - exp(-28.0 * delta))
 	queue_redraw()
 
 
@@ -123,7 +116,7 @@ func _draw_soft_shadow(center: Vector2, rx: float, ry: float, alpha: float) -> v
 		var points := PackedVector2Array()
 		for p in MathArt.ngon(20, 1.0):
 			points.append(Vector2(p.x * rx * scale, p.y * ry * scale) + center)
-		MathArt.px_poly(self, points, Color(0.0, 0.0, 0.0, clampf(a, 0.0, 0.22)))
+		MathArt.px_poly(self, points, Color(MathArt.BLACK, clampf(a, 0.0, 0.22)))
 
 
 func _body_rotation() -> float:
@@ -158,7 +151,7 @@ func _draw_body(alpha: float) -> void:
 		lean = 0.14 * clampf(absf(p.velocity.x) / p.max_speed, 0.0, 1.0) * float(p.facing)
 
 	draw_set_transform(
-		Vector2(_body_lag.x, bob + _body_lag.y),
+		Vector2(0.0, bob),
 		_body_rotation() + lean,
 		_body_scale() * Vector2(float(p.facing), 1.0)
 	)
@@ -176,7 +169,7 @@ func _draw_body(alpha: float) -> void:
 
 	# The core: a white dot in the black face, pulsing.
 	var pulse := 0.72 + 0.28 * sin(_t * 6.0)
-	MathArt.disc(self, Vector2.ZERO, 2.6 * pulse, _tint(MathArt.WHITE, alpha))
+	MathArt.disc(self, Vector2.ZERO, 2.6 * pulse, _tint(MathArt.PLAYER, alpha))
 
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	_draw_aegis(alpha)
@@ -269,6 +262,8 @@ func _blade_angle() -> float:
 func _blade_length() -> float:
 	# The blade length is authored in data/weapons.json next to the hitbox, so
 	# the drawn blade and the damage box can never drift apart.
+	if p.state != Player.State.ATTACK and not p.weapon_combo.is_empty():
+		return float(p.weapon_combo[0].get("blade", 38))
 	if p.attack_cfg.has("blade"):
 		return float(p.attack_cfg["blade"])
 	return 38.0
@@ -279,6 +274,11 @@ func _draw_hand_and_blade(alpha: float) -> void:
 	# sword never appears to start inside the body.
 	# Grip sits in the LOWER half of the square, on the front edge.
 	var hand := Vector2(float(p.facing) * HALF, 4.0)
+	if Game.build != null and Game.build.definition(Game.build.slots[p.weapon_slot]).get("action") == "shield":
+		var center := hand + Vector2(p.facing * 8, -8)
+		MathArt.poly(self, MathArt.ngon(6, 16, 0, center), MathArt.INK, MathArt.PLAYER, 2)
+		MathArt.ring(self, center, 16 * MathArt.INV_PHI, MathArt.PICKUP if p.guard_t > 0 else MathArt.MID, 1)
+		return
 	var angle := REST_ANGLE
 	if p.state == Player.State.ATTACK:
 		angle = _blade_angle()
@@ -286,7 +286,6 @@ func _draw_hand_and_blade(alpha: float) -> void:
 		angle = REST_ANGLE + sin(_t * 15.0) * 0.10
 	else:
 		angle = REST_ANGLE + sin(_t * 2.6) * 0.06
-	_prev_blade_angle = angle
 
 	var length := _blade_length()
 	var direction := Vector2.from_angle(angle)
@@ -311,11 +310,11 @@ func _draw_hand_and_blade(alpha: float) -> void:
 		tip - side * tip_half,
 		base - side * base_half,
 	])
-	MathArt.px_poly(self, blade, _tint(BLADE, alpha), _tint(MathArt.WHITE, alpha * 0.35), 1.0)
+	MathArt.px_poly(self, blade, _tint(BLADE, alpha), _tint(MathArt.PICKUP, alpha * 0.35), 1.0)
 
 	# A single bright edge along ONE side only, so it reads as a bevel rather
 	# than a second blade.
-	MathArt.line(self, base + side * (base_half - 0.4), tip, _tint(MathArt.WHITE, alpha * 0.75), 1.0)
+	MathArt.line(self, base + side * (base_half - 0.4), tip, _tint(MathArt.PICKUP, alpha * 0.75), 1.0)
 
 	# Guard: a short bar perpendicular to the blade, centred on the grip and
 	# kept SHORT so it cannot form an "L" with the blade.
@@ -342,11 +341,11 @@ func _draw_aegis(alpha: float) -> void:
 		var radius := 30.0 + float(ring_index) * 5.0
 		var wobble := sin(_t * 7.0 + float(ring_index) * 0.8) * 1.8
 		MathArt.ring(self, Vector2.ZERO, radius + wobble,
-			Color(MathArt.WHITE, alpha * life_k * (0.55 - float(ring_index) * 0.14)), 1.5)
+			Color(MathArt.PICKUP, alpha * life_k * (0.55 - float(ring_index) * 0.14)), 1.5)
 	for i in 6:
 		var a := _t * 2.6 + TAU * float(i) / 6.0
 		MathArt.disc(self, Vector2.from_angle(a) * (34.0 + float(i % 2) * 5.0), 1.8,
-			Color(MathArt.WHITE, alpha * life_k * 0.85))
+			Color(MathArt.PICKUP, alpha * life_k * 0.85))
 
 
 # --- Roll / death -----------------------------------------------------------
@@ -359,7 +358,7 @@ func _draw_roll(alpha: float) -> void:
 	MathArt.px_rect(self, outer, _tint(BODY, alpha))
 	draw_rect(outer, Color(RIM, alpha * 0.9), false, 2.0)
 	MathArt.px_rect(self, Rect2(-4.0, -4.0, 8.0, 8.0), Color(FACE, alpha * 0.9))
-	MathArt.disc(self, Vector2.ZERO, 2.0, Color(MathArt.WHITE, alpha))
+	MathArt.disc(self, Vector2.ZERO, 2.0, Color(MathArt.PLAYER, alpha))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
@@ -383,4 +382,4 @@ func _draw_dead() -> void:
 		var oy := -HALF * 0.5 if i < 2 else HALF * 0.5
 		var drift := Vector2(ox, oy) * 1.6 + Vector2(0, float(i) * 2.0)
 		MathArt.px_rect(self, Rect2(drift.x - HALF * 0.45, drift.y - HALF * 0.45, HALF * 0.9, HALF * 0.9),
-			Color(MathArt.MID, 0.85))
+			Color(MathArt.PLAYER, 0.85))

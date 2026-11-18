@@ -12,6 +12,7 @@ var tier := 0
 ## BEFORE enable(); enable() deliberately does not touch it, so a box can be
 ## re-armed for a different swing without a signature change.
 var attr := 0
+var status_id := ""
 var source: Node2D = null
 var active := false
 var shape_node: CollisionShape2D = null
@@ -84,13 +85,15 @@ func _try_hit(body: Node) -> void:
 		var radius := 12.0
 		if body is Enemy:
 			radius = float((body as Enemy).cfg.get("body_radius", 12.0))
-		point.x += away * radius
+		point.x -= away * radius
 	# HUNTER promises a knife back on every crit; the hit is the only place
 	# that knows a crit happened, so the refund lives here.
 	if crit and source != null and source.has_method("on_crit"):
 		source.on_crit()
 	body.take_hit({
 		"damage": final_damage,
+		"status": status_id,
+		"status_attr": attr,
 		"crit": crit,
 		"knockback": knockback,
 		"hitstop": hitstop_time,
