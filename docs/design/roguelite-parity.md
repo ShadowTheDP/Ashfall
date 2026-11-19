@@ -2,7 +2,7 @@
 
 2026-10-29 真人回報後的最新逐項研究見 [詳細機制比較](../research/dead-cells-mechanics-comparison.md)：Scroll 成長、HP 比例／顯示、裝備、經濟、戰鬥與永久進度。該報告是研究與待修事項，不是本文件下方歷史切片的重跑結果。
 
-最終目標與完成標準統一記在 [GOALS.md](../GOALS.md)。本文件是歷史對照與設計理由，**不是目前任務、下一步或狀態 owner**；舊 L0–L9 roadmap 已於 2026-11-16 刪除，編號只供追溯。目前狀態與剩餘工作見 [current-state](../agent/current-state.md)，route 契約見 [route-runtime.md](route-runtime.md)，房間／能力／地圖見 [biome-graph.md](biome-graph.md)。下方表格與舊實機章節保留當時切片，不代表目前完成度。
+最終目標與完成標準統一記在 [GOALS.md](../GOALS.md)。本文件是歷史對照與設計理由；舊 L0–L9 roadmap 已於 2026-11-16 刪除，編號只供追溯。route 契約見 [route-runtime.md](route-runtime.md)，房間／能力／地圖見 [biome-graph.md](biome-graph.md)。下方表格與舊實機章節保留當時切片，不代表目前完成度。
 
 ## 核心目標
 
@@ -85,15 +85,15 @@ Dead Cells 公開資料沒有包含所有現行內部生成參數；本文件把
 | 難度 G15 | 首先完成 0 BSC，再擴張難度 | run 固定0，Passage 完整補給，切片結尾不冒充首通／BSC | 完整終局與 BSC 1–5 屬後續範圍 |
 | 驗證 G16 | 真入口、合法進度與實際操作都需證據 | 生成2759/0、物理48/0、雙路線108/0、限定流程52/0；display 圖已檢視 | 人工手感、全順序慢測／舊長距離 walk、退出資源警告、export：後續驗收 |
 
-上述裝備槽、輸入、Scroll、Mutation、Passage 服務與終局已在後續工作實作；此段不再是指令。剩餘是真人雙路線驗收與 UI 理解／美術簽核，見 [current-state](../agent/current-state.md)。
+上述裝備槽、輸入、Scroll、Mutation、Passage 服務與終局已在後續工作實作；此段不再是指令。剩餘是真人雙路線驗收與 UI 理解／美術簽核。
 
-L2 標記完成僅指五節點工程交付；G02/G03 的完整內容與 G16 人工驗收仍部分完成。生成器 reviewer 的四項缺口已用反例重現並修正；輸入 reviewer 續審超時沒有 verdict，已由主線直接審查與回歸。55秒超時的完整 V3 不計通過，另跑約20秒 flow-only 得52/52。
+L2 標記完成僅指五節點工程交付；G02/G03 的完整內容與 G16 人工驗收仍部分完成。生成器的四項缺口已用反例重現並修正；55秒超時的完整 V3 不計通過，另跑約20秒 flow-only 得52/52。
 
 ## 歷史實機與公開畫面对比（L0 前的遷移基準）
 
-以下記錄原五層版本；其提及的舊 h*.png captures 已在後續 cleanup 清理，不能作 L2 畫面證據。最新圖在 `output/screenshots/biome/`。
+以下記錄原五層版本；其提及的舊 h*.png captures 已清理，不能作 L2 畫面證據。
 
-本輪以隔離 Profile 啟動正常 `scenes/main.tscn`，並以 display capture 檢查 Hub、站點、Floor 1/3/5 和房間；素材在 `output/screenshots/h*.png`。Steam 公開畫面與 Wiki biome map 作為參考，不複製其色彩、素材或 room layout：
+本輪以隔離 Profile 啟動正常 `scenes/main.tscn`，並以 display capture 檢查 Hub、站點、Floor 1/3/5 和房間。Steam 公開畫面與 Wiki biome map 作為參考，不複製其色彩、素材或 room layout：
 
 - [Dead Cells Steam gameplay screenshots](https://store.steampowered.com/app/588650/Dead_Cells/) 顯示實際戰鬥是在連續的 side-scrolling、垂直 platform 空間中發生，平台、敵人、環境危險和 traversal 同時出現在一個可讀畫面；Ashfall 的實機 Floor capture 有可用的跳台／柱體／敵人，但仍是單一長 floor 的大段房間與 `FLOOR 1/5` HUD。
 - [Official Wiki biome map](https://deadcells.wiki.gg/wiki/Biomes_map) 顯示固定世界骨架、分層分支、Boss 節點和符文／鑰匙連接；Ashfall 新 `route_graph.json` 已有 15 biome／4 boss 的資料層，但實機仍走 `data/floors.json` 的五個整數 floor，沒有 map、出口選擇或 node-id runtime。
@@ -127,7 +127,7 @@ L2 標記完成僅指五節點工程交付；G02/G03 的完整內容與 G16 人�
 
 ## 遷移順序
 
-目前順序與剩餘工作見 [current-state](../agent/current-state.md)；目標編號見 [GOALS G01–G16](../GOALS.md)，不在這裡複製另一份長期待辦。
+目標編號見 [GOALS G01–G16](../GOALS.md)，不在這裡複製另一份長期待辦。
 
 ## 邊界與驗收
 

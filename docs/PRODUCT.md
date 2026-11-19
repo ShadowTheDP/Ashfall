@@ -1,6 +1,6 @@
 # Ashfall 業務文檔
 
-產品成果以 [GOALS.md](GOALS.md) 為準。九訪問主路、合法 Cistern 替代、三種不同 Boss、原子勝利與完整 Passage 已實作；UI 成熟度增量通過 focused 工程驗證。真人雙路線驗收、UI 美術／理解仍待完成，因此交付 A 尚未正式完成。當前狀態與證據只以 [current-state](agent/current-state.md) 為準；本文件保留產品／架構／數值，不複製進度。
+產品成果以 [GOALS.md](GOALS.md) 為準。九訪問主路、合法 Cistern 替代、三種不同 Boss、原子勝利與完整 Passage 已實作；UI 成熟度增量通過 focused 工程驗證。真人雙路線驗收、UI 美術／理解仍待完成，因此交付 A 尚未正式完成。本文件保留產品／架構／數值，不複製進度。
 
 正式 route 使用 run-owned 五槽、三軸 Scroll／Mutation、gold／loot與Profile v6永久藍圖／Forge及三個獨立存檔；biome入口／Passage檢查點可續玩，區內戰鬥不逐幀保存。首次合法0BSC勝利保存殘留Cells、BSC1與最終Rune。BSC1僅解鎖，未實作高難度。本文永久數值／每房boon／固定五層等表格描述仍活躍的legacy fixtures，不疊加正式build。契約：[run-build.md](design/run-build.md)、[save-slots.md](design/save-slots.md)、[route-runtime.md](design/route-runtime.md)、[delivery-a.md](design/delivery-a.md)。UI 全面美術／結構升級已完成工程，2026-11-15 授權全遊戲多色；真人美術滿意與理解待確認。音訊退出引用警告仍有記錄。
 
@@ -655,7 +655,7 @@ Perfect Dodge 期間 `Game.total_damage_mult()` 額外 ×1.25。
 python tools/check.py
 ```
 
-以下表保留 legacy fixture 的歷史驗證入口與用途；表內舊數字不是本輪驗收結果。目前證據、限制與 timeout 只以 [`current-state`](agent/current-state.md) 為準。
+以下表保留 legacy fixture 的歷史驗證入口與用途；表內舊數字不是本輪驗收結果。
 
 | 階段 | 指令 | 驗證什麼 |
 |---|---|---|
@@ -693,16 +693,16 @@ python tools/check.py --capture bloom
 
 輸出到 `output/screenshots/`（gitignored）。
 
-### 10.3 歷史 L2 證據與本輪入口
+### 10.3 歷史 L2 證據
 
-目前驗證入口、歷史 Passages／Boss／兩路正常鍵盤操作與人工 gate 見 [current-state](agent/current-state.md) 及其中連結的原始日誌；本節只保留歷史 L2 證據。
+本節只保留歷史 L2 工程證據；目前驗證入口見 §10.1 與 [launching.md](launching.md)。
 
 下列為歷史L2五節點工程證據：
 
 - `biome_gen_probe -- --seeds=32`: 2,759/2,759
 - `biome_play_probe`: 48/48；最新 display capture 亦 48/48
 - `run_probe`:112/112；兩條四訪問路線、出口重畫，非九訪問首通
-- 該輪安全維護：purchase114、migration56、economy138、CLI safety12與路徑17；Python runner8項程序測試，Bloom16項實際渲染檢查。UI230／restart42為上一輪證據；最新規範見 [launching.md](launching.md)，狀態見 [current-state](agent/current-state.md)。
+- 該輪安全維護：purchase114、migration56、economy138、CLI safety12與路徑17；Python runner8項程序測試，Bloom16項實際渲染檢查。UI230／restart42為上一輪證據；最新規範見 [launching.md](launching.md)。
 - `audit_v3 -- --flow-only`: 52/52
 
 這些是隔離存檔的自動檢查，不等於人工手感、完整 sequential suite、九訪問 0-BSC 首通、完整 build 或 Windows export。
@@ -799,10 +799,6 @@ python tools/check.py --capture bloom
 | 文件 | 內容 |
 |---|---|
 | `README.md` | 專案入口、快速開始、目錄結構 |
-| `AGENTS.md` | AI agent 工作規則、硬性約束 |
-| `MEMORY.md` | 持久決策、指令、風險、驗證狀態 |
-| [docs/agent/current-state.md](agent/current-state.md) | 唯一目前狀態、證據、剩餘工作與人工 gate |
-| [ASHFALL_UI_IMPROVE_PLAN.md](../ASHFALL_UI_IMPROVE_PLAN.md) | 唯一 UI 執行計畫（1–4 完成；5 為下一步） |
 | [docs/GOALS.md](GOALS.md) | 各部分最終目標 G01–G16、驗收與範圍 |
 | `docs/design/math-art.md` | **視覺語言完整規格** |
 | `docs/design/impact.md` | **打擊感完整規格** |

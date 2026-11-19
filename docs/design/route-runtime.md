@@ -1,6 +1,6 @@
 # Route runtime 執行契約
 
-歷史設計：原 route 契約；舊 roadmap 已刪除，編號只供追溯。房間／能力／地圖見 [biome-graph.md](biome-graph.md)，永久交易見 [delivery-a.md](delivery-a.md)，內容及 Boss 見 [delivery-a-content.md](delivery-a-content.md)、[l5-route-bosses.md](l5-route-bosses.md)。目前狀態只以 [current-state](../agent/current-state.md) 與原始日誌為準。
+歷史設計：原 route 契約；舊 roadmap 已刪除，編號只供追溯。房間／能力／地圖見 [biome-graph.md](biome-graph.md)，永久交易見 [delivery-a.md](delivery-a.md)，內容及 Boss 見 [delivery-a-content.md](delivery-a-content.md)、[l5-route-bosses.md](l5-route-bosses.md)。
 
 ## 狀態與責任
 
@@ -55,5 +55,4 @@ a new embedding load. Central integration passed revision36, save-slot128 and
 Passage111 focused checks, including actual legacy continuation against the
 pre-upgrade formal-caller golden. The bounded ordinary Ash Gate/Gallery journey
 passed7557 checks and earned Canopy without changing the input driver. These
-results do not release Fast/Full, complete dual routes or human acceptance;
-independent integrated review remains the next dependency.
+results do not release Fast/Full, complete dual routes or human acceptance.

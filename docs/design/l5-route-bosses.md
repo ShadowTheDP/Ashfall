@@ -1,8 +1,7 @@
 # L5 route boss integration contract
 
 The isolated boss snapshot is integrated into Level and the ten-profile content catalog.
-Runtime evidence is recorded in the current-state file. The snapshot
-statements below explain the original bounded contribution, not current acceptance.
+The snapshot statements below explain the original bounded contribution, not current acceptance.
 
 Choose three different spatial problems because the player should answer Bridge with
 jump/roll timing, Clock with committed landing avoidance and height changes, and Regent
@@ -13,7 +12,7 @@ Reject homing, permanent armour and damage inflation as substitutes for distinct
 for `bridge_sentinel`, `clock_warden`, `silent_regent`; keep the legacy Warden fixture on
 Enemy. Use the exact kind ID as the configure argument, with that kind's enemy cfg.
 The existing Enemy `boss` lifecycle owns Game.boss, died, Cells and kill bookkeeping;
-route rewards/terminal settlement remain the parent's existing flow, not this controller.
+route rewards/terminal settlement remain the existing route flow, not this controller.
 The subclass takes a private config copy and forces boss=true and shield=false; MathArt
 semantic colors own the current Boss render.
 The kind-specific guard sets shield only around a hit in its guarded window.
@@ -76,8 +75,7 @@ There are at most 12 owned live hazards. Projectiles live at most 6 seconds; col
 delay+active is capped to 6 seconds. If content exceeds those caps, timing is clamped;
 the hazard cap retires the oldest hazard. Use values below the caps for intended play.
 
-Original snapshot validation request (subsequently executed by the parent; see
-[current-state](../agent/current-state.md)):
+Original snapshot validation request (subsequently executed):
 import/compile, execute the isolated profile fixture scene,
 then combat/soak/impact and route integration checks, display captures and human two-route play.
 The fixture uses production Player, Hitbox and Projectile with deliberately controlled
@@ -86,4 +84,4 @@ damage in both directions, every attack type including upper lane, phase thresho
 patterns, committed attacks under repeated hits, translated floor geometry, hazard caps,
 TTL expiration, death cleanup and scene removal. It is not a hands-off full-play pass.
 The isolated snapshot had no engine/assets/cache. Its static-only result is superseded
-by parent runtime tests and full keyboard runs; neither establishes human balance signoff.
+by runtime tests and full keyboard runs; neither establishes human balance signoff.

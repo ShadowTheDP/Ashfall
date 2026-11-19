@@ -10,14 +10,19 @@ output/*
 *.tmp
 *.log
 
-# Session exports (pi writes these into the project root)
-pi-session-*.html
-
 # Python validation bytecode
 __pycache__/
 
-# Vendored dependencies (restore with `npm ci` inside .pi/npm)
+# Node dependencies (local only)
 node_modules/
+
+# Agent/tool runtime files (never publish)
+.pi/
+.omp/
+/AGENTS.md
+/MEMORY.md
+/ASHFALL_UI_IMPROVE_PLAN.md
+/docs/agent/
 
 # OS noise
 Thumbs.db

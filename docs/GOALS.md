@@ -1,6 +1,6 @@
 # Ashfall 最終目標
 
-本文件是產品成果的唯一清單。L0–L9 roadmap 已於 2026-11-16 廢除；目前狀態、授權範圍與剩餘工作見 [current-state.md](agent/current-state.md)，視覺規格見 [ui-system.md](design/ui-system.md)。[roguelite-parity.md](design/roguelite-parity.md) 保留公開參考、差異盤點與設計理由。歷史文件中的固定五層、每房 boon、R 重開當層等描述是遷移來源，不是完成條件。
+本文件是產品成果的唯一清單。L0–L9 roadmap 已於 2026-11-16 廢除；視覺規格見 [ui-system.md](design/ui-system.md)。[roguelite-parity.md](design/roguelite-parity.md) 保留公開參考、差異盤點與設計理由。歷史文件中的固定五層、每房 boon、R 重開當層等描述是遷移來源，不是完成條件。
 
 ## 總目標
 

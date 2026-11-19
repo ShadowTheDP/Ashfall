@@ -1,6 +1,6 @@
 # Delivery A — implementation contract
 
-Status: route, Passage and UI engineering are implemented. Current evidence is in [current-state](../agent/current-state.md); this contract is not test evidence. Human UI art/comprehension and 真人雙路線驗收 remain required, so Delivery A is not complete.
+Status: route, Passage and UI engineering are implemented; this contract is not test evidence. Human UI art/comprehension and 真人雙路線驗收 remain required, so Delivery A is not complete.
 
 ## Additive persistence / transaction packet
 
@@ -30,4 +30,4 @@ Status: route, Passage and UI engineering are implemented. Current evidence is i
 
 Nine-visit primary route and one lawful cross-run alternative, three distinct Boss mechanisms, guarded atomic final victory/BSC1 unlock. No BSC1 gameplay or unauthorized world expansion. Preserve all existing regression assertions unless the tested contract genuinely changes, retaining legacy fixtures explicitly. End-to-end tests must use ordinary input, actual combat, physical traversal and actual pickup; no teleport, invulnerability, stat overrides or auto awards. Automated play and display captures are labelled automated; mandatory human signoff remains a separate unchecked gate.
 
-Baseline rerun: `python tools/check.py --fast`, 22 steps, 162.82s, passed; `output/delivery-a-baseline-fast.log`. Audio exit reference warning still reproduced. This does not validate the later route/UI additions.
+Baseline rerun: `python tools/check.py --fast`, 22 steps, 162.82s, passed. Audio exit reference warning still reproduced. This does not validate the later route/UI additions.

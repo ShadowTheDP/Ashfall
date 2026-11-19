@@ -1,12 +1,12 @@
 # L2：房間圖、能力與地圖契約
 
-歷史設計（原 L2-01..05）：保留當時五個 runtime biome 的生成設計與驗收記錄；舊 roadmap 已刪除，編號只供追溯。其後擴充為十個 runtime profiles，目前內容、狀態與人工 gate 以 [route-runtime.md](route-runtime.md) 及 [current-state](../agent/current-state.md) 為準，不假稱完成 19 節點或人工手感驗收。
+歷史設計（原 L2-01..05）：保留當時五個 runtime biome 的生成設計與驗收記錄；舊 roadmap 已刪除，編號只供追溯。其後擴充為十個 runtime profiles，目前內容與人工 gate 見 [route-runtime.md](route-runtime.md)，不假稱完成 19 節點或人工手感驗收。
 
 ## 2026-11-04 有界升級授權與待驗契約
 
 2026-11-04 使用者採納了一項有界的精修／生成指令，把當時純 UI 工作擴至 Delivery A biome 內部的房間圖／空間組裝變化。該階段現已完成並屬歷史；後續 2026-11-15 全遊戲多色授權另行取代舊色彩限制。世界路線、九訪問、三 Boss、合法 Cistern、Rune／key／出口及敵人／經濟總預算仍不變，且不開未授權的擴充世界、BSC 1–5 或 19 節點。
 
-準備保存現有 generator／表／tests／tools／docs 原始 bytes 與十個 profiles 的 seeds1..32 實測 signature／耗時，見 `output/ui-refinement-map-2026-11-04/`。Ash Gate 是第一個 pilot；authored 合法布局候選或有界 placement 的最小方案由基線缺口決定，準備階段不預選通用 solver。空間 signature 排除 template／敵人名稱，保留房間身份、位置、bounds、socket／edge 模式及實體幾何，不能把換模板數當新布局數。
+準備保存現有 generator／表／tests／tools／docs 原始 bytes 與十個 profiles 的 seeds1..32 實測 signature／耗時。Ash Gate 是第一個 pilot；authored 合法布局候選或有界 placement 的最小方案由基線缺口決定，準備階段不預選通用 solver。空間 signature 排除 template／敵人名稱，保留房間身份、位置、bounds、socket／edge 模式及實體幾何，不能把換模板數當新布局數。
 
 canonical layout 同時供 Level、spawn、collision、map、loot、checkpoint 與出口使用。schema/socket／footprint／clearance／SurfaceReach 及真實 Player 物理驗證保留；圖連通和 metrics 不是正常兩路線行走證明。相同 seed／revision 可重現，無合法候選須有界失敗且保留舊 scene/run state。
 
@@ -49,7 +49,7 @@ Passage 只有服務和已選目的地的繼續門，不再選路。進新 node 
 
 ## 驗收
 
-L2 當時結果：32 seeds ×5 biomes ×16 Rune 狀態的 sweep 為 2759 checks／0 failures；真實 120 Hz 物理與輸入 48／0（display capture 同樣通過）；雙路線108／0，V3 flow-only52／0。這些不是最新整合測試數字，當前證據見 [current-state](../agent/current-state.md)。`output/screenshots/biome/` 保存該階段分岔、探索／世界圖、藤蔓、破地、鎖門／開門；這些是自動輸入證據，人工手感仍未驗收。
+L2 當時結果：32 seeds ×5 biomes ×16 Rune 狀態的 sweep 為 2759 checks／0 failures；真實 120 Hz 物理與輸入 48／0（display capture 同樣通過）；雙路線108／0，V3 flow-only52／0。這些不是最新整合測試數字。該階段分岔、探索／世界圖、藤蔓、破地、鎖門／開門有自動輸入證據，人工手感仍未驗收。
 
 隔離存檔：模組／socket schema 反例、相同 seed 重現、五 biome 的能力狀態 sweep、blocked landing／牆阻擋、實際角色分岔合流、疊層房分別啟動、Rune 拾取前後、key 消耗、實體出口留敵、Passage 固定目的地、地圖隱藏未知／modal／checkpoint，以及死亡／放棄 pending 清理。
 
@@ -108,10 +108,9 @@ and high/low/long physical fixtures55/52/52 inside30s each. The bounded ordinary
 Ash Gate/Gallery input diagnostic earned Canopy; it is not full-route acceptance.
 AFTER320-layout/1600-check metrics passed34.67s inside35s, with ordinary
 embeddings1→3 and topology unchanged. Generation median36.04ms versus14.30ms
-before is a measured cost. The map gallery, metrics, source hashes and complete
-failure ledger are in `output/ui-refinement-map-2026-11-04/integration/`.
-Complete ordinary dual routes and human play/feel/two-route acceptance remain pending
-independent integrated review; static or physical fixtures cannot sign them.
+before is a measured cost.
+Complete ordinary dual routes and human play/feel/two-route acceptance remain pending;
+static or physical fixtures cannot sign them.
 
 
 ## Central verification performance repair — 2026-11-06

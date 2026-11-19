@@ -1,6 +1,6 @@
 # L3 — 局內 build、戰鬥槽與經濟
 
-> 主體保留L3交付時的設計；Mutation／Forge 與 Profile v6 已在後續實作，不應把下方歷史「未啟用／未實作」當成現況。最新 UI 契約見末節、[UI system](ui-system.md)；目前狀態見 [current-state](../agent/current-state.md)。
+> 主體保留L3交付時的設計；Mutation／Forge 與 Profile v6 已在後續實作，不應把下方歷史「未啟用／未實作」當成現況。最新 UI 契約見末節、[UI system](ui-system.md)。
 
 ## Ownership 與生命週期
 
@@ -42,14 +42,14 @@
 
 `tests/l3_build_probe.tscn` 77 checks：真實 Main／Biome、鍵盤事件、碰撞 hitbox／projectile、敵人 HP／poison tick、盾防方向、逐件冷卻、Scroll／食物／滿槽替換／交易／回收、轉場、死亡、放棄、最後 pause-Q 真實退出。戰鬥及能力個案有 fixture 定位／固定敵人；不是一整輪人工遊玩。`biome_play_probe` 48 項另覆蓋真實移動、dive／climb／Rune／modal。
 
-`python tools/check.py --fast`及display l3 77項是上述L3輪次的歷史證據；不作本UI輪通過依據。最新結果以 [current-state](../agent/current-state.md) 為準。
+`python tools/check.py --fast`及display l3 77項是上述L3輪次的歷史證據；不作本UI輪通過依據。
 
 ## 2026-11-02 顯示投影與決策契約
 
 - `RunBuild.display_stats()`重用`Damage.compute`、`health`、`cooldown`及當前品質／詞綴／匹配軸／常駐Mutation；`replacement_projection()`／`scroll_projection()`使用只讀計算副本，不改live slots／UID／wallet／checkpoint。候選與現裝在同一build基準、同種動作才可解讀數值差。
 - Scroll明示下一點受益槽位、真實normal傷害與max/current HP；現規則只提高上限、不回血，預告NO HEAL；MECH-01比例政策獨立，UI修復沒有改公式。
 - HP文字max向上取整；未滿current向下取整，正值小於1仍顯示1，0為0，真滿分子=分母；FULL/HURT用raw值判斷。血條每格按ratio部分填充，不能用ceil讓未滿全亮。
-- 本輪isolated Fast32/224.65s及L3 display103／HUD65通過；before/after、長內容與真實按鍵路徑在`output/ui-execution-20261030/`。模型視覺審查不等於真人理解／真人雙路線驗收；未重跑本輪Full。
+- 本輪isolated Fast32/224.65s及L3 display103／HUD65通過；before/after、長內容與真實按鍵路徑已於該輪檢查。模型視覺審查不等於真人理解／真人雙路線驗收；未重跑本輪Full。
 
 選擇原owner提供無副作用投影與一致顯示契約，因為預覽不能另寫一套可能漂移的玩法公式。
 放棄重平衡／維持HP比例、新背包及整套UI遷移；它們不是本輪授權的顯示修復。

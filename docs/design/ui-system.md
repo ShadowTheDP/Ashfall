@@ -1,8 +1,8 @@
 # Ashfall UI system — current spec
 
-本文件只保留現行 UI 規格與理由。歷史階段、舊截圖帳本、灰階違規與失效位置已刪除；原始證據留在 `docs/research/`、`output/` 與 dated validation reports。狀態、驗證與人工 gate 只看 [current-state](../agent/current-state.md)。
+本文件只保留現行 UI 規格與理由。歷史階段、舊截圖帳本、灰階違規與失效位置已刪除。
 
-第 1–8 步已完成工程實作與有限視覺；最終集中驗證與 manifest 見 [RESULT](../../output/ui-product/step5-8-validation/RESULT.md) 與 current-state，自動與有限視覺 gate 已 PASS，人類、硬體與 export 仍待，故不得把下列契約當成人類驗收通過。以下幾何、符號與文案是凍結來源的實際契約，不是計畫目標；也不改變鍵盤完整可用、MathArt、768×480 邏輯尺寸與 Profile 唯一 writer 等既有不變條件。
+第 1–8 步已完成工程實作與有限視覺；自動與有限視覺 gate 已 PASS，人類、硬體與 export 仍待，故不得把下列契約當成人類驗收通過。以下幾何、符號與文案是凍結來源的實際契約，不是計畫目標；也不改變鍵盤完整可用、MathArt、768×480 邏輯尺寸與 Profile 唯一 writer 等既有不變條件。
 
 ## 目標
 
@@ -31,7 +31,7 @@ UI 借用 Dead Cells 可觀察的功能分組與導覽，不複製其版面、�
 - 授權與出處：SIL OFL 1.1，`assets/fonts/OFL.txt` 為同 commit 的原始授權，`assets/fonts/PROVENANCE.md` 記錄來源、雜湊與字型內建著作權聲明。只交付 Regular 一個字重。
 - `MathArt.ui_font()` 是唯一載入點；缺檔或讀不到時必須 `push_error`，不得用系統 fallback 假裝中文字型已交付。玩家機不依賴作業系統字型。
 - 語言：首次預設 `zh_TW`，`en` 為回退；`project.godot` 以 `internationalization/locale/translations` 註冊 Godot 原生 CSV 匯入產生的 `data/localization/ui.<locale>.translation`，並設定回退 locale 與 Text Server 資料。`data/localization/ui.csv`（欄位固定 `keys,en,zh_TW`，引號內可含換行）是唯一手寫來源；靜態文案用 `UI_*` key；內容名稱用 `<FAMILY>_<ID>_NAME`／`_TEXT`（id 不縮寫、不以 raw ID 當玩家名稱）；動態句用命名 placeholder。官方流程見 <https://docs.godotengine.org/en/stable/tutorials/i18n/localization_using_spreadsheets.html>。生成檔不手改、不當成執行期 fallback 機制。
-- 這兩個生成資源必須與 `ui.csv` 一起交付：全新專案啟動時，`locale/translations` 的註冊清單即可直接解析，不需要任何執行期 fallback 或 bootstrap 程式碼。原生編輯器匯入會由 `ui.csv` 重建它們（首次實測 `--import` 6.76 s PASS；日期、大小與雜湊屬當次證據，記錄在 dated evidence 與 `docs/agent/current-state.md`，不寫死在此文件），因此不得手改、不得以固定雜湊當版本條件、也不各自維護翻譯；唯一手寫來源仍是 `ui.csv`，且不自動提交，所有未提交變更由使用者審閱。
+- 這兩個生成資源必須與 `ui.csv` 一起交付：全新專案啟動時，`locale/translations` 的註冊清單即可直接解析，不需要任何執行期 fallback 或 bootstrap 程式碼。原生編輯器匯入會由 `ui.csv` 重建它們（首次實測 `--import` 6.76 s PASS；日期、大小與雜湊屬當次證據，不寫死在此文件），因此不得手改、不得以固定雜湊當版本條件、也不各自維護翻譯；唯一手寫來源仍是 `ui.csv`，且不自動提交，所有未提交變更由使用者審閱。
 - 機器值（Profile 狀態、`lock_reason`、存檔錯誤原因）保持英文 canonical，只在顯示邊界翻譯；錯誤顯示為「本地化前綴＋原始可診斷原因」，不得吞掉原因或改寫比較用的值。
 - 統一術語：Gold＝金幣、Cells＝細胞、Scroll＝卷軸、Mutation＝突變、Collector＝收藏者、Forge＝鍛造、Passage＝中繼站、Blueprint＝藍圖、Brutality／Tactics／Survival＝暴虐／戰術／生存；「本局」與「永久」全頁一致。
 
