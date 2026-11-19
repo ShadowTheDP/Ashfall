@@ -16,14 +16,6 @@ __pycache__/
 # Node dependencies (local only)
 node_modules/
 
-# Agent/tool runtime files (never publish)
-.pi/
-.omp/
-/AGENTS.md
-/MEMORY.md
-/ASHFALL_UI_IMPROVE_PLAN.md
-/docs/agent/
-
 # OS noise
 Thumbs.db
 desktop.ini
