@@ -21,6 +21,12 @@ var owner_build: RunBuild
 func _ready() -> void:
 	owner_build = Game.build
 	add_to_group("run_loot")
+	# The level's interaction hint uses z_index 4. The shop's opaque stock card
+	# is painted by this node in screen space, so it must sit above that Label
+	# but still below the HUD CanvasLayer (30). Only shops need the extra depth;
+	# the stock and its tooltip share this CanvasItem.
+	if kind == "shop":
+		z_index = 5
 
 ## An offer left on the floor dies with its terrain, so its unclaimed instance
 ## must not stay in the run inventory. Only the captured owner is touched: a new
@@ -173,30 +179,36 @@ func _draw_shop_tip() -> void:
 		var edge := card.end.y + 6.0 if point.y > card.get_center().y else card.position.y - 6.0
 		MathArt.line(self, Vector2(anchor_x, edge), Vector2(anchor_x, edge + (6.0 if point.y > card.get_center().y else -6.0)), MathArt.STONE_HI, 1)
 	MathArt.ui_surface(self, card, true, true)
-	var stats := owner_build.display_stats(item)
 	var attribute := str(cfg.get("attribute", "survival"))
 	MathArt.ui_gear(self, card.position + Vector2(28, 36), str(cfg.get("action", "amulet")), 16, MathArt.axis_color(attribute), str(item.id))
 	MathArt.ui_text(self, card.position + Vector2(52, 20), loot_name("shop").to_upper(), 11, MathArt.LIGHT_DIM)
-	MathArt.ui_text(self, card.position + Vector2(card.size.x - 120, 20), ContentText.of("UI_PRICE_AMOUNT", "{amount} {unit}").format({"amount": cost, "unit": _unit("gold")}), 11, MathArt.GOLD, 104, HORIZONTAL_ALIGNMENT_RIGHT)
-	var names := MathArt.ui_wrap(ContentText.name("gear", str(item.id), str(cfg.name)), 236, 16)
+	# Purpose first: canonical presenter text, never reconstructed from stats here.
+	var info := GearPresentation.describe(owner_build, item)
+	var names := MathArt.ui_wrap(str(info.name), 236.0, 16)
 	for i in mini(2, names.size()):
-		MathArt.ui_text(self, card.position + Vector2(52, 42 + i * MathArt.ui_line_height(16)), names[i] + ("…" if i == 1 and names.size() > 2 else ""), 16, MathArt.PALE)
-	var mains := ContentText.of("UI_STAT_READOUT", "{label} {value}").format({"label": ContentText.stat_label(str(stats.label)), "value": stats.value})
-	if cfg.kind != "amulet" and int(stats.capacity) > 1:
-		mains += " · " + ContentText.of("UI_GEAR_CHARGES", "Charges {have}/{capacity}").format({"have": int(item.charges), "capacity": int(stats.capacity)})
-	MathArt.ui_text(self, card.position + Vector2(16, 86), mains, 13, MathArt.PALE, 272)
-	MathArt.ui_text(self, card.position + Vector2(16, 103), ContentText.of("UI_GEAR_TRAITS", "{quality} · {axis}").format({"quality": quality_name(str(item.quality)), "axis": axis_name(attribute)}), 11, MathArt.LIGHT_DIM)
-	var affix: Dictionary = Data.gear.affixes.get(item.affix, {})
-	if not affix.is_empty():
-		MathArt.ui_text(self, card.position + Vector2(16, 118), ContentText.name("affix", str(item.affix), str(affix.get("name", ""))), 11, MathArt.LIGHT_DIM, 272)
-	var action := ContentText.of("UI_SHOP_COMPARE", "{action} compare · {amount} {unit}").format({"action": Interface.prompt(&"interact"), "amount": cost, "unit": _unit("gold")})
-	var tone := MathArt.PALE
-	if owner_build.gold < cost:
-		action = ContentText.of("UI_SHOP_NEED_GOLD", "Need {amount} more {unit}").format({"amount": cost - owner_build.gold, "unit": _unit("gold")})
-		tone = MathArt.DANGER
-	MathArt.ui_text(self, card.position + Vector2(16, 139), action, 13, tone)
-	if names.size() > 2:
-		MathArt.ui_text(self, card.position + Vector2(card.size.x - 120, 139), ContentText.of("UI_SHOP_FULL_DETAILS", "{action} full details").format({"action": Interface.prompt(&"interact")}), 11, MathArt.LIGHT_DIM, 104, HORIZONTAL_ALIGNMENT_RIGHT)
+		var name_line: String = names[i]
+		if i == 1 and names.size() > 2:
+			name_line = MathArt.ui_short(name_line + "…", 236.0, 16)
+		MathArt.ui_text(self, card.position + Vector2(52, 42 + i * 24), name_line, 16, MathArt.PALE)
+	var plays := MathArt.ui_wrap(str(info.playstyle), 272.0, 13)
+	for i in mini(2, plays.size()):
+		var play_line: String = plays[i]
+		if i == 1 and plays.size() > 2:
+			play_line = MathArt.ui_short(play_line + "…", 272.0, 13)
+		MathArt.ui_text(self, card.position + Vector2(16, 88 + i * 19), play_line, 13, MathArt.PALE)
+	var headline := str(info.headline)
+	if headline.is_empty():
+		headline = ContentText.of("UI_S5_COND_FALLBACK", "Follow the details for the exact trigger and timing.")
+	MathArt.ui_text(self, card.position + Vector2(16, 126), MathArt.ui_short(headline, 272.0, 13), 13, MathArt.LIGHT_DIM)
+	# One bounded footer: the full price plus the interact key. The comparison
+	# page owns the shortfall; this card never overlaps the headline to fit a
+	# second footer row. At the minimum size the full valid amount fits 272 px.
+	var affordable := owner_build.gold >= cost
+	var footer := ContentText.of("UI_SHOP_COMPARE", "{action} compare · {amount} {unit}").format({"action": Interface.prompt(&"interact"), "amount": cost, "unit": _unit("gold")})
+	var footer_size := 13
+	if MathArt.ui_wrap(footer, 272.0, footer_size).size() > 1:
+		footer_size = 11
+	MathArt.ui_text(self, card.position + Vector2(16, 145), footer, footer_size, MathArt.PALE if affordable else MathArt.DANGER)
 	draw_set_transform_matrix(Transform2D.IDENTITY)
 
 

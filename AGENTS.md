@@ -10,9 +10,10 @@
 - `docs/agent/current-state.md` is the single owner of current status, evidence,
   remaining work and human gates. `docs/design/ui-system.md` owns visual rules
   and rationale. `ASHFALL_UI_IMPROVE_PLAN.md` is the sole approved UI execution
-  plan: steps 1–4 are engineering- and bounded-visual complete, step 5 is next,
-  and steps 5–8 are not implemented. Do not recreate a numbered roadmap, a
-  duplicate plan or a parallel status table.
+  plan: steps 1–8 are implemented engineering and bounded visual; the final
+  gate, evidence and known limits live only in current-state, and no step is
+  declared fully accepted before that gate passes. Do not recreate a numbered
+  roadmap, a duplicate plan or a parallel status table.
 - `docs/agent/omp-configuration.md` owns the current OMP role mapping and the
   project-to-Bili runtime boundary. Dated model, billing and recovery evidence
   belongs under `docs/research/` only when it is still a useful reference.
@@ -46,11 +47,15 @@
 ## Current authorization
 
 - Delivery A is the lawful nine-visit, three-Boss 0 BSC primary route, the
-  same-Profile Cistern alternative and the completed UI maturity work. Current
-  status, remaining work and the human gates live only in
+  same-Profile Cistern alternative and the UI maturity work (steps 1–8
+  implemented engineering and bounded visual). Current status, remaining work
+  and the human gates live only in
   [current-state](docs/agent/current-state.md). The approved UI execution plan
-  is [ASHFALL_UI_IMPROVE_PLAN.md](ASHFALL_UI_IMPROVE_PLAN.md): steps 1–4 are
-  complete, step 5 is next, and steps 5–8 are not authorized to start implicitly.
+  is [ASHFALL_UI_IMPROVE_PLAN.md](ASHFALL_UI_IMPROVE_PLAN.md): final acceptance
+  evidence and gates live in current-state; automated and bounded-visual gates
+  passed, and human/hardware/normal-route/export gates remain. The 2026-11-18 authorization for steps 5–8 covers only that plan's
+  UI scope and does not authorize new mechanics, rebalancing, save-policy
+  changes, expanded content or BSC gameplay.
 - The UI structure may use Dead Cells' observable functional grouping and
   navigation as reference, but expression is original Ashfall MathArt. The
   bounded UI maturity increment is implemented; human aesthetics and

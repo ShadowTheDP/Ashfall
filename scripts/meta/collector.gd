@@ -21,6 +21,9 @@ var _fail_count := 0
 var _unlocked_id := ""
 ## The service opens on the interact press; that same press must not buy.
 var _opened_frame := -1
+## Reset is the only destructive action here: it owns a nearest-layer confirm
+## so Back cancels the reset and still cannot close the service underneath.
+var _reset_confirm := false
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -75,10 +78,39 @@ func _input(event: InputEvent) -> void:
 			_unlocked_id = ""
 			_canvas.queue_redraw()
 		return
+	# Reset confirmation is the nearest acknowledgement: Back cancels only this
+	# layer and spends nothing; the service stays open underneath.
+	if _reset_confirm:
+		if Interface.pressed(event, &"ui_accept"):
+			_reset_confirm = false
+			_buy()
+			_canvas.queue_redraw()
+		elif Interface.pressed(event, &"ui_back"):
+			_reset_confirm = false
+			_note = ContentText.of("UI_S6_RESET_CANCELLED", "Reset cancelled / 0 Gold spent")
+			Sfx.play("ui", -14)
+			_canvas.queue_redraw()
+		return
 	if Interface.pressed(event, &"ui_back"):
 		_continue()
 		return
 	if Interface.pressed(event, &"ui_accept"):
+		var id := _ids[_index] if not _ids.is_empty() else ""
+		if _route and service == "mutation" and id == "reset":
+			# Reset is exclusive: an empty reset explains itself here and never
+			# reaches _buy(), so it cannot produce a NOT COMMITTED receipt, a
+			# save attempt or a failure sound.
+			if _owner.mutations.is_empty():
+				_note = ContentText.of("UI_S6_RESET_NONE", "No chosen effects to clear.")
+				_canvas.queue_redraw()
+				return
+			# A reset is destructive and paid: show the real price and names
+			# first. Confirming is the only path that calls the transaction.
+			_reset_confirm = true
+			_note = ""
+			Sfx.play("ui", -12)
+			_canvas.queue_redraw()
+			return
 		_buy()
 		_canvas.queue_redraw()
 		return
@@ -123,6 +155,141 @@ func _scroll_detail(direction: int) -> void:
 	elif _route and service in ["collector", "mutation"]:
 		_detail_scroll = clampi(_detail_scroll + direction, 0, maxi(0, _detail_count - _detail_visible()))
 	_canvas.queue_redraw()
+
+
+## The page header states the three facts a player needs before pressing
+## anything: what is spent, whether the effect is run or permanent, and when it
+## reaches disk. The wallet line already names the exact balance.
+func _scope_context() -> String:
+	var spend := ContentText.of("UI_S6_SPEND_CELLS", "Spend: carried Cells")
+	var effect := ContentText.of("UI_S6_EFFECT_PERMANENT", "Permanent effect")
+	var landing := ContentText.of("UI_S6_LAND_IMMEDIATE", "Saved immediately")
+	if _route:
+		match service:
+			"mutation", "craft":
+				spend = ContentText.of("UI_S6_SPEND_GOLD", "Spend: this run's Gold")
+				effect = ContentText.of("UI_S6_EFFECT_RUN", "This-run effect")
+				landing = ContentText.of("UI_S6_LAND_CHECKPOINT", "Saved at this Passage checkpoint")
+			"collector", "forge":
+				landing = ContentText.of("UI_S6_LAND_CHECKPOINT", "Saved at this Passage checkpoint")
+			"challenge":
+				spend = ContentText.of("UI_S6_SPEND_NONE", "No cost")
+				effect = ContentText.of("UI_S6_EFFECT_RUN", "This-run effect")
+	return spend + " · " + effect + " · " + landing
+
+
+## One machine-readable state per row. Name, short text and marker all derive
+## from this, so locked and bought never share a single dim style.
+func _state_of(id: String) -> String:
+	if not _route:
+		var upgrade_cost := Profile.upgrade_cost(id)
+		if upgrade_cost < 0:
+			return "completed"
+		return "available" if Game.run_cells >= upgrade_cost else "insufficient"
+	match service:
+		"collector":
+			var cfg: Dictionary = Data.passage.blueprints[id]
+			if int(Profile.blueprint_cells.get(id, 0)) >= int(cfg.cost):
+				return "completed"
+			if Game.carried_blueprints.has(id):
+				return "available"
+			if not Profile.delivered_blueprints.has(id):
+				return "locked"
+			return "available" if Game.blueprint_investment(id, int(Data.passage.investment_step)) > 0 else "insufficient"
+		"mutation":
+			if id == "reset":
+				if _owner.mutations.is_empty():
+					return "completed"
+				return "available" if _owner.gold >= _owner.reset_cost() else "insufficient"
+			if _owner.mutations.has(id):
+				return "chosen"
+			if not Profile.mutation_available(id) or _owner.mutations.size() >= _owner.mutation_capacity:
+				return "locked"
+			return "available"
+		"craft":
+			var item := _owner.slots[int(id.get_slice("/", 1))]
+			if item.is_empty():
+				return "locked"
+			var cost := _owner.craft_cost(int(id.get_slice("/", 1)), id.begins_with("reforge"))
+			if cost < 0:
+				return "completed"
+			return "available" if _owner.gold >= cost else "insufficient"
+		"forge":
+			if Profile.forge_cells >= int(Data.passage.forge.cost):
+				return "completed"
+			return "available" if Game.forge_investment(int(Data.passage.investment_step)) > 0 else "insufficient"
+		"challenge":
+			if Game.passage_claims.has(id):
+				return "completed"
+			return "available" if Game.challenge_available(id) else "locked"
+	return "available"
+
+
+func _state_tone(state: String) -> Color:
+	match state:
+		"available": return MathArt.ACCENT
+		"locked": return MathArt.STONE_HI
+		"chosen": return MathArt.HEAL
+		"owned": return MathArt.PLAYER
+		"completed": return MathArt.HEAL
+		"insufficient": return MathArt.DANGER
+	return MathArt.PALE
+
+
+## First fact in the blueprint pane: what the unlocked object actually does.
+## Gear goes through the fixed GearPresentation API; a Mutation reads its real
+## effect text. This is a read-only probe item, never inserted into the build.
+func _blueprint_purpose(id: String) -> String:
+	var cfg: Dictionary = Data.passage.blueprints[id]
+	var target := str(cfg.target)
+	if cfg.kind == "mutation":
+		return ContentText.text("mutation", target, str(Data.passage.mutations.get(target, {}).get("text", "")))
+	var probe := {"uid": 0, "id": target, "quality": "plain", "affix": "none", "charges": 0, "cooldown": 0.0}
+	var info := GearPresentation.describe(_owner, probe)
+	var play := str(info.get("playstyle", ""))
+	var condition := str(info.get("condition", ""))
+	if play.is_empty():
+		return str(info.get("headline", ""))
+	return play if condition.is_empty() else play + " " + condition
+
+
+func _blueprint_next_step(id: String, invested: int, complete: bool, carried: bool, delivered: bool) -> String:
+	var cost := int(Data.passage.blueprints[id].cost)
+	if complete:
+		return ContentText.of("UI_S6_NEXT_COMPLETE", "Unlocked for future loot and runs.")
+	if carried:
+		return ContentText.of("UI_S6_NEXT_DELIVER", "Deliver this blueprint to start investing Cells.")
+	if not delivered:
+		return ContentText.of("UI_S6_NEXT_FIND", "Find this blueprint in a biome, then bring it to a Collector.")
+	var spend := Game.blueprint_investment(id, int(Data.passage.investment_step))
+	if spend > 0:
+		return ContentText.of("UI_S6_NEXT_INVEST", "Invest {step} Cells now; {left} left to unlock.").format({"step": spend, "left": cost - invested - spend})
+	return ContentText.of("UI_S6_NEXT_NEED_CELLS", "Need carried Cells; saved progress is kept.")
+
+
+func _mutation_tone(id: String) -> Color:
+	var cfg: Dictionary = Data.passage.mutations.get(id, {})
+	if float(cfg.get("damage", 0)) > 0:
+		return MathArt.BRUTALITY
+	if float(cfg.get("cooldown", 0)) != 0:
+		return MathArt.TACTICS
+	if float(cfg.get("damage_taken", 0)) != 0:
+		return MathArt.SURVIVAL
+	if float(cfg.get("heal_kill", 0)) > 0:
+		return MathArt.HEAL
+	return MathArt.TACTICS
+
+
+
+func _empty_message() -> String:
+	match service:
+		"collector": return ContentText.of("UI_S6_EMPTY_COLLECTOR", "No blueprints to deliver yet")
+		"mutation": return ContentText.of("UI_S6_EMPTY_MUTATION", "No mutation effects are available")
+		"craft": return ContentText.of("UI_S6_EMPTY_CRAFT", "No gear to upgrade")
+		"forge": return ContentText.of("UI_S6_EMPTY_FORGE", "The Forge is unavailable here")
+		"challenge": return ContentText.of("UI_S6_EMPTY_CHALLENGE", "No challenge qualifies at this Passage")
+	return ContentText.of("UI_COLLECTOR_EMPTY", "No available entries")
+
 
 func _buy() -> void:
 	if _ids.is_empty():
@@ -260,7 +427,16 @@ func _draw_ui() -> void:
 	var c := _canvas
 	MathArt.px_rect(c, Rect2(0, 0, 768, 480), Color(MathArt.INK, 0.82))
 	MathArt.ui_panel(c, MathArt.UI_PAGE)
-	var scope := ContentText.of("UI_COLLECTOR_SCOPE_PERMANENT", "Permanent progress") if not _route or service in ["collector", "forge"] else ContentText.of("UI_COLLECTOR_SCOPE_RUN", "This run / Passage checkpoint")
+	# One backdrop per page. The acknowledgement owns the whole page while it is
+	# up, so the service list, price controls and key band are not painted under
+	# it and no second full-screen scrim is needed.
+	if not _unlocked_id.is_empty():
+		_draw_unlock()
+		return
+	if _reset_confirm:
+		_draw_reset_confirm()
+		return
+	var scope := _scope_context()
 	var wallet := ContentText.of("UI_COLLECTOR_WALLET_CELLS", "{count} carried Cells").format({"count": Game.run_cells})
 	if _route and service in ["craft", "mutation"]: wallet = _price(_owner.gold, "gold")
 	elif _route and service == "challenge": wallet = ContentText.of("UI_COLLECTOR_WALLET_BOTH", "{gold} Gold · {cells} Cells").format({"gold": _owner.gold, "cells": Game.run_cells})
@@ -280,7 +456,9 @@ func _draw_ui() -> void:
 			var pitch := MathArt.ui_line_height(13)
 			for n in mini(names.size(), 2):
 				MathArt.ui_text(c, rect.position + Vector2(inset, 17 + n * pitch), names[n] + ("…" if n == 1 and names.size() > 2 else ""), 13, MathArt.WHITE if i == _index else MathArt.PALE)
-			MathArt.ui_text(c, rect.position + Vector2(inset, 44), MathArt.ui_short(str(row[3]).to_upper(), 118, 11), 11, MathArt.LIGHT_DIM, 118)
+			var state := _state_of(_ids[i])
+			MathArt.ui_state(c, rect.position + Vector2(inset + 4, 45), state)
+			MathArt.ui_text(c, rect.position + Vector2(inset + 14, 44), MathArt.ui_short(str(row[3]).to_upper(), 104, 11), 11, _state_tone(state), 104)
 			MathArt.ui_text(c, rect.position + Vector2(rect.size.x - 66, 44), _status_text(str(row[2])), 11, MathArt.PALE, 58, HORIZONTAL_ALIGNMENT_RIGHT)
 
 	if not full_composition:
@@ -291,7 +469,8 @@ func _draw_ui() -> void:
 	elif not _ids.is_empty():
 		_draw_service(_ids[_index])
 	else:
-		MathArt.ui_text(c, Vector2(328, 145), ContentText.of("UI_COLLECTOR_EMPTY", "No available entries"), 16)
+		MathArt.ui_text(c, Vector2(328, 145), _empty_message(), 16)
+		MathArt.ui_text(c, Vector2(328, 172), ContentText.of("UI_S6_EMPTY_DETAIL", "This service can still be closed with Back."), 11, MathArt.LIGHT_DIM)
 	MathArt.line(c, Vector2(52, 365), Vector2(716, 365), MathArt.STONE, 1)
 	var message := _note
 	if message.is_empty(): message = ContentText.of("UI_COLLECTOR_FOOTER", "Select an option to see its effect and cost. Changes save only after success.")
@@ -311,14 +490,42 @@ func _draw_ui() -> void:
 			"challenge": action = ContentText.of("UI_KEY_CLAIM", "Claim")
 	MathArt.ui_key(c, Vector2(x, 428), Interface.prompt(&"ui_accept"), action)
 	MathArt.ui_key(c, Vector2(572, 428), Interface.prompt(&"ui_back"), ContentText.of("UI_KEY_BACK", "Back"))
-	if not _unlocked_id.is_empty():
-		_draw_unlock()
+
+## Full reset confirmation. It is a nearest layer, not a second page: it shows
+## the real price and the exact names it will erase, and Back spends nothing.
+func _draw_reset_confirm() -> void:
+	var c := _canvas
+	var card := Rect2(184, 104, 400, 272)
+	MathArt.ui_panel(c, card, true)
+	var cost := _owner.reset_cost()
+	MathArt.ui_text(c, Vector2(204, 134), ContentText.of("UI_S6_RESET_TITLE", "RESET MUTATIONS?"), 16, MathArt.WHITE)
+	MathArt.ui_text(c, Vector2(204, 156), ContentText.of("UI_S6_RESET_CONTEXT", "THIS RUN · PASSAGE CHECKPOINT"), 11, MathArt.LIGHT_DIM)
+	var cost_line := ContentText.of("UI_S6_RESET_COST", "Cost {cost} Gold · {after} Gold after").format({"cost": cost, "after": _owner.gold - cost}) if _owner.gold >= cost else ContentText.of("UI_S6_RESET_COST_ONLY", "Cost {cost} Gold").format({"cost": cost})
+	MathArt.ui_text(c, Vector2(204, 190), cost_line, 16, MathArt.GOLD)
+	var balance := ContentText.of("UI_S6_RESET_BALANCE", "Current Gold {gold}").format({"gold": _owner.gold})
+	var balance_tone := MathArt.PALE
+	if _owner.gold < cost:
+		balance = ContentText.of("UI_S6_RESET_SHORT", "Current Gold {gold} · need {short} more").format({"gold": _owner.gold, "short": cost - _owner.gold})
+		balance_tone = MathArt.DANGER
+	MathArt.ui_text(c, Vector2(204, 212), balance, 11, balance_tone)
+	MathArt.ui_text(c, Vector2(204, 240), ContentText.of("UI_S6_RESET_CLEARS", "Clears these chosen effects:"), 11, MathArt.LIGHT_DIM)
+	if _owner.mutations.is_empty():
+		MathArt.ui_text(c, Vector2(204, 262), ContentText.of("UI_S6_RESET_NONE", "No chosen effects to clear."), 13, MathArt.LIGHT_DIM)
+	else:
+		var pitch := MathArt.ui_line_height(13)
+		for i in _owner.mutations.size():
+			var mid: String = _owner.mutations[i]
+			var name := ContentText.name("mutation", mid, str(Data.passage.mutations[mid].name))
+			MathArt.ui_state(c, Vector2(210, 258 + i * pitch), "chosen")
+			MathArt.ui_text(c, Vector2(222, 262 + i * pitch), name, 13, MathArt.WHITE)
+	MathArt.ui_text(c, Vector2(204, 322), ContentText.of("UI_S6_RESET_KEEP", "Slots, gear, charges and cooldown are kept."), 11, MathArt.LIGHT_DIM)
+	MathArt.ui_text(c, Vector2(204, 352), ContentText.of("UI_S6_RESET_FOOTER", "{accept} Confirm reset · {back} Cancel · cancel spends 0 Gold").format({"accept": Interface.prompt(&"ui_accept"), "back": Interface.prompt(&"ui_back")}), 11, MathArt.PALE, 360)
+
 
 ## Acknowledgement of a real persisted unlock. Nothing here writes anything.
 func _draw_unlock() -> void:
 	var c := _canvas
-	MathArt.px_rect(c, Rect2(0, 0, 768, 480), Color(MathArt.INK, 0.82))
-	var card := Rect2(174, 126, 420, 228)
+	var card := Rect2(174, 126, 420, 242)
 	MathArt.ui_panel(c, card, true)
 	_draw_blueprint_icon(_unlocked_id, Vector2(384, 190), 40, MathArt.WHITE)
 	var cfg: Dictionary = Data.passage.blueprints[_unlocked_id]
@@ -330,9 +537,7 @@ func _draw_unlock() -> void:
 	for i in mini(2, notes.size()):
 		MathArt.ui_text(c, Vector2(194, 292 + i * note_pitch), notes[i], 13, MathArt.PALE, 380, HORIZONTAL_ALIGNMENT_CENTER)
 	MathArt.ui_text(c, Vector2(194, 330), ContentText.of("UI_COLLECTOR_UNLOCK_SAVED", "UNLOCKED / SAVED"), 13, MathArt.HEAL, 380, HORIZONTAL_ALIGNMENT_CENTER)
-	if notes.size() > 2:
-		MathArt.ui_text(c, Vector2(194, 340), ContentText.of("UI_COLLECTOR_UNLOCK_DETAILS", "Details available in list"), 11, MathArt.LIGHT_DIM, 380, HORIZONTAL_ALIGNMENT_CENTER)
-	MathArt.ui_text(c, Vector2(194, 350), ContentText.of("UI_COLLECTOR_UNLOCK_FOOTER", "{accept} / {back} Continue").format({"accept": Interface.prompt(&"ui_accept"), "back": Interface.prompt(&"ui_back")}), 11, MathArt.PALE, 380, HORIZONTAL_ALIGNMENT_CENTER)
+	MathArt.ui_text(c, Vector2(194, 352), ContentText.of("UI_COLLECTOR_UNLOCK_FOOTER", "{accept} / {back} Continue").format({"accept": Interface.prompt(&"ui_accept"), "back": Interface.prompt(&"ui_back")}), 11, MathArt.PALE, 380, HORIZONTAL_ALIGNMENT_CENTER)
 
 func _draw_service(id: String) -> void:
 	if _route:
@@ -377,6 +582,7 @@ func _draw_mutation(id: String) -> void:
 	if reset_focused: MathArt.ui_focus(c, reset)
 	MathArt.ui_text(c, reset.position + Vector2(16, 19), ContentText.of("UI_COLLECTOR_RESET_NAME", "RESET ALL"), 13, MathArt.WHITE if reset_focused else MathArt.PALE)
 	MathArt.ui_text(c, reset.position + Vector2(106, 19), ContentText.of("UI_COLLECTOR_RESET_TEXT", "CLEAR CHOSEN EFFECTS / KEEP SLOTS"), 11, MathArt.LIGHT_DIM, 300)
+	MathArt.ui_state(c, reset.position + Vector2(reset.size.x - 112, 14), _state_of("reset"))
 	MathArt.ui_text(c, reset.position + Vector2(reset.size.x - 96, 19), _price(_owner.reset_cost(), "gold"), 11, MathArt.GOLD, 80, HORIZONTAL_ALIGNMENT_RIGHT)
 	var label_w := 96.0
 	if capacity > 0:
@@ -410,7 +616,7 @@ func _draw_mutation(id: String) -> void:
 		var focused := index == selected
 		if focused:
 			MathArt.ui_focus(c, rect)
-		MathArt.ui_service(c, rect.position + Vector2(24, 26), "mutation", 13)
+		MathArt.ui_mutation(c, rect.position + Vector2(24, 26), mid, 13, _mutation_tone(mid))
 		var names := MathArt.ui_wrap(ContentText.name("mutation", mid, str(cfg.name)), 166, 13)
 		for i in mini(2, names.size()):
 			MathArt.ui_text(c, rect.position + Vector2(46, 20 + i * MathArt.ui_line_height(13)), names[i], 13, MathArt.WHITE if focused else MathArt.PALE)
@@ -421,6 +627,7 @@ func _draw_mutation(id: String) -> void:
 		var pitch := MathArt.ui_line_height(13)
 		for i in range(offset, mini(lines.size(), offset + 2)):
 			MathArt.ui_text(c, rect.position + Vector2(212, 20 + (i - offset) * pitch), lines[i], 13, MathArt.WHITE if focused else MathArt.PALE, 352)
+		MathArt.ui_state(c, rect.position + Vector2(550, 20), _state_of(mid))
 		MathArt.ui_text(c, rect.position + Vector2(568, 20), _status_text(str(row[2])), 11, MathArt.HEAL if str(row[2]) == "CHOSEN" else MathArt.LIGHT_DIM, 80, HORIZONTAL_ALIGNMENT_RIGHT)
 		if focused and _detail_count > 2:
 			MathArt.ui_text(c, rect.position + Vector2(568, 42), ContentText.of("UI_COLLECTOR_SCROLL_HINT", "{scroll} {index} / {count}").format({"scroll": _scroll_prompt(), "index": _detail_scroll + 1, "count": _detail_count}), 11, MathArt.LIGHT_DIM, 80, HORIZONTAL_ALIGNMENT_RIGHT)
@@ -436,24 +643,28 @@ func _draw_craft(id: String) -> void:
 	MathArt.ui_gear(c, Vector2(364, 155), str(cfg.get("action", "amulet")), 28, MathArt.axis_color(str(cfg.get("attribute", "survival"))), str(item.id))
 	var names := MathArt.ui_wrap(ContentText.name("gear", str(item.id), str(cfg.name)), 292, 16)
 	for i in mini(2, names.size()): MathArt.ui_text(c, Vector2(412, 138 + i * MathArt.ui_line_height(16)), names[i], 16, MathArt.WHITE)
-	var price := ContentText.of("UI_COLLECTOR_MAX_QUALITY", "Maximum quality") if preview.is_empty() else (ContentText.of("UI_COLLECTOR_PAY", "Pay {cost} Gold · {after} after").format({"cost": preview.cost, "after": _owner.gold - preview.cost}) if _owner.gold >= preview.cost else ContentText.of("UI_COLLECTOR_NEED_GOLD", "Need {amount} more Gold").format({"amount": preview.cost - _owner.gold}))
+	var price := ContentText.of("UI_COLLECTOR_MAX_QUALITY", "Maximum quality") if preview.is_empty() else (ContentText.of("UI_S6_CRAFT_PAY", "Pay {cost} Gold · {after} Gold after").format({"cost": preview.cost, "after": _owner.gold - preview.cost}) if _owner.gold >= preview.cost else ContentText.of("UI_S6_CRAFT_NEED", "Need {amount} more Gold · {gold} now").format({"amount": preview.cost - _owner.gold, "gold": _owner.gold}))
 	MathArt.ui_text(c, Vector2(328, 195), price, 13, MathArt.GOLD)
 	if preview.is_empty():
 		MathArt.ui_text(c, Vector2(328, 248), ContentText.of("UI_COLLECTOR_NO_UPGRADE", "This item cannot be upgraded further."), 13)
 		return
 	for i in 2:
 		var target: Dictionary = item if i == 0 else preview.item
-		var rect := Rect2(328 + i * 194, 210, 178, 86)
+		var rect := Rect2(328 + i * 194, 202, 178, 80)
 		MathArt.ui_surface(c, rect, i == 1)
-		MathArt.ui_text(c, rect.position + Vector2(12, 18), ContentText.of("UI_COMMON_CURRENT", "CURRENT") if i == 0 else ContentText.of("UI_COLLECTOR_AFTER_PAYMENT", "AFTER PAYMENT"), 11, MathArt.LIGHT_DIM)
-		MathArt.ui_quality(c, rect.position + Vector2(12, 45), str(target.quality))
-		MathArt.ui_text(c, rect.position + Vector2(32, 46), RunLoot.quality_name(str(target.quality)), 16, MathArt.WHITE)
+		MathArt.ui_text(c, rect.position + Vector2(12, 16), ContentText.of("UI_COMMON_CURRENT", "CURRENT") if i == 0 else ContentText.of("UI_COLLECTOR_AFTER_PAYMENT", "AFTER PAYMENT"), 11, MathArt.LIGHT_DIM)
+		MathArt.ui_quality(c, rect.position + Vector2(12, 38), str(target.quality))
+		MathArt.ui_text(c, rect.position + Vector2(32, 39), RunLoot.quality_name(str(target.quality)), 16, MathArt.WHITE)
 		var affix := MathArt.ui_wrap(ContentText.name("affix", str(target.affix), str(Data.gear.affixes[target.affix].name)), 154, 11)
-		for n in mini(2, affix.size()): MathArt.ui_text(c, rect.position + Vector2(12, 65 + n * MathArt.ui_line_height(11)), affix[n], 11)
-	MathArt.line(c, Vector2(508, 250), Vector2(520, 250), MathArt.PALE, 1.5)
-	MathArt.ui_text(c, Vector2(328, 318), ContentText.of("UI_COLLECTOR_STAT_CHANGE", "{label} {before} → {after}").format({"label": ContentText.stat_label(preview.before.label), "before": preview.before.value, "after": preview.after.value}), 16, MathArt.WHITE)
-	MathArt.ui_text(c, Vector2(328, 338), ContentText.of("UI_COLLECTOR_RECHARGE", "Recharge {before}s → {after}s").format({"before": "%.2f" % preview.before.cooldown, "after": "%.2f" % preview.after.cooldown}), 12)
-	MathArt.ui_text(c, Vector2(328, 355), ContentText.of("UI_COLLECTOR_KEPT", "Charges and remaining recharge are kept."), 11, MathArt.LIGHT_DIM)
+		for n in mini(2, affix.size()): MathArt.ui_text(c, rect.position + Vector2(12, 58 + n * MathArt.ui_line_height(11)), affix[n], 11)
+	MathArt.line(c, Vector2(508, 242), Vector2(520, 242), MathArt.PALE, 1.5)
+	# The preview is the real craft_projection result: name the exact outcome,
+	# never a "random chance" promise the transaction does not make.
+	var result_item: Dictionary = preview.item
+	MathArt.ui_text(c, Vector2(328, 300), ContentText.of("UI_S6_CRAFT_RESULT", "Result: {quality} / {affix}").format({"quality": RunLoot.quality_name(str(result_item.quality)), "affix": ContentText.name("affix", str(result_item.affix), str(Data.gear.affixes[result_item.affix].name))}), 11, MathArt.PALE)
+	MathArt.ui_text(c, Vector2(328, 326), ContentText.of("UI_COLLECTOR_STAT_CHANGE", "{label} {before} → {after}").format({"label": ContentText.stat_label(preview.before.label), "before": preview.before.value, "after": preview.after.value}), 16, MathArt.WHITE)
+	MathArt.ui_text(c, Vector2(328, 344), ContentText.of("UI_COLLECTOR_RECHARGE", "Recharge {before}s → {after}s").format({"before": "%.2f" % preview.before.cooldown, "after": "%.2f" % preview.after.cooldown}), 12)
+	MathArt.ui_text(c, Vector2(328, 359), ContentText.of("UI_S6_CRAFT_KEEP", "Preserves current charges and remaining recharge."), 11, MathArt.LIGHT_DIM)
 
 func _draw_forge() -> void:
 	var c := _canvas
@@ -463,6 +674,7 @@ func _draw_forge() -> void:
 	MathArt.ui_text(c, Vector2(248, 186), ContentText.of("UI_COLLECTOR_FORGE_CHANCE_VALUE", "{chance}% {quality}").format({"chance": roundi(Profile.forge_chance() * 100), "quality": RunLoot.quality_name(str(cfg.quality))}), 32, MathArt.ACCENT)
 	MathArt.ui_text(c, Vector2(248, 218), ContentText.of("UI_COLLECTOR_FORGE_CHANCE", "Chance for newly generated equipment"), 13)
 	MathArt.ui_text(c, Vector2(248, 245), ContentText.of("UI_COLLECTOR_FORGE_KEEP", "Carried equipment keeps its current quality."), 11, MathArt.LIGHT_DIM)
+	MathArt.ui_text(c, Vector2(248, 262), ContentText.of("UI_S6_FORGE_NO_GEAR", "Does not change carried gear."), 11, MathArt.PALE)
 	var ratio := clampf(float(Profile.forge_cells) / float(cfg.cost), 0, 1)
 	MathArt.px_rect(c, Rect2(68, 284, 632, 10), MathArt.STONE_DIM)
 	MathArt.px_rect(c, Rect2(68, 284, 632 * ratio, 10), MathArt.CELL)
@@ -493,19 +705,20 @@ func _draw_challenges() -> void:
 		for n in mini(3, details.size()): MathArt.ui_text(c, rect.position + Vector2(16, 128 + n * 19), details[n], 13)
 		MathArt.line(c, rect.position + Vector2(16, 178), rect.position + Vector2(width - 16, 178), MathArt.STONE, 1)
 		MathArt.ui_text(c, rect.position + Vector2(16, 209), ContentText.of("UI_COLLECTOR_REWARD", "{gold} Gold + {cells} Cells").format({"gold": int(cfg.gold), "cells": int(cfg.cells)}), 20, MathArt.GOLD)
-		MathArt.ui_text(c, rect.position + Vector2(16, 230), ContentText.of("UI_COLLECTOR_REWARD_SAVED", "Reward already saved") if claimed else (ContentText.of("UI_COLLECTOR_CLAIM_ONCE", "{action} to claim once").format({"action": Interface.prompt(&"ui_accept")}) if ready else ContentText.of("UI_COLLECTOR_REQUIREMENT", "Requirement not met on this visit")), 11, MathArt.LIGHT_DIM)
+		MathArt.ui_text(c, rect.position + Vector2(16, 230), ContentText.of("UI_S6_CHALLENGE_SAVED", "Saved to this run / cannot be claimed twice") if claimed else (ContentText.of("UI_COLLECTOR_CLAIM_ONCE", "{action} to claim once").format({"action": Interface.prompt(&"ui_accept")}) if ready else ContentText.of("UI_COLLECTOR_REQUIREMENT", "Requirement not met on this visit")), 11, MathArt.LIGHT_DIM)
 
 func _draw_blueprint_icon(id: String, at: Vector2, radius: float, tone: Color) -> void:
 	var cfg: Dictionary = Data.passage.blueprints[id]
 	if cfg.kind == "gear":
 		MathArt.ui_gear(_canvas, at, str(Data.gear.items[cfg.target].get("action", "amulet")), radius, MathArt.axis_color(str(Data.gear.items[cfg.target].get("attribute", "survival"))) if tone != MathArt.LIGHT_DIM else tone, str(cfg.target))
 	else:
-		MathArt.ui_service(_canvas, at, "mutation", radius)
+		var target := str(cfg.target)
+		var shade := tone if tone == MathArt.LIGHT_DIM else _mutation_tone(target)
+		MathArt.ui_mutation(_canvas, at, target, radius, shade)
 
 func _draw_blueprint(id: String) -> void:
 	var c := _canvas
 	var cfg: Dictionary = Data.passage.blueprints[id]
-	var row := _row(id)
 	var invested := int(Profile.blueprint_cells.get(id, 0))
 	var complete := invested >= int(cfg.cost)
 	var carried := Game.carried_blueprints.has(id)
@@ -517,7 +730,10 @@ func _draw_blueprint(id: String) -> void:
 	for i in mini(2, names.size()):
 		MathArt.ui_text(c, Vector2(450, 158 + i * MathArt.ui_line_height(16)), names[i] + ("…" if i == 1 and names.size() > 2 else ""), 16, MathArt.WHITE)
 	var description := ContentText.of("UI_COLLECTOR_BLUEPRINT_UNLOCK_GEAR", "Unlocks this weapon in future loot.") if cfg.kind == "gear" else ContentText.of("UI_COLLECTOR_BLUEPRINT_UNLOCK_MUTATION", "Unlocks this Mutation for future runs.")
-	var details := MathArt.ui_wrap((blueprint_name + "\n" if names.size() > 2 else "") + description, 250, 12)
+	# Purpose first: what the object does in play, then the acquisition route.
+	# Names longer than two lines stay in the same scrollable copy block.
+	var purpose := _blueprint_purpose(id)
+	var details := MathArt.ui_wrap((blueprint_name + "\n" if names.size() > 2 else "") + purpose + "\n" + description, 250, 12)
 	_detail_count = details.size()
 	var detail_pitch := MathArt.ui_line_height(12)
 	for i in range(_detail_scroll, mini(details.size(), _detail_scroll + 3)):
@@ -528,9 +744,11 @@ func _draw_blueprint(id: String) -> void:
 	MathArt.ui_text(c, Vector2(328, 294), ContentText.of("UI_PRICE_PROGRESS_CELLS_SLASH", "{have} / {need} Cells").format({"have": invested, "need": int(cfg.cost)}), 22, MathArt.CELL)
 	var price := ContentText.of("UI_COLLECTOR_PRICE_UNLOCKED", "Unlocked · future runs") if complete else (ContentText.of("UI_COLLECTOR_PRICE_FREE", "Deliver blueprint · Free") if carried else (ContentText.of("UI_COLLECTOR_INVEST_NOW", "Invest {amount} Cells now").format({"amount": Game.blueprint_investment(id, int(Data.passage.investment_step))}) if delivered and Game.run_cells > 0 else (ContentText.of("UI_COLLECTOR_NO_CELLS", "No Cells to invest") if delivered else ContentText.of("UI_COLLECTOR_NOT_DELIVERED", "Blueprint not delivered"))))
 	MathArt.ui_text(c, Vector2(328, 318), price, 13, MathArt.WHITE)
-	var status := MathArt.ui_wrap(str(row[1]), 372, 11)
-	for i in mini(2, status.size()):
-		MathArt.ui_text(c, Vector2(328, 340 + i * MathArt.ui_line_height(11)), status[i], 11, MathArt.LIGHT_DIM)
+	# Real next step, not the row's status token: it names the exact action and
+	# the Cells still missing at this checkpoint.
+	var next_step := MathArt.ui_wrap(_blueprint_next_step(id, invested, complete, carried, delivered), 372, 11)
+	for i in mini(2, next_step.size()):
+		MathArt.ui_text(c, Vector2(328, 340 + i * MathArt.ui_line_height(11)), next_step[i], 11, MathArt.PALE)
 	if _detail_count > 3:
 		MathArt.ui_text(c, Vector2(60, 335), ContentText.of("UI_COLLECTOR_DETAILS_HINT", "{scroll} Details {index} / {count}").format({"scroll": _scroll_prompt(), "index": _detail_scroll + 1, "count": _detail_count}), 11)
 

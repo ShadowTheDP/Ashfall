@@ -612,10 +612,12 @@ func safe_landing(at: Vector2) -> bool:
 	return not get_world_2d().direct_space_state.intersect_ray(ray).is_empty()
 
 
-func teleport_to(id: String, source_id: String) -> bool:
+## Canonical travel gate. The map asks this before confirming and teleport_to
+## asks it before moving, so the reason and the action cannot drift apart.
+func teleport_refusal(id: String, source_id: String) -> String:
 	var player := _player()
 	if player == null or player.hp <= 0 or Game.run_over or Game.run_phase != "biome" or _cleared_emitted:
-		return false
+		return "RUN UNAVAILABLE"
 	var source: Dictionary = {}
 	var target: Dictionary = {}
 	for pad: Dictionary in data.get("pads", []):
@@ -623,17 +625,35 @@ func teleport_to(id: String, source_id: String) -> bool:
 			source = pad
 		if str(pad["id"]) == id:
 			target = pad
-	if source.is_empty() or target.is_empty() or source_id == id or player.global_position.distance_to(source["pos"]) >= float(Data.traversal["interact_reach"]):
-		return false
+	if source.is_empty() or target.is_empty():
+		return "UNKNOWN PAD"
+	if source_id == id:
+		return "SAME CHECKPOINT"
+	if player.global_position.distance_to(source["pos"]) >= float(Data.traversal["interact_reach"]):
+		return "TOO FAR"
 	if str(source["kind"]) == "phase":
 		if not Profile.unlocked_runes.has("phase_rune") or str(source["pair"]) != id:
-			return false
-	elif not _active_pads.has(source_id) or not _active_pads.has(id) or str(target["kind"]) != "checkpoint":
-		return false
+			return "PHASE RUNE REQUIRED"
+	else:
+		if not _active_pads.has(source_id) or not _active_pads.has(id):
+			return "TARGET NOT REACHED"
+		if str(target["kind"]) != "checkpoint":
+			return "TARGET NOT A TELEPORTER"
 	if not safe_landing(target["pos"]):
+		return "LANDING BLOCKED"
+	return ""
+
+
+func teleport_to(id: String, source_id: String) -> bool:
+	var refusal := teleport_refusal(id, source_id)
+	if not refusal.is_empty():
 		return false
-	player.relocate(target["pos"])
-	return true
+	var player := _player()
+	for pad: Dictionary in data.get("pads", []):
+		if str(pad["id"]) == id:
+			player.relocate(pad["pos"])
+			return true
+	return false
 
 
 func map_snapshot() -> Dictionary:
@@ -734,9 +754,6 @@ func _draw_biome() -> void:
 			var x := bounds.position.x + float(i + 1) * bounds.size.x / (5.0 + MathArt.INV_PHI)
 			MathArt.line(self, Vector2(x, bounds.position.y + 24), Vector2(x, bounds.end.y - 16), _near, 3)
 		MathArt.line(self, bounds.position, Vector2(bounds.end.x, bounds.position.y), Color(_accent, 0.45), 2)
-		# Diagnostic room-id label: untranslated on purpose, slated for deletion in
-		# step 7. Never a source of player-facing names.
-		draw_string(font, bounds.position + Vector2(24, 28), str(room["id"]).replace("_", " ").to_upper(), HORIZONTAL_ALIGNMENT_LEFT, 570, 11, MathArt.MID_DIM)
 		for rect: Rect2 in room["ground"]:
 			MathArt.px_rect(self, rect, _stone.darkened(0.20))
 			MathArt.line(self, rect.position, Vector2(rect.end.x, rect.position.y), _edge, 3)

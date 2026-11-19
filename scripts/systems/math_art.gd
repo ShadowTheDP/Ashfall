@@ -400,8 +400,9 @@ static func ui_wrap(value: String, width: float, size := 13) -> Array[String]:
 	if value.is_empty():
 		lines.append("")
 	else:
+		var wrap_width := maxf(width, 1.0)
 		var paragraph := TextParagraph.new()
-		paragraph.width = maxf(width, 1.0)
+		paragraph.width = wrap_width
 		paragraph.break_flags = TextServer.BREAK_MANDATORY | TextServer.BREAK_WORD_BOUND | TextServer.BREAK_ADAPTIVE
 		paragraph.add_string(value, ui_font(), size, TranslationServer.get_locale())
 		var starts: Array[int] = []
@@ -418,7 +419,14 @@ static func ui_wrap(value: String, width: float, size := 13) -> Array[String]:
 				text = text.substr(0, text.length() - 2)
 			elif text.ends_with("\n") or text.ends_with("\r"):
 				text = text.substr(0, text.length() - 1)
-			lines.append(text)
+			# Native adaptive word breaking can still leave one unbroken run
+			# wider than the paragraph. Only that line gets the grapheme-bound
+			# pass; ordinary word wrapping and punctuation rules keep their
+			# first-pass result.
+			if ui_font().get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > wrap_width + 0.5:
+				lines.append_array(_wrap_grapheme_line(text, wrap_width, size))
+			else:
+				lines.append(text)
 		# TextParagraph may omit the empty line after a terminal hard break.
 		if (value.ends_with("\n") or value.ends_with("\r")) and not starts.is_empty() and starts[-1] < value.length():
 			lines.append("")
@@ -426,6 +434,29 @@ static func ui_wrap(value: String, width: float, size := 13) -> Array[String]:
 		_ui_wrap_cache.clear()
 	_ui_wrap_cache[key] = lines
 	return lines
+
+
+## Native fallback for the rare paragraph line that still exceeds its width.
+## BREAK_GRAPHEME_BOUND makes TextServer record every grapheme boundary as a
+## safe break, so an unbroken word can be split without UTF-16 slicing. This is
+## used per over-wide line, never for the whole paragraph.
+static func _wrap_grapheme_line(value: String, width: float, size: int) -> Array[String]:
+	var wrapped: Array[String] = []
+	if value.is_empty():
+		wrapped.append("")
+		return wrapped
+	var paragraph := TextParagraph.new()
+	paragraph.width = maxf(width, 1.0)
+	paragraph.break_flags = TextServer.BREAK_MANDATORY | TextServer.BREAK_GRAPHEME_BOUND
+	paragraph.add_string(value, ui_font(), size, TranslationServer.get_locale())
+	var starts: Array[int] = []
+	for index in paragraph.get_line_count():
+		starts.append(paragraph.get_line_range(index).x)
+	for index in starts.size():
+		var start := starts[index]
+		var end := starts[index + 1] if index + 1 < starts.size() else value.length()
+		wrapped.append(value.substr(start, end - start))
+	return wrapped
 
 ## Fit a single line into `width`, ending in an ellipsis when it does not fit.
 ## Callers must not pass a clipped width to draw_string instead: a hard clip cuts
@@ -528,6 +559,89 @@ static func ui_service(canvas: CanvasItem, at: Vector2, service: String, radius 
 		"character":
 			px_rect(canvas, Rect2(at - Vector2.ONE * radius, Vector2.ONE * radius * 2), tone)
 			px_rect(canvas, Rect2(at - Vector2.ONE * radius * INV_PHI, Vector2.ONE * radius * INV_PHI * 2), INK)
+
+
+## One shape per real Mutation effect, built from the same primitives as every
+## other UI glyph. The id is data, not a drawing switch: reading
+## Data.passage.mutations keeps a new effect from inheriting a borrowed icon.
+static func ui_mutation(canvas: CanvasItem, at: Vector2, id: String, radius: float, tone := PALE) -> void:
+	var cfg: Dictionary = Data.passage.mutations.get(id, {})
+	var damage := float(cfg.get("damage", 0))
+	var cooldown := float(cfg.get("cooldown", 0))
+	var taken := float(cfg.get("damage_taken", 0))
+	var heal := float(cfg.get("heal_kill", 0))
+	if damage > 0:
+		# Blade triangle: forward edge plus a second scoring line.
+		poly(canvas, PackedVector2Array([
+			at + Vector2(-radius * 0.62, radius * 0.58),
+			at + Vector2(radius * 0.62, -radius),
+			at + Vector2(radius * 0.92, -radius * 0.68),
+			at + Vector2(-radius * 0.34, radius * 0.82),
+		]), tone)
+		line(canvas, at + Vector2(-radius * 0.82, radius * 0.22), at + Vector2(-radius * 0.16, radius * 0.84), tone, maxf(1.5, radius * 0.07))
+		return
+	if cooldown != 0:
+		# Broken ring: three arcs leave a visible gap the tick bridges.
+		var gap := PI * 0.20
+		for i in 3:
+			var start := float(i) * TAU / 3.0 + gap
+			arc(canvas, at, radius * 0.86, start, start + TAU / 3.0 - gap * 2.0, tone, maxf(1.8, radius * 0.10))
+		line(canvas, at + Vector2(-radius * INV_PHI, 0), at + Vector2(radius * INV_PHI, 0), tone, maxf(1.5, radius * 0.07))
+		disc(canvas, at, maxf(1.2, radius * 0.12), tone)
+		return
+	if taken != 0:
+		# Hex shell: a hard outer plate with one nested brace.
+		poly(canvas, ngon(6, radius, PI / 6.0, at), Color(tone, 0.20), tone, maxf(1.8, radius * 0.09))
+		poly(canvas, ngon(6, radius * INV_PHI, PI / 6.0, at), Color.TRANSPARENT, with_alpha(tone, 0.75), 1.2)
+		line(canvas, at + Vector2(-radius * 0.30, -radius * 0.18), at + Vector2(0, radius * 0.32), tone, maxf(1.5, radius * 0.08))
+		line(canvas, at + Vector2(0, radius * 0.32), at + Vector2(radius * 0.34, -radius * 0.20), tone, maxf(1.5, radius * 0.08))
+		return
+	if heal > 0:
+		# Four petals around an empty centre: recovery, not a damage symbol.
+		for i in 4:
+			var dir := Vector2.from_angle(float(i) * PI * 0.5 + PI * 0.25)
+			disc(canvas, at + dir * radius * 0.52, radius * 0.33, with_alpha(tone, 0.9))
+			ring(canvas, at + dir * radius * 0.52, radius * 0.33, Color(tone, 0.35), 1.0, 20)
+		disc(canvas, at, radius * 0.20, INK)
+		return
+	# Unknown effect: the neutral mutation triangle, never a silently wrong icon.
+	var points := ngon(3, radius, -PI * 0.5, at)
+	poly(canvas, points, Color.TRANSPARENT, STONE_HI, 1.5)
+	disc(canvas, at, maxf(1.2, radius * 0.14), tone)
+
+
+## One shape per acquisition state, shared by Collector rows, Hub rows and the
+## reset card: ring, lock, diamond, double ring, check, warning triangle. Shape
+## is the second signal after the short text, so states never differ by colour
+## alone. Callers keep their own wording and tone; this draws only the marker.
+static func ui_state(canvas: CanvasItem, at: Vector2, state: String) -> void:
+	var tone := PALE
+	match state:
+		"available": tone = ACCENT
+		"locked": tone = STONE_HI
+		"chosen": tone = HEAL
+		"owned": tone = PLAYER
+		"completed": tone = HEAL
+		"insufficient": tone = DANGER
+	match state:
+		"available":
+			ring(canvas, at, 4.2, tone, 1.2, 18)
+			disc(canvas, at, 1.4, tone)
+		"locked":
+			px_rect(canvas, Rect2(at.x - 3.2, at.y - 2.5, 6.4, 7.0), tone)
+			arc(canvas, at + Vector2(0, -2.5), 2.6, PI, TAU, tone, 1.2)
+		"chosen":
+			poly(canvas, ngon(4, 4.8, PI * 0.25, at), tone)
+		"owned":
+			ring(canvas, at, 4.8, tone, 1.2, 18)
+			ring(canvas, at, 2.2, tone, 1.0, 14)
+		"completed":
+			line(canvas, at + Vector2(-4, 0), at + Vector2(-1, 3.4), tone, 1.6)
+			line(canvas, at + Vector2(-1, 3.4), at + Vector2(4.4, -3.6), tone, 1.6)
+		"insufficient":
+			poly(canvas, ngon(3, 4.8, PI * 0.5, at), Color.TRANSPARENT, tone, 1.3)
+		_:
+			disc(canvas, at, 2.2, tone)
 
 
 static func ui_gear(canvas: CanvasItem, at: Vector2, action: String, radius := 12.0, tone := WHITE, identity := "") -> void:

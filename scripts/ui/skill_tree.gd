@@ -21,6 +21,12 @@ var _t := 0.0
 var _flash_t := 0.0
 var _note := ""
 var _note_t := 0.0
+## Save failure is state, not a prefix parsed back out of display text. The raw
+## diagnostic scrolls in the detail column; the receipt stays bounded.
+var _failed := false
+var _fail_reason := ""
+var _fail_scroll := 0
+var _fail_count := 0
 var _locale := ""
 
 
@@ -67,6 +73,10 @@ func open() -> void:
 	_note = ""
 	_note_t = 0.0
 	_flash_t = 0.0
+	_failed = false
+	_fail_reason = ""
+	_fail_scroll = 0
+	_fail_count = 0
 	Sfx.play("ui", -10)
 	_canvas.queue_redraw()
 
@@ -117,6 +127,12 @@ func _input(event: InputEvent) -> void:
 	if Interface.pressed(event, &"ui_back"):
 		close()
 		return
+	if _failed and Interface.pressed(event, &"ui_detail_up"):
+		_scroll_fail(-1)
+		return
+	if _failed and Interface.pressed(event, &"ui_detail_down"):
+		_scroll_fail(1)
+		return
 	if Interface.pressed(event, &"ui_accept"):
 		_buy()
 		return
@@ -132,6 +148,15 @@ func _input(event: InputEvent) -> void:
 
 func _is_menu_event(event: InputEvent) -> bool:
 	return event is InputEventKey or event is InputEventJoypadButton or event is InputEventJoypadMotion or event is InputEventAction
+
+
+func _scroll_fail(direction: int) -> void:
+	var limit := maxi(0, _fail_count - 7)
+	var next := clampi(_fail_scroll + direction, 0, limit)
+	if next == _fail_scroll:
+		return
+	_fail_scroll = next
+	_canvas.queue_redraw()
 
 
 func _move(direction: Vector2) -> void:
@@ -155,6 +180,13 @@ func _move(direction: Vector2) -> void:
 			best = i
 	if best >= 0:
 		_index = best
+		# A save failure belongs to the node that produced it. Moving the cursor
+		# clears the raw payload too, so the receipt never outlives its owner.
+		_failed = false
+		_fail_reason = ""
+		_fail_scroll = 0
+		_note = ""
+		_note_t = 0.0
 		MathArt.ui_select(_canvas)
 		Sfx.play("ui", -14)
 		_canvas.queue_redraw()
@@ -165,18 +197,29 @@ func _buy() -> void:
 		return
 	var id := _ids[_index]
 	if Profile.has_skill(id):
+		_failed = false
+		_fail_reason = ""
+		_fail_scroll = 0
 		_note = "ALREADY OWNED"
 		_note_t = 1.4
 		_canvas.queue_redraw()
 		return
 	if Profile.buy_skill(id):
+		_failed = false
+		_fail_reason = ""
+		_fail_scroll = 0
 		_note = "LEARNED: " + id
 		_note_t = 1.6
 		Sfx.play("reward", -8)
 		_canvas.queue_redraw()
 		return
+	# Raw `_note` stays the machine payload external fixtures compare; the
+	# receipt and the raw reason are separate display state, never parsed back.
 	_flash_t = 0.45
-	_note = "SAVE FAILED: " + Profile.last_save_error if not Profile.last_save_error.is_empty() else "BLOCKED: " + id
+	_failed = not Profile.last_save_error.is_empty()
+	_fail_reason = Profile.last_save_error if _failed else ""
+	_fail_scroll = 0
+	_note = "SAVE FAILED: " + Profile.last_save_error if _failed else "BLOCKED: " + id
 	_note_t = 1.8
 	Sfx.play("block", -10)
 	_canvas.queue_redraw()
@@ -248,8 +291,8 @@ func _blocked_display(id: String) -> String:
 
 
 func _note_display() -> String:
-	if _note.begins_with("SAVE FAILED: "):
-		return Hud.save_failed_display(_note.substr(13))
+	if _failed and not _fail_reason.is_empty():
+		return ContentText.of("UI_S6_SAVE_FAILED_FIXED", "NOT SAVED / {action} RETRY / reason in detail pane").format({"action": Interface.prompt(&"ui_accept")})
 	if _note.begins_with("LEARNED: "):
 		return ContentText.of("UI_TREE_LEARNED", "LEARNED {name}").format({"name": _name_display(_note.substr(9))})
 	if _note.begins_with("BLOCKED: "):
@@ -293,8 +336,21 @@ func _paint(canvas: Control) -> void:
 		var owned := Profile.has_skill(id)
 		MathArt.ui_text(canvas, Vector2(494, 198), ContentText.of("UI_TREE_OWNED", "Owned") if owned else ContentText.of("UI_TREE_PRICE", "{cells} Cells").format({"cells": _cost(id)}), 16, MathArt.HEAL if owned else MathArt.CELL)
 		var detail := _text_display(id) + "\n\n" + (ContentText.of("UI_TREE_ALREADY_LEARNED", "Already learned.") if owned else _blocked_display(id) if not Profile.skill_available(id) or Profile.cells < _cost(id) else ContentText.of("UI_TREE_AVAILABLE", "Available to learn."))
-		var lines := MathArt.ui_wrap(detail, 220, 13)
-		for i in mini(7, lines.size()): MathArt.ui_text(canvas, Vector2(494, 232 + i * MathArt.ui_line_height(13)), lines[i], 13)
+		var lines: Array[String]
+		if _failed and not _fail_reason.is_empty():
+			# The raw diagnostic is the only unbounded string; it owns the seven
+			# scrollable detail rows. The receipt below stays fixed.
+			lines = MathArt.ui_wrap(ContentText.of("UI_S6_FAIL_DETAIL", "NOT SAVED / DIAGNOSTIC") + "\n" + _fail_reason, 220, 13)
+			_fail_count = lines.size()
+			_fail_scroll = clampi(_fail_scroll, 0, maxi(0, _fail_count - 7))
+		else:
+			lines = MathArt.ui_wrap(detail, 220, 13)
+			_fail_count = 0
+			_fail_scroll = 0
+		for i in mini(7, lines.size() - _fail_scroll): MathArt.ui_text(canvas, Vector2(494, 232 + i * MathArt.ui_line_height(13)), lines[_fail_scroll + i], 13)
+		if _fail_count > 7:
+			var scroll_label := Interface.prompt(&"ui_detail_up") + " / " + Interface.prompt(&"ui_detail_down")
+			MathArt.ui_text(canvas, Vector2(494, 359), ContentText.of("UI_S6_FAIL_SCROLL_HINT", "{scroll} scroll diagnostic").format({"scroll": scroll_label}), 11, MathArt.LIGHT_DIM)
 		var notes := MathArt.ui_wrap(_note_display(), 220, 11)
 		for i in mini(3, notes.size()): MathArt.ui_text(canvas, Vector2(494, 371 + i * MathArt.ui_line_height(11)), notes[i], 11, MathArt.WHITE)
 	MathArt.ui_text(canvas, Vector2(52, 399), ContentText.of("UI_TREE_LEGEND", "Filled: owned · Hollow: available · Dim: locked"), 11)

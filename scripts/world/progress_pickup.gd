@@ -34,7 +34,21 @@ func _unhandled_input(event: InputEvent) -> void:
 		if gained:
 			Game.announce(ContentText.of("UI_WORLD_ACQUIRED", "{item} acquired").format({"item": _item_name().to_upper()}), 1.6)
 			Sfx.play("reward", -6)
+		else:
+			# A taken-everything result still answers; the pickup never vanishes
+			# as if the press did nothing.
+			Game.announce(ContentText.of(_no_gain_key(), "Cannot take this item right now."), 1.6)
 		queue_free()
+
+
+## Exact condition for an interaction that changed nothing, with the item kind
+## as the only difference.
+func _no_gain_key() -> String:
+	if item_type == "key":
+		return "UI_S7_WORLD_ALREADY_KEY"
+	if item_type == "blueprint":
+		return "UI_S7_WORLD_ALREADY_BLUEPRINT" if Game.carried_blueprints.has(item_id) or Profile.delivered_blueprints.has(item_id) else "UI_S7_WORLD_TAKE_FAILED"
+	return "UI_S7_WORLD_ALREADY_RUNE" if Profile.unlocked_runes.has(item_id) else "UI_S7_WORLD_TAKE_FAILED"
 
 
 func _draw() -> void:

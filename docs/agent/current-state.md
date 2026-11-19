@@ -10,15 +10,58 @@ Product outcomes are in [GOALS](../GOALS.md); visual rules and rationale are in
 
 Delivery A targets the lawful nine-visit, three-Boss 0 BSC primary route and the
 same-Profile Cistern alternative, with the completed UI maturity work. The
-approved full UI improvement plan: steps 1–4 (bilingual text layer, shared input
-layer, settings/preferences, combat HUD and pause build summary) are
-engineering- and bounded-visual complete, with human review pending; steps 5–8
-are not started. 本輪完成第 4 步即停止，未啟動 5–8；日後使用者要求接續時，沿用已核准計畫從第 5 步開始。 Expanded world content, BSC 1–5 gameplay, new
+approved full UI improvement plan has steps 1–8 implemented engineering and
+bounded visual, with final automated and bounded-visual evidence in RESULT;
+human, hardware and normal dual-route review remain pending. The 2026-11-18
+authorization covered the comparison/shop, services, map/save/result text and
+state-feedback scope only. Expanded world content, BSC 1–5 gameplay, new
 mechanics, rebalance, DLC and online work are not authorized. BSC1 being
 unlocked is not BSC1 gameplay.
 
 ## Current status
 
+- **UI plan steps 1–8 (2026-11-18): implemented engineering and bounded
+  visual; automated and bounded-visual gates PASS; human/hardware/normal
+  dual-route/export gates pending.** Build comparison uses
+  candidate `Rect2(52,110,664,164)` and target `Rect2(52+n*338,294,326 or
+  664,104)` with shared details at y416／432 (range y287, keys y452); Scroll
+  uses three 212×242 cards at `52+n*226,110` with details y386／402／418, key
+  y440 and NO HEAL baseline y232 relative to each card; the shop tip is
+  304×154 and orders name→two playstyle lines→headline→price/interact.
+  Services gained `MathArt.ui_mutation`／`ui_state`, empty reset explains 0
+  spend and cannot buy, non-empty reset confirms at the nearest layer, and
+  Archive/Skill failures are localized receipts plus scrollable raw
+  diagnostics with no prefix matching; pages keep one backdrop. Map draws
+  discovered rooms only with 24px padding, scale caps at 1:1, room ids are
+  removed from drawing, and `Level.teleport_refusal` is shared.
+  `Profile.slot_summary()` exposes `resume_error` as a display-only
+  canonical-validation projection while `blocked`／`select_slot` stay
+  unchanged; result focus ids distinguish pending retry/quit from clean
+  return/quit at `Rect2(52+i*134,424,128,28)`, with five raw-reason rows in
+  `Rect2(52,242,664,100)` and real up/down scrolling. `Game.run_abandoned` is
+  ephemeral and never serialized. The HUD Scroll hint is conditional on a real
+  remaining range >0; one row `UI_S7_HUD_RESULT_NAV_FITS` was added, so the
+  proper-parser audit counts 112 added rows (12 S5／64 S6／36 S7) and the CSV
+  holds 910 unique strings with no duplicate or blank keys; the native import's
+  translations validate.
+- **Final validation (observed, 2026-11-18): all automated and bounded-visual
+  gates PASS; no all-zero-warning claim.** Final central `world_map` is 459/0
+  PASS in 5.95s; product capture is 590/0 PASS in 41.66s (within 60s);
+  main/headless is 567 PASS in 39.54s; native is 761/0 PASS in 71.982s with
+  actual motion at 19/99/179/258 against requested 0/50/100/150. Final
+  evidence is [RESULT.md](../../output/ui-product/step5-8-validation/RESULT.md)
+  (201 lines, SHA-256 begins `97435e89`); `FINAL-source-303.sha256` covers 303
+  files / 2,593,475 bytes and excludes docs. Final capture inventory
+  `phase-a-map1/captures.json` plus SHA-256 covers 144 PNGs (142 at 768×480,
+  2 at 520×96), 140 unique, 56 EN / 64 ZH / 24 neutral. Primary review passed
+  the actual final `map-travel-en.png` (HANGING GALLERY, no ZH cache) and the
+  corrected opaque shop headline; the independent 11-image services/results
+  bounded review passed layout only, and its map finding is fixed. The
+  historical world-probe/source-hash gate exclusion is documented in RESULT §8
+  and was not repeated for doc-only changes; the earlier link check is
+  pre-final and is not reused. Native fixtures are not normal input; human
+  aesthetics/comprehension, physical controller unplug, normal primary/
+  alternate dual-route and Windows export remain pending.
 - **UI plan steps 1–3 (2026-11-17): implemented; engineering PASS; human and
   controller review pending.** Step 1 pins Noto Sans CJK TC Regular as the only
   external asset, loads it solely through `MathArt.ui_font()`, uses native
@@ -114,12 +157,16 @@ unlocked is not BSC1 gameplay.
 
 ## Remaining work
 
-1. **UI plan steps 5–8 (not started):** 本輪完成第 4 步即停止，未啟動 5–8；日後使用者要求接續時，沿用已核准計畫從第 5 步開始。 Step 5 begins with the
-   build comparison/shop work: retire `BuildScreen.item_details` and
-   `_gear_lines`, and migrate the legacy L3 assertions to the presenter
-   semantics. Steps 5–8 must not be described as implemented now. Steps 1–4 are
-   engineering- and bounded-visual complete, with human/hardware review still
-   pending.
+1. **UI plan steps 1–8 (authorized 2026-11-18; implemented engineering and
+   bounded visual; final RESULT recorded):** Step 5 removed
+   `BuildScreen.item_details` and `_gear_lines` plus their string parsing, and
+   updated the legacy L3 assertions to presenter semantics;
+   `tests/l3_build_probe.gd` remains the default gate. Steps 6–8 cover service
+   scope/result ordering, map/save/result text, and state-shaped feedback.
+   Automated and bounded-visual gates pass per RESULT; the remaining gates are
+   human aesthetics/comprehension, normal-input primary/alternate dual-route
+   play, physical controller unplug and Windows export. Automated captures and
+   native fixtures are not those human gates.
 2. **真人雙路線驗收:** one lawful nine-visit primary victory followed by the
    lawful same-Profile Cistern victory, with short readability, difficulty and
    rhythm feedback. Use [delivery-a-human-check](delivery-a-human-check.md);

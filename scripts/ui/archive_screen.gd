@@ -25,6 +25,10 @@ var _flash_row := -1
 var _flash_t := 0.0
 var _note := ""
 var _note_t := 0.0
+## Save failure is state, not a prefix parsed back out of display text.
+var _failed := false
+var _fail_reason := ""
+var _need_cost := -1
 var _locale := ""
 
 
@@ -66,6 +70,9 @@ func open(tab: String) -> void:
 	_detail_focus = false
 	_note = ""
 	_note_t = 0.0
+	_failed = false
+	_fail_reason = ""
+	_need_cost = -1
 	_flash_row = -1
 	_flash_t = 0.0
 	_reload()
@@ -185,6 +192,9 @@ func _switch_tab(delta_index: int) -> void:
 	_flash_row = -1
 	_note = ""
 	_note_t = 0.0
+	_failed = false
+	_fail_reason = ""
+	_need_cost = -1
 	_reload()
 	Sfx.play("ui", -12)
 	_canvas.queue_redraw()
@@ -195,6 +205,14 @@ func _move(delta_index: int) -> void:
 		return
 	_index = clampi(_index + delta_index, 0, _ids.size() - 1)
 	_detail_scroll = 0
+	# A failure belongs to the row that produced it. Moving the cursor clears it
+	# so the nearest owner of the message is always the focused record. The raw
+	# `_note` payload goes with it; only the focused failure owns a receipt.
+	_failed = false
+	_fail_reason = ""
+	_need_cost = -1
+	_note = ""
+	_note_t = 0.0
 	MathArt.ui_select(_canvas)
 	if _index < _scroll:
 		_scroll = _index
@@ -237,25 +255,40 @@ func _activate() -> void:
 	var id := _ids[_index]
 	if Profile.is_unlocked(_tab, id):
 		if Profile.select(_tab, id):
+			_failed = false
+			_fail_reason = ""
+			_need_cost = -1
 			_note = "EQUIPPED: " + id
 			_note_t = 1.6
 			Sfx.play("pickup", -10)
 			return
 	elif _tab == "weapon" and not Profile.gear_blueprint(id).is_empty():
+		_failed = false
+		_fail_reason = ""
+		_need_cost = -1
 		_note = "BLUEPRINT: " + id
 		_note_t = 2.5
 		Sfx.play("block", -10)
 		return
 	elif Profile.unlock(_tab, id):
 		Profile.see(_tab, id)
+		_failed = false
+		_fail_reason = ""
+		_need_cost = -1
 		_note = "UNLOCKED: " + id
 		_note_t = 1.8
 		Sfx.play("reward", -8)
 		return
-	# Failure is reported by flashing the row, never by a silent no-op.
+	# Failure is reported by flashing the row, never by a silent no-op. The
+	# localized receipt and the raw reason are separate fields, so display never
+	# has to parse its own text back out of `_note`.
 	_flash_row = _index
 	_flash_t = 0.45
-	_note = "SAVE FAILED: " + Profile.last_save_error if not Profile.last_save_error.is_empty() else "NEED %d CELLS" % _cost_of(id)
+	_detail_scroll = 0
+	_failed = not Profile.last_save_error.is_empty()
+	_fail_reason = Profile.last_save_error if _failed else ""
+	_need_cost = -1 if _failed else _cost_of(id)
+	_note = "SAVE FAILED: " + _fail_reason if _failed else "NEED %d CELLS" % _cost_of(id)
 	_note_t = 1.8
 	Sfx.play("block", -10)
 	_canvas.queue_redraw()
@@ -332,10 +365,10 @@ func _note_display() -> String:
 		return ContentText.of("UI_ARCHIVE_UNLOCKED", "UNLOCKED: {name}").format({"name": _name_display(_note.substr(10))})
 	if _note.begins_with("BLUEPRINT: "):
 		return _unlock_display(_note.substr(11))
-	if _note.begins_with("SAVE FAILED: "):
-		return Hud.save_failed_display(_note.substr(13))
-	if _note.begins_with("NEED ") and _note.ends_with(" CELLS"):
-		return ContentText.of("UI_ARCHIVE_NEED_CELLS", "NEED {cost} CELLS").format({"cost": _note.trim_prefix("NEED ").trim_suffix(" CELLS")})
+	if _failed and not _fail_reason.is_empty():
+		return ContentText.of("UI_S6_SAVE_FAILED_FIXED", "NOT SAVED / {action} RETRY / reason in detail pane").format({"action": Interface.prompt(&"ui_accept")})
+	if _need_cost >= 0:
+		return ContentText.of("UI_ARCHIVE_NEED_CELLS", "NEED {cost} CELLS").format({"cost": _need_cost})
 	return _note
 
 
@@ -414,6 +447,52 @@ func _paint(canvas: Control) -> void:
 	MathArt.ui_key(canvas, Vector2(636, 432), Interface.prompt(&"ui_back"), ContentText.of("UI_ARCHIVE_KEY_BACK", "Back"))
 
 
+## Acquisition first: how this record is earned, then what it does in play.
+## Numbers stay below both, in the existing reading order.
+func _acquisition_line(id: String) -> String:
+	if _tab == "enemy":
+		return ContentText.of("UI_S6_ARCHIVE_ACQ_ENEMY", "Recorded by meeting it in the field.")
+	if not Profile.is_unlocked(_tab, id):
+		return _unlock_display(id)
+	if _tab == "armor":
+		return ContentText.of("UI_S6_ARCHIVE_ACQ_ARMOR", "Owned permanently / armour is Arena only.")
+	var blueprint := Profile.gear_blueprint(id)
+	if not blueprint.is_empty():
+		var cfg: Dictionary = Data.passage.blueprints[blueprint]
+		var biome_id := str(cfg.get("biome", ""))
+		var biome := ContentText.name("biome", biome_id, str(Data.route_graph.nodes.get(biome_id, {}).get("name", biome_id)))
+		return ContentText.of("UI_S6_ARCHIVE_ACQ_WEAPON_BLUEPRINT", "Collector blueprint complete / {biome}").format({"biome": biome})
+	if bool(_cfg(id).get("starter", false)):
+		return ContentText.of("UI_S6_ARCHIVE_ACQ_STARTER", "Starter weapon / always available.")
+	return ContentText.of("UI_S6_ARCHIVE_ACQ_WEAPON", "Owned permanently / equips as the first weapon in runs.")
+
+
+func _tactical_line(id: String) -> String:
+	var cfg := _cfg(id)
+	match _tab:
+		"weapon":
+			var authored := str(cfg.get("text", ""))
+			if authored.is_empty():
+				# Canonical weapons are melee combo sets. Rusty Sword has no
+				# authored description, so use the archive's existing truthful
+				# melee line instead of looking up a row that was never authored.
+				var combo: Array = cfg.get("combo", [])
+				if not combo.is_empty():
+					return ContentText.of("UI_S6_ARCHIVE_USE_MELEE", "Melee pressure / wait for the windup, then strike.")
+				return ContentText.of("UI_GEAR_PLAY_%s" % id.to_upper(), str(cfg.get("name", "")))
+			return ContentText.text("weapon", id, authored)
+		"armor":
+			return ContentText.text("armor", id, str(cfg.get("text", "")))
+	var reach := float(cfg.get("attack_range", 0))
+	if bool(cfg.get("boss", false)):
+		return ContentText.of("UI_S6_ARCHIVE_USE_BOSS", "Boss pattern / read the windup, then punish the recovery.")
+	if id == "charger":
+		return ContentText.of("UI_S6_ARCHIVE_USE_CHARGER", "Charges in a straight line / sidestep, then punish.")
+	if reach > 200.0:
+		return ContentText.of("UI_S6_ARCHIVE_USE_RANGED", "Attacks at range / close the gap during recovery.")
+	return ContentText.of("UI_S6_ARCHIVE_USE_MELEE", "Melee pressure / wait for the windup, then strike.")
+
+
 ## Data-only half of the record pane. Drawing the icon and the copy are split so
 ## the right-stick scroll can measure the same wrapped copy without duplicating
 ## the per-tab text rules.
@@ -423,6 +502,11 @@ func _record_copy(id: String) -> Dictionary:
 	var status := _status_display(id)
 	var lines: Array[String] = []
 	if known:
+		# Acquisition, then tactical use, then numeric record.
+		var intro: Array[String] = [_acquisition_line(id)]
+		var use := _tactical_line(id)
+		if not use.is_empty():
+			intro.append(use)
 		match _tab:
 			"enemy":
 				lines = [
@@ -449,11 +533,18 @@ func _record_copy(id: String) -> Dictionary:
 					ContentText.of("UI_ARCHIVE_ARMOR_TAKEN", "Damage taken x{taken}").format({"taken": "%.2f" % float(cfg.get("damage_taken", 1))}),
 					ContentText.of("UI_ARCHIVE_ARMOR_KNIVES", "Kunai capacity {knives}").format({"knives": "%+d" % int(cfg.get("knives", 0))}),
 				]
+		intro.append_array(lines)
+		lines = intro
 	else:
 		status = ContentText.of("UI_ARCHIVE_LOCKED", "Locked / not yet recorded")
 		lines = [ContentText.of("UI_ARCHIVE_MEET", "Meet this entry in the field to reveal its details.")]
 	if not known and _tab != "enemy":
 		lines.append(_unlock_display(id))
+	# The diagnostic itself is the only unbounded string on this page. It lives
+	# in the existing scrollable detail pane, not in the fixed receipt, so a long
+	# save error is fully readable with the same detail controls as the record.
+	if _failed and not _fail_reason.is_empty():
+		lines.push_front(ContentText.of("UI_S6_ARCHIVE_FAIL_DETAIL", "NOT SAVED / DIAGNOSTIC") + "\n" + _fail_reason)
 	return {"status": status, "details": MathArt.ui_wrap("\n".join(lines), 372, 13)}
 
 

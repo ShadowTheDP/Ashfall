@@ -34,6 +34,10 @@ var enemies_left := 0
 var run_time := 0.0
 var run_over := false
 var victory := false
+## Why the ended run ended, recorded from the canonical end_run() call. It is
+## presentation state only: no save, checkpoint or settlement payload carries
+## it, and a victory always clears it.
+var run_abandoned := false
 
 var announce_text := ""
 var announce_t := 0.0
@@ -126,6 +130,7 @@ func reset_run() -> void:
 	run_time = 0.0
 	run_over = false
 	victory = false
+	run_abandoned = false
 	announce_text = ""
 	announce_t = 0.0
 	announce_max = 1.0
@@ -279,6 +284,7 @@ func end_run(did_win: bool, abandoned: bool = false) -> bool:
 	if not saved:
 		settlement_pending = {"kills":kills, "died":not abandoned}
 	run_over = true
+	run_abandoned = abandoned and not did_win
 	exit_selected = false
 	pending_destination = ""
 	run_phase = "ended"
@@ -312,6 +318,7 @@ func start_floor(index: int) -> void:
 		run_phase = "biome"
 	run_over = false
 	victory = false
+	run_abandoned = false
 	# kills is NOT reset here. It is the run's kill count, and end_run()
 	# persists it to Profile.total_kills; a per-floor reset meant a 5-floor
 	# victory recorded only the Warden's single kill. reset_run() owns it.

@@ -13,6 +13,13 @@ func _ready() -> void:
 	await get_tree().process_frame
 	_main.enter_hub()
 	_check(_main.start_node("ash_gate"), "start abandonment fixture")
+	Game.add_cells(11)
+	Game.add_kill()
+	# A successful explicit abandon keeps its kind even with nothing pending:
+	# the result page must not need settlement_pending to know it was abandoned.
+	_check(Game.end_run(false, true) and Game.run_abandoned and Game.settlement_pending.is_empty(), "successful abandon records its reason without a pending receipt")
+	_main.enter_hub()
+	_check(_main.start_node("ash_gate"), "restart for the failed-receipt fixture")
 	var runs := Profile.runs
 	var deaths := Profile.deaths
 	var total := Profile.total_kills
@@ -28,6 +35,22 @@ func _ready() -> void:
 	await _key(KEY_KP_ENTER)
 	_check(Game.run_over and not Game.settlement_pending.is_empty() and Game.run_cells == 0 and Game.build == null, "failed keypad abandonment still forfeits run")
 	_check(Profile.runs == runs and Profile.deaths == deaths and Profile.total_kills == total, "failed abandonment has no false permanent receipt")
+	_check(Game.run_abandoned, "failed abandonment keeps its result kind")
+	_check(_main.hud.run_over_action_ids() == ["retry", "quit"], "failed result offers retry and leave")
+	_check(_main.hud._run_action == 0, "failed result defaults to Retry save")
+	await _key(KEY_RIGHT)
+	_check(_main.hud._run_action == 1, "keyboard moves the result focus to Leave")
+	await _key(KEY_LEFT)
+	_check(_main.hud._run_action == 0, "keyboard returns the result focus to Retry")
+	Profile.last_save_error = "LONG_STORAGE_ERROR_TOKEN_".repeat(30)
+	for frame in 3:
+		await get_tree().process_frame
+	_check(_main.hud._result_line_count > _main.hud.RESULT_DETAIL_ROWS, "long failed reason fills more lines than the result window")
+	var scroll_before: int = _main.hud._result_scroll
+	await _key(KEY_DOWN)
+	_check(_main.hud._result_scroll == scroll_before + 1, "down pages the failed reason")
+	await _key(KEY_UP)
+	_check(_main.hud._result_scroll == scroll_before, "up pages back to the first line")
 	await _shot("abandon-save-failed")
 	for code in [KEY_ENTER, KEY_KP_ENTER, KEY_ESCAPE]: await _key(code)
 	_check(Game.run_over and Profile.runs == runs and Profile.total_kills == total and not get_tree().paused, "repeated refused retries neither resume nor double settle")
@@ -42,10 +65,17 @@ func _ready() -> void:
 	Game.player.invuln = 0
 	Game.player.take_hit({"damage":99999.0, "source_pos":Game.player.position - Vector2(40, 0)})
 	Combat.cancel_hitstop()
-	await get_tree().create_timer(2.6, true).timeout
+	# The death route owns a 2.2s transition; wait for the real countdown to end
+	# instead of sleeping past it. The assertion still proves the automatic Hub
+	# return refuses the failed receipt.
+	await get_tree().process_frame
+	var hub_deadline := Time.get_ticks_msec() + 2600
+	while Game.hub_return_in > 0.0 and Time.get_ticks_msec() < hub_deadline:
+		await get_tree().process_frame
 	_check(Game.run_over and Game.hub_return_in == 0 and not Game.settlement_pending.is_empty(), "automatic Hub return refuses failed death receipt")
 	for code in [KEY_KP_ENTER, KEY_ENTER, KEY_ESCAPE]: await _key(code)
 	_check(Game.run_over and Game.run_cells == 0 and Game.build == null and Profile.runs == runs + 1 and Profile.deaths == deaths and Profile.total_kills == total + 1, "death retries retain forfeiture without duplicate receipts")
+	_check(not Game.run_abandoned, "death result is never labelled abandoned")
 	_check(not _main.hud.paused and not _main.hud._modal_open(), "ended overlay owns keyboard even when pause cannot open")
 	await _shot("death-save-failed")
 	# No explicit quit fallback: removing the HUD quit path makes this probe time out.

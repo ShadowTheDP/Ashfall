@@ -152,14 +152,19 @@ func slot_summary(slot: int) -> Dictionary:
 	var d: Dictionary = json.data
 	if _to_int(d.get("version", 1)) > VERSION:
 		return {"blocked":true, "label":"NEWER VERSION / PROTECTED"}
-	var checkpoint: Variant = d.get("run_checkpoint", {})
-	if typeof(checkpoint) != TYPE_DICTIONARY:
+	var raw_checkpoint: Variant = d.get("run_checkpoint", {})
+	if typeof(raw_checkpoint) != TYPE_DICTIONARY:
 		return {"blocked":true, "label":"INVALID CHECKPOINT / PROTECTED"}
+	var checkpoint: Dictionary = raw_checkpoint
 	var victories := _to_int(d.get("victories", 0))
 	var label := "HUB / %d VICTORIES" % victories
 	var checkpoint_node_id := ""
 	var checkpoint_kind := ""
+	# Display-only validation for the title/slot cards. The canonical gate stays
+	# RunCheckpoint.error(); select_slot still decides writes from `blocked`.
+	var resume_error := ""
 	if not checkpoint.is_empty():
+		resume_error = RunCheckpoint.error(checkpoint)
 		checkpoint_kind = str(checkpoint.get("kind", ""))
 		var state: Variant = checkpoint.get("state", {})
 		label = "CHECKPOINT NEEDS RECOVERY"
@@ -168,9 +173,8 @@ func slot_summary(slot: int) -> Dictionary:
 			label = str(Data.route_graph.nodes.get(checkpoint_node_id, {}).get("name", "UNKNOWN ROUTE")) + (" / PASSAGE" if checkpoint_kind == "passage" else " / ENTRANCE")
 	# checkpoint_node_id / checkpoint_kind / victories are display metadata only:
 	# label stays the byte-comparable machine value and nothing here is persisted.
-	return {"blocked":false, "label":label, "resume":not checkpoint.is_empty(),
-		"checkpoint_node_id":checkpoint_node_id, "checkpoint_kind":checkpoint_kind,
-		"victories":_to_int(d.get("victories", 0))}
+	return {"blocked":false, "label":label, "resume":not checkpoint.is_empty() and resume_error.is_empty(), "resume_error":resume_error,
+		"checkpoint_node_id":checkpoint_node_id, "checkpoint_kind":checkpoint_kind, "victories":_to_int(d.get("victories", 0))}
 
 
 func select_slot(slot: int) -> bool:

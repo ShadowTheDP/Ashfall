@@ -2,9 +2,12 @@ extends Node
 ## STEP 3 preferences probe: first use, bus gains, progress isolation, locale /
 ## audio cancel, persistence through reset / slot switch / a real restart,
 ## damaged and invalid files, write failure, rebind mirroring, and the headless
-## display-preview state. Every choice and confirmation here is a real
-## InputEvent driven through the production input path; the only direct calls
-## are the public Profile / Interface APIs a normal page uses.
+## display-preview state. The final section drives the real SettingsScreen
+## display transaction while the tree is paused and Engine.time_scale is 0,
+## proving the preview still expires from wall-clock ticks. Every choice and
+## confirmation here is a real InputEvent driven through the production input
+## path; the only direct calls are the public Profile / Interface / page APIs a
+## normal page uses.
 ##
 ## Opt-in through tools/check.py with a 30 second deadline. The full ten second
 ## display preview runs once in tests/ui_product_probe.gd, not here.
@@ -30,7 +33,7 @@ func _ready() -> void:
 		if not singleton.is_node_ready():
 			await singleton.ready
 	_settings_path = Profile._settings_path
-	_run()
+	await _run()
 	print("SETTINGS PROBE %s (%d checks, %d failures)" % ["OK" if _fails == 0 else "FAILED", _checks, _fails])
 	await get_tree().process_frame
 	get_tree().quit(0 if _fails == 0 else 1)
@@ -50,6 +53,7 @@ func _run() -> void:
 	_check_rebind_mirroring()
 	_check_headless_display_state()
 	_check_slot_switch_keeps_settings_path()
+	await _check_frozen_wallclock_preview()
 
 
 # ------------------------------------------------------------------ first use
@@ -303,7 +307,78 @@ func _check_slot_switch_keeps_settings_path() -> void:
 	_check(Profile._settings_path == saved_path, "returning slots still keeps the preferences path fixed")
 
 
+# --------------------------------------------------- frozen preview transaction
+
+## Step 8 consumer edge: the display preview must follow the wall clock even
+## while the tree is paused and the engine clock is frozen. The real ten second
+## wait is owned by tests/ui_product_probe.gd; here the fixture only shortens
+## its own deadline after proving the production page armed the real one, then
+## waits on process frames and wall ticks (a scaled SceneTreeTimer would hang).
+func _check_frozen_wallclock_preview() -> void:
+	var screen := SettingsScreen.new()
+	add_child(screen)
+	await get_tree().process_frame
+	screen.open()
+	await get_tree().process_frame
+	var committed: Dictionary = Profile.preferences.duplicate(true)
+	var settings_bytes := _text(_settings_path)
+	_check(screen.is_open() and screen.draft == committed, "the page opens on the committed preferences")
+	await _press(KEY_PAGEDOWN)
+	_check(screen.page_index == 1, "real navigation reaches the display category")
+	await _press(KEY_RIGHT)
+	_check(str(screen.draft["display"]["window_mode"]) == "fullscreen",
+		"the display draft requests the native fullscreen mode")
+	_check(str(screen.committed["display"]["window_mode"]) == "windowed",
+		"the display draft never rewrites the committed value")
+	await _press(KEY_DOWN)
+	await _press(KEY_DOWN)
+	get_tree().paused = true
+	Engine.time_scale = 0.0
+	await _press(KEY_ENTER)
+	_check(screen.display_preview_active, "Apply on a display change starts the live preview")
+	var remaining := int(screen.preview_deadline_ms) - Time.get_ticks_msec()
+	_check(remaining > 9000 and remaining <= 10000,
+		"the preview arms the real ten second wall-clock deadline while frozen")
+	_check(Profile.preferences == committed, "the live preview never commits preferences")
+	_check(_text(_settings_path) == settings_bytes, "the live preview never writes the preferences file")
+	_check(bool(Interface._fullscreen_active), "the frozen preview still applies its display state")
+	var start := Time.get_ticks_msec()
+	screen.preview_deadline_ms = start + 400
+	while Time.get_ticks_msec() - start < 150:
+		await get_tree().process_frame
+	_check(screen.display_preview_active, "the preview keeps its wall-clock deadline under a frozen clock")
+	while screen.display_preview_active and Time.get_ticks_msec() - start < 3000:
+		await get_tree().process_frame
+	var elapsed := Time.get_ticks_msec() - start
+	_check(not screen.display_preview_active,
+		"the preview expires from wall-clock ticks while paused at time_scale 0")
+	_check(elapsed >= 300 and elapsed <= 3000, "the wall-clock expiry lands near its deadline (%dms)" % elapsed)
+	_check(screen.status_key == "UI_SETTINGS_PREVIEW_EXPIRED", "the expired preview reports its own status")
+	_check(not bool(Interface._fullscreen_active), "the expired preview restores the committed display mode")
+	_check(str(screen.draft["display"]["window_mode"]) == "fullscreen", "expiry keeps the pending display draft")
+	_check(screen.committed["display"] == committed["display"], "expiry keeps the committed display values")
+	_check(Profile.preferences == committed, "expiry never commits preferences")
+	_check(_text(_settings_path) == settings_bytes, "expiry never writes the preferences file")
+	_check(screen.last_error.is_empty(), "a rolled-back preview is not reported as a save failure")
+	Engine.time_scale = 1.0
+	get_tree().paused = false
+	screen.close()
+	_check(not screen.is_open(), "the fixture closes the preview page")
+	screen.queue_free()
+	await get_tree().process_frame
+
+
 # ------------------------------------------------------------------- helpers
+
+func _press(code: int) -> void:
+	for pressed in [true, false]:
+		var event := InputEventKey.new()
+		event.physical_keycode = code
+		event.keycode = code
+		event.pressed = pressed
+		Input.parse_input_event(event)
+		await get_tree().process_frame
+
 
 func _progress_state() -> Dictionary:
 	var state := {"active_slot": Profile.active_slot, "checkpoint": JSON.stringify(Profile.run_checkpoint)}

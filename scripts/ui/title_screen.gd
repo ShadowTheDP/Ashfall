@@ -208,7 +208,7 @@ func _choose(new_run: bool) -> void:
 ## it); only this rendering is localized.
 func _note_display() -> String:
 	if note.begins_with("SAVE FAILED: "):
-		return Hud.save_failed_display(note.substr(13))
+		return Hud.save_failed_display(note.substr(13)) + " · " + ContentText.of("UI_S7_TITLE_RETRY_SAVE", "Press {accept} to retry.").format({"accept": Interface.prompt(&"ui_accept")})
 	if note == "CONFIRM AGAIN: ABANDON CHECKPOINT / KEEP PERMANENT UNLOCKS":
 		return ContentText.of("UI_TITLE_CONFIRM_AGAIN", "CONFIRM AGAIN: ABANDON CHECKPOINT / KEEP PERMANENT UNLOCKS")
 	if note.is_empty():
@@ -227,7 +227,7 @@ func _note_display() -> String:
 		if note.contains(": "):
 			return refused + " · " + note
 		return refused
-	return ContentText.of("UI_TITLE_CHECKPOINT_BLOCKED", "Checkpoint blocked: {reason}").format({"reason": note})
+	return ContentText.of("UI_S7_TITLE_UNUSABLE_CHECKPOINT", "Checkpoint cannot resume: {reason} · original data retained.").format({"reason": note})
 
 
 func _draw() -> void:
@@ -244,20 +244,22 @@ func _draw() -> void:
 
 
 func _draw_main() -> void:
-	MathArt.ui_brand(self, Vector2(604, 102), 58)
+	_draw_brand_axes(Rect2(378, 102, 338, 74))
 	MathArt.ui_text(self, Vector2(52, 114), ContentText.of("UI_TITLE_BRAND", "ASHFALL"), 24, MathArt.PALE)
 	MathArt.ui_text(self, Vector2(54, 141), ContentText.of("UI_TITLE_SUBTITLE", "Combat, geometry and consequence"), 13, MathArt.PALE)
 	MathArt.ui_text(self, Vector2(52, 179), ContentText.of("UI_TITLE_CHOOSE", "Choose an action"), 16, MathArt.WHITE)
-	var resume := not Profile.run_checkpoint.is_empty()
+	var summary := Profile.slot_summary(Profile.active_slot)
+	var resume := bool(summary.get("resume", false))
+	var resume_error := str(summary.get("resume_error", ""))
 	var labels: Array[String] = [
-		ContentText.of("UI_TITLE_CONTINUE", "Continue checkpoint") if resume else ContentText.of("UI_TITLE_ENTER_HUB", "Enter Hub"),
+		ContentText.of("UI_TITLE_CONTINUE", "Continue checkpoint") if resume else (ContentText.of("UI_S7_TITLE_CHECKPOINT_UNAVAILABLE", "Checkpoint unavailable") if not resume_error.is_empty() else ContentText.of("UI_TITLE_ENTER_HUB", "Enter Hub")),
 		ContentText.of("UI_TITLE_NEW_RUN", "New run"),
 		ContentText.of("UI_TITLE_SAVES", "Saves"),
 		ContentText.of("UI_TITLE_SETTINGS", "Settings"),
 		ContentText.of("UI_TITLE_QUIT", "Quit"),
 	]
 	var hints: Array[String] = [
-		ContentText.of("UI_TITLE_HINT_RESUME", "Resume the saved checkpoint") if resume else ContentText.of("UI_TITLE_HINT_OPEN_HUB", "Open the Hub"),
+		ContentText.of("UI_TITLE_HINT_RESUME", "Resume the saved checkpoint") if resume else (ContentText.of("UI_S7_TITLE_HINT_CHECKPOINT_UNAVAILABLE", "Cannot resume: {reason}").format({"reason": resume_error}) if not resume_error.is_empty() else ContentText.of("UI_TITLE_HINT_OPEN_HUB", "Open the Hub")),
 		ContentText.of("UI_TITLE_HINT_KEEP_PROGRESS", "Keep permanent progress"),
 		ContentText.of("UI_TITLE_HINT_CHOOSE_SLOT", "Choose a save slot"),
 		ContentText.of("UI_TITLE_HINT_SETTINGS", "Sound, display, controls and language"),
@@ -270,11 +272,11 @@ func _draw_main() -> void:
 		MathArt.ui_text(self, rect.position + Vector2(16, 29), "%02d" % [i + 1], 24, MathArt.ACCENT if focused else MathArt.STONE_HI)
 		MathArt.ui_text(self, rect.position + Vector2(70, 16), labels[i], 13, MathArt.WHITE if focused else MathArt.PALE)
 		MathArt.ui_text(self, rect.position + Vector2(70, 16 + MathArt.ui_line_height(13)), hints[i], 11, MathArt.LIGHT_DIM)
-	var summary := Profile.slot_summary(Profile.active_slot)
 	MathArt.ui_surface(self, Rect2(378, 194, 338, 154), _confirm_new, true)
 	MathArt.ui_text(self, Vector2(394, 218), ContentText.of("UI_TITLE_ACTIVE_SAVE", "ACTIVE SAVE"), 11, MathArt.LIGHT_DIM)
 	MathArt.ui_text(self, Vector2(394, 248), ContentText.of("UI_TITLE_SAVE_NUMBER", "Save {slot}").format({"slot": Profile.active_slot}), 16, MathArt.WHITE)
-	var state := ContentText.of("UI_TITLE_STATE_PROTECTED", "Protected / refused") if summary.blocked else (ContentText.of("UI_TITLE_STATE_CHECKPOINT", "Checkpoint available") if summary.get("resume", false) else (ContentText.of("UI_TITLE_STATE_EMPTY", "Empty / fresh start") if str(summary.label) == "EMPTY" else ContentText.of("UI_TITLE_STATE_HUB", "Hub / permanent progress")))
+	MathArt.ui_service(self, Vector2(684, 244), _save_service(summary), 14)
+	var state := ContentText.machine(str(summary.label)) if summary.blocked else (ContentText.of("UI_S7_TITLE_CHECKPOINT_UNAVAILABLE", "Checkpoint unavailable") if not resume_error.is_empty() else (ContentText.of("UI_TITLE_STATE_CHECKPOINT", "Checkpoint available") if resume else (ContentText.of("UI_TITLE_STATE_EMPTY", "Empty / fresh start") if str(summary.label) == "EMPTY" else ContentText.of("UI_TITLE_STATE_HUB", "Hub / permanent progress"))))
 	MathArt.ui_text(self, Vector2(394, 272), state, 13, MathArt.PALE, 306)
 	var explain := MathArt.ui_wrap(ContentText.of("UI_TITLE_SLOT_EXPLAIN", "{state} · {hint}").format({"state": Hud.slot_label(summary), "hint": hints[_action]}), 306, 11)
 	for i in mini(3, explain.size()):
@@ -289,7 +291,7 @@ func _draw_main() -> void:
 
 
 func _draw_saves() -> void:
-	MathArt.ui_brand(self, Vector2(660, 92), 40)
+	_draw_brand_axes(Rect2(596, 62, 140, 52))
 	MathArt.ui_text(self, Vector2(52, 96), ContentText.of("UI_TITLE_SAVES_TITLE", "SAVES"), 24, MathArt.WHITE)
 	var nav := _prompt_pair(&"ui_nav_left", &"ui_nav_right")
 	var accept := Interface.prompt(&"ui_accept")
@@ -302,13 +304,17 @@ func _draw_saves() -> void:
 		MathArt.ui_text(self, rect.position + Vector2(16, 26), "%02d" % [i + 1], 24, MathArt.ACCENT if focused else MathArt.STONE_HI)
 		if i + 1 == Profile.active_slot:
 			MathArt.ui_text(self, rect.position + Vector2(rect.size.x - 70, 26), ContentText.of("UI_TITLE_ACTIVE", "ACTIVE"), 11, MathArt.HEAL, 54, HORIZONTAL_ALIGNMENT_RIGHT)
-		var state := ContentText.of("UI_TITLE_SLOT_PROTECTED", "PROTECTED") if summary.blocked else (ContentText.of("UI_TITLE_SLOT_CHECKPOINT", "CHECKPOINT") if summary.get("resume", false) else (ContentText.of("UI_TITLE_SLOT_EMPTY", "EMPTY") if str(summary.label) == "EMPTY" else ContentText.of("UI_TITLE_SLOT_HUB", "HUB")))
-		MathArt.ui_text(self, rect.position + Vector2(16, 56), state, 13, MathArt.PALE)
+		MathArt.ui_service(self, rect.position + Vector2(184, 44), _save_service(summary), 10)
+		MathArt.ui_text(self, rect.position + Vector2(16, 56), _slot_state(summary), 13, MathArt.PALE, 150)
 		var lines := MathArt.ui_wrap(Hud.slot_label(summary), 180, 13)
-		for n in mini(4, lines.size()):
+		for n in mini(3, lines.size()):
 			MathArt.ui_text(self, rect.position + Vector2(16, 84 + n * MathArt.ui_line_height(13)), lines[n], 13, MathArt.WHITE if focused else MathArt.PALE, 180)
-		var footer := ContentText.of("UI_TITLE_SLOT_REFUSED", "Refused · file unchanged") if summary.blocked else (ContentText.of("UI_TITLE_SLOT_ENTER_CONTINUES", "{accept} continues").format({"accept": accept}) if summary.get("resume", false) else (ContentText.of("UI_TITLE_SLOT_ENTER_FRESH", "{accept} starts fresh").format({"accept": accept}) if str(summary.label) == "EMPTY" else ContentText.of("UI_TITLE_SLOT_ENTER_HUB", "{accept} opens Hub").format({"accept": accept})))
-		MathArt.ui_text(self, rect.position + Vector2(16, 174), footer, 11, MathArt.LIGHT_DIM, 180)
+		var unusable := not str(summary.get("resume_error", "")).is_empty()
+		var footer := ContentText.of("UI_TITLE_SLOT_REFUSED", "Refused · file unchanged") if summary.blocked else (ContentText.of("UI_S7_TITLE_SLOT_UNUSABLE", "Checkpoint unusable · data retained") if unusable else (ContentText.of("UI_TITLE_SLOT_ENTER_CONTINUES", "{accept} continues").format({"accept": accept}) if summary.get("resume", false) else (ContentText.of("UI_TITLE_SLOT_ENTER_FRESH", "{accept} starts fresh").format({"accept": accept}) if str(summary.label) == "EMPTY" else ContentText.of("UI_TITLE_SLOT_ENTER_HUB", "{accept} opens Hub").format({"accept": accept}))))
+		MathArt.ui_text(self, rect.position + Vector2(16, 140), footer, 11, MathArt.LIGHT_DIM, 180)
+		var boundary := MathArt.ui_wrap(_slot_boundary(summary), 180, 11)
+		for n in mini(2, boundary.size()):
+			MathArt.ui_text(self, rect.position + Vector2(16, 158 + n * MathArt.ui_line_height(11)), boundary[n], 11, MathArt.LIGHT_DIM, 180)
 	var selected := Profile.slot_summary(_slot + 1)
 	var label := MathArt.ui_wrap(ContentText.of("UI_TITLE_SELECTED_SAVE", "Save {slot} · {state}").format({"slot": _slot + 1, "state": Hud.slot_label(selected)}), 664, 16)
 	for i in mini(2, label.size()):
@@ -321,6 +327,59 @@ func _draw_saves() -> void:
 	x += MathArt.ui_key(self, Vector2(x, 440), _prompt_pair(&"ui_tab_prev", &"ui_tab_next"), ContentText.of("UI_TITLE_KEY_SLOT", "Slot"))
 	x += MathArt.ui_key(self, Vector2(x, 440), Interface.prompt(&"ui_accept"), ContentText.of("UI_TITLE_KEY_OPEN", "Open"))
 	MathArt.ui_key(self, Vector2(636, 440), Interface.prompt(&"ui_back"), ContentText.of("UI_TITLE_KEY_BACK", "Back"))
+
+
+## Glyph and category are display-only projections of the machine summary.
+## The full reason still comes from Hud.slot_label(); nothing here writes a slot.
+func _save_service(summary: Dictionary) -> String:
+	if summary.blocked or not str(summary.get("resume_error", "")).is_empty():
+		return "challenge"
+	if summary.get("resume", false):
+		return "continue"
+	if str(summary.label) == "EMPTY":
+		return "fountain"
+	return "character"
+
+
+func _slot_state(summary: Dictionary) -> String:
+	if summary.blocked:
+		var raw := str(summary.label)
+		if raw == "NEWER VERSION / PROTECTED" or raw == "INVALID CHECKPOINT / PROTECTED":
+			return ContentText.of("UI_TITLE_SLOT_PROTECTED", "PROTECTED")
+		return ContentText.of("UI_S7_TITLE_SLOT_BLOCKED", "BLOCKED")
+	if not str(summary.get("resume_error", "")).is_empty():
+		return ContentText.of("UI_S7_TITLE_SLOT_UNUSABLE_STATE", "UNUSABLE")
+	if summary.get("resume", false):
+		return ContentText.of("UI_TITLE_SLOT_CHECKPOINT", "CHECKPOINT")
+	if str(summary.label) == "EMPTY":
+		return ContentText.of("UI_TITLE_SLOT_EMPTY", "EMPTY")
+	return ContentText.of("UI_TITLE_SLOT_HUB", "HUB")
+
+
+## The boundary names what reopening this slot would discard or keep.
+func _slot_boundary(summary: Dictionary) -> String:
+	if summary.blocked:
+		return ContentText.of("UI_S7_TITLE_BOUNDARY_PROTECTED", "Original file kept; this slot cannot open.")
+	if not str(summary.get("resume_error", "")).is_empty():
+		return ContentText.of("UI_S7_TITLE_BOUNDARY_UNUSABLE", "Unusable checkpoint data is kept; starting a new run replaces it.")
+	if summary.get("resume", false):
+		return ContentText.of("UI_S7_TITLE_BOUNDARY_CHECKPOINT", "Restores this checkpoint; newer progress is lost.")
+	if str(summary.label) == "EMPTY":
+		return ContentText.of("UI_S7_TITLE_BOUNDARY_EMPTY", "No save data; nothing is deleted.")
+	return ContentText.of("UI_S7_TITLE_BOUNDARY_HUB", "Permanent progress only; no checkpoint.")
+
+
+## Static brand + three-axis field. No idle pulse: the canvas is redrawn only
+## when focus, slot or locale changes.
+func _draw_brand_axes(rect: Rect2) -> void:
+	var mid := rect.position.y + rect.size.y * 0.44
+	var radius := minf(22.0, rect.size.y * 0.34)
+	MathArt.ui_brand(self, Vector2(rect.position.x + rect.size.x * 0.22, mid), radius)
+	var axes: Array[String] = ["brutality", "tactics", "survival"]
+	var start := rect.position.x + rect.size.x * 0.44
+	var step := rect.size.x * 0.19
+	for i in axes.size():
+		MathArt.ui_axis(self, Vector2(start + float(i) * step, mid), axes[i], radius * 0.46)
 
 
 ## One keycap per action source: the prompt owner decides keyboard or gamepad.

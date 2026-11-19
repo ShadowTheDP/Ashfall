@@ -74,7 +74,7 @@ static func describe(build: RunBuild, item: Dictionary) -> Dictionary:
 	_append_affix(details, cfg, item)
 	return {
 		"name": name,
-		"playstyle": _playstyle(str(item.get("id", ""))),
+		"playstyle": _playstyle(str(item.get("id", "")), kind, str(cfg.get("action", ""))),
 		"condition": _condition(kind, str(cfg.get("action", ""))),
 		"headline": _headline(cfg, stats),
 		"details": details,
@@ -161,10 +161,22 @@ static func _append_charge_lines(item: Dictionary, stats: Dictionary, details: A
 		"capacity": capacity,
 		"state": ContentText.of("UI_HUD_READY", "READY") if charges > 0 else ContentText.of("UI_HUD_EMPTY", "EMPTY"),
 	}))
-	details.append(ContentText.of("UI_BUILD_RECHARGE_LINE", "RECHARGE {cooldown}s / NEXT {next}s").format({
-		"cooldown": "%.2f" % float(stats.cooldown),
-		"next": "%.2f" % float(item.get("cooldown", 0.0)),
-	}))
+	var recharge := float(stats.cooldown)
+	var next := float(item.get("cooldown", 0.0))
+	# Present the item's real timer: no timer, an in-progress recharge, or an
+	# idle state that is ready / empty. Never a fabricated NEXT 0.00s.
+	if recharge <= 0.0:
+		details.append(ContentText.of("UI_BUILD_NO_RECHARGE", "NO RECHARGE TIMER"))
+	elif next > 0.0:
+		details.append(ContentText.of("UI_BUILD_RECHARGE_LINE", "RECHARGE {cooldown}s / NEXT {next}s").format({
+			"cooldown": "%.2f" % recharge,
+			"next": "%.2f" % next,
+		}))
+	else:
+		details.append(ContentText.of("UI_S5_RECHARGE_IDLE", "Recharge {cooldown}s / {state}").format({
+			"cooldown": "%.2f" % recharge,
+			"state": ContentText.of("UI_HUD_READY", "READY") if charges >= capacity else ContentText.of("UI_HUD_EMPTY", "EMPTY"),
+		}))
 
 
 static func _append_guard(details: Array[String], cfg: Dictionary, frontal: bool) -> void:
@@ -203,9 +215,12 @@ static func _append_affix(details: Array[String], cfg: Dictionary, item: Diction
 			}))
 
 
-static func _playstyle(id: String) -> String:
+static func _playstyle(id: String, kind: String, action: String) -> String:
 	var key := "UI_GEAR_PLAY_%s" % id.to_upper()
-	return ContentText.of(key, str(PLAYSTYLE_EN.get(id, "")))
+	var english := str(PLAYSTYLE_EN.get(id, ""))
+	if english.is_empty():
+		english = _condition(kind, action)
+	return ContentText.of(key, english)
 
 
 static func _condition(kind: String, action: String) -> String:
@@ -219,7 +234,7 @@ static func _condition(kind: String, action: String) -> String:
 		return ContentText.of("UI_GEAR_COND_KUNAI", "Auto-targets the nearest enemy; can crit when the target is exposed or backstabbed.")
 	if kind == "amulet":
 		return ContentText.of("UI_GEAR_COND_AMULET", "Passive; always active.")
-	return ""
+	return ContentText.of("UI_S5_COND_FALLBACK", "Follow the details for the exact trigger and timing.")
 
 
 static func _headline(cfg: Dictionary, stats: Dictionary) -> String:

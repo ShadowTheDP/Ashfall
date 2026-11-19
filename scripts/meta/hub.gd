@@ -663,7 +663,15 @@ func _draw_station(index: int) -> void:
 		MathArt.px_rect(self, Rect2(base.x + drift, -66.0 - rise, 1.0, 1.0),
 			Color(tint, (1.0 - rise / 44.0) * 0.55))
 
-	MathArt.ui_text(self, Vector2(x - 70.0, -84.0), ContentText.name("station", str(station["id"]), str(station["name"])).to_upper(), 11, MathArt.WHITE if bright else MathArt.LIGHT, 140.0, HORIZONTAL_ALIGNMENT_CENTER)
+	MathArt.ui_text(self, Vector2(x - 70.0, -100.0), ContentText.name("station", str(station["id"]), str(station["name"])).to_upper(), 11, MathArt.WHITE if bright else MathArt.LIGHT, 140.0, HORIZONTAL_ALIGNMENT_CENTER)
+	var purpose := ""
+	match str(station["id"]):
+		"upgrade": purpose = ContentText.of("UI_S6_STATION_UPGRADE", "PERMANENT / ARENA")
+		"skill": purpose = ContentText.of("UI_S6_STATION_SKILL", "SKILLS / ARENA")
+		"archive": purpose = ContentText.of("UI_S6_STATION_ARCHIVE", "BESTIARY · WEAPONS · ARMOUR")
+		"character": purpose = ContentText.of("UI_S6_STATION_CHARACTER", "ARENA BODY / EQUIP")
+	if not purpose.is_empty():
+		MathArt.ui_text(self, Vector2(x - 70.0, -84.0), purpose, 11, MathArt.LIGHT_DIM if not bright else MathArt.CELL, 140.0, HORIZONTAL_ALIGNMENT_CENTER)
 	if bright:
 		MathArt.ui_text(self, Vector2(x - 20.0, 22.0), Interface.prompt(&"interact"), 11, Color(MathArt.WHITE, 0.55 + 0.45 * sin(_t * 4.0)), 40.0, HORIZONTAL_ALIGNMENT_CENTER)
 

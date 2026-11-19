@@ -269,8 +269,33 @@ func _ready() -> void:
 	Game.add_kill()
 	Game.note_damage_taken(1)
 	_check(Game.kill_streak == 0 and Game.best_kill_streak == 3, "damage resets current streak but keeps achieved milestone")
+	# The reset row is destructive: first press opens a nearest-layer confirm,
+	# cancel spends nothing, and only a second confirm performs the reset.
+	build.gold = 0
+	var held := build.mutations.duplicate()
+	_main._open_service("mutation")
+	await _frames(2)
+	for i in _main.collector._ids.size():
+		if _main.collector._index == 0: break
+		await _key(KEY_DOWN)
+	await _key(KEY_ENTER)
+	_check(_main.collector._reset_confirm and build.gold == 0, "reset opens a confirmation without charging")
+	await _key(KEY_ESCAPE)
+	_check(not _main.collector._reset_confirm and get_tree().paused and build.gold == 0 and build.mutations == held, "reset cancel spends 0 and leaves effects and service intact")
+	await _key(KEY_ESCAPE)
+	_check(not get_tree().paused, "closing after a cancelled reset releases the pause")
 	build.gold = 200
-	_check(Game.reset_mutations() and Game.choose_mutation("shell"), "reset clears all selected effects without closing three slots")
+	var reset_price: int = build.reset_cost()
+	_main._open_service("mutation")
+	await _frames(2)
+	for i in _main.collector._ids.size():
+		if _main.collector._index == 0: break
+		await _key(KEY_DOWN)
+	await _key(KEY_ENTER)
+	await _key(KEY_ENTER)
+	_check(not _main.collector._reset_confirm and build.mutations.is_empty() and build.gold == 200 - reset_price, "confirmed reset spends the displayed price and clears every effect")
+	await _key(KEY_ESCAPE)
+	_check(Game.choose_mutation("shell"), "chosen effect restored after the real reset transaction")
 	# Explicit service-context fixtures below test limits; no claim of route traversal.
 	Game.run_node_id = "bridge_sentinel"
 	Game.boss_defeated = true

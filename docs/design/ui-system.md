@@ -2,6 +2,8 @@
 
 本文件只保留現行 UI 規格與理由。歷史階段、舊截圖帳本、灰階違規與失效位置已刪除；原始證據留在 `docs/research/`、`output/` 與 dated validation reports。狀態、驗證與人工 gate 只看 [current-state](../agent/current-state.md)。
 
+第 1–8 步已完成工程實作與有限視覺；最終集中驗證與 manifest 見 [RESULT](../../output/ui-product/step5-8-validation/RESULT.md) 與 current-state，自動與有限視覺 gate 已 PASS，人類、硬體與 export 仍待，故不得把下列契約當成人類驗收通過。以下幾何、符號與文案是凍結來源的實際契約，不是計畫目標；也不改變鍵盤完整可用、MathArt、768×480 邏輯尺寸與 Profile 唯一 writer 等既有不變條件。
+
 ## 目標
 
 UI 借用 Dead Cells 可觀察的功能分組與導覽，不複製其版面、文字、資產或動畫；表達必須是 Ashfall 原創 MathArt。玩家應在 768×480、鍵盤完整可用且不需滑鼠的條件下，先看懂現在能做什麼、代價與真實後果，再讀細節；手把走同一組語意與焦點，提示隨最後有效裝置切換。
@@ -18,6 +20,10 @@ UI 借用 Dead Cells 可觀察的功能分組與導覽，不複製其版面、�
 - 長文字用 `MathArt.ui_wrap(value, width, size)` 換行；單行空間不足用 `ui_short(value, width, size)` 加 `…`，不得硬切字形。`ui_heading` 只畫 96px 短規線，不用滿版標題線。
 - 換行交給 TextServer 的 `TextParagraph`：中文在字元邊界、英文在單字邊界，明確換行與空白行保留；行首從 grapheme 邊界取回，內容不遺失。`ui_short` 只在 grapheme 邊界截斷後加 `…`。
 - 排版結果依（文字、寬度、字級、locale）快取，上限 256 筆、滿了就整批清除；頁面每幀只查快取，不重新 shape 全文，locale 或字型變更自然換 key 重排。
+- `MathArt.ui_wrap` 第一遍仍是原生自適應排版，沒有換掉正常路徑。只有實測超寬的行才用相同字級與寬度重建新的 `TextParagraph`，以 `MANDATORY | GRAPHEME_BOUND` 重排；正常單字、CJK、locale 與 256 筆快取行為不變。根因是引擎硬斷行後不重設 `word_count`，換行後才出現的長 token 可能溢出；不得為此加自製 parser 或手動 ASCII 切字。
+- 選這個：只對實測超寬行做原生 grapheme-bound fallback，正常英文單字與中文換行不受影響；放棄：全域套用 grapheme flag，會把正常英文單字切開。
+- 選這個：保留 TextServer 為唯一換行權威；放棄：自製 parser 或手動 ASCII 切分，行為會與引擎分岐且難以對齊 locale。
+- 已執行的 retry 7 顯示 Archive 280-token、換行後出現的完整失敗原因可讀並能捲到終端，PASS；整體 product 仍在下一項 Skill fixture 失敗，尚無全數通過的宣稱。
 
 ## 文字字型與語言
 
@@ -53,18 +59,25 @@ UI 借用 Dead Cells 可觀察的功能分組與導覽，不複製其版面、�
 - 放棄：把 T／Q／S 熱鍵與裝備詳情末端附帶的 Controls 當成唯一入口；它們無法用手把焦點抵達，也讓閱讀與操作混在一起。
 
 ### Scroll 與比較
-- Scroll 是三張 212×242 軸卡；選中卡連到真實 build 投影，Enter 才消耗，NO HEAL 明示。
-- Scroll 詳細首行在 `(52,386)`，最後一行不越過 y440 的 key band。
-- 比較頁是單一候選卡（664×154）與下方 target；hint 在 `(52,274)`，位於兩卡之間，不與 CHARGES／READY 碰撞。
-- 比較只改 UI 投影，不寫 canonical UID／charges／wallet；價格、回收、餘額與錯誤都來自同一交易入口。
+- Scroll 是三張 212×242 軸卡，位置 `Rect2(52+n*226,110,212,242)`；選中卡連到真實 build 投影，Enter 才消耗，NO HEAL 基線在卡內相對 y232。
+- Scroll 詳情三行在 y386／402／418，最後一行不越過 y440 的 key band；body 在卡內重排，不縮字。
+- 比較頁（已實作）：候選卡 `Rect2(52,110,664,164)`，左欄先玩法、條件與真實 headline，右欄只放價格、選中槽回收額、交易後餘額與不足額；付款順序固定先付原價、再回收舊件。目標卡 `Rect2(52+n*338,294,326,104)`（單槽時寬 664），只留槽名、同類 headline 差額、短玩法與真實充能；完整明細收斂到共用底部兩行（y416／432，顯示範圍在 y287），鍵列統一 y452。`BuildScreen.item_details()`／`_gear_lines()` 與其字串解析已退場，`Hud` 直接使用 `GearPresentation.describe()`；`tests/l3_build_probe.gd` 只移除過時 helper 斷言，probe 仍是預設 gate。
+- 選這個：讓「怎麼玩、換哪槽、付多少」在同一視線完成；放棄：每張卡各自捲動並固定刪行，使同一事實分散在版面各處。
+- 比較只改 UI 投影，不寫 canonical UID／charges／wallet；價格、回收、餘額與錯誤都來自同一交易入口；不足原價時即使回收後足夠也不得先買。
 
 ### 商店
 - 世界商品保留 name、price 與 `R`；提示卡最多 304×154，跟隨真實商品並 clamp 在 `Rect2(16,16,736,320)` 安全區。
 - 若即時公告與提示衝突，且商品上方、下方都放不下，提示延後（defer）；公告與購買資訊都不遮住。提示只畫，`R` 仍開原本 compare，不新增購買路徑。
+- 提示內容（已實作）：依序物件名→玩法兩行→真實 headline→價格與互動比較；價錢只在 footer 出現一次，不重複 header 價格，資金不足顯示明文差額；世界下方的價格保留，讓提示被 defer 時仍可交易。
+- 提示深度（已實作）：提示 `z_index` 5，位於世界互動物件提示 Label 的 4 之上、HUD Canvas 的 30 之下；原因是不透明的 304×154 提示曾被傳送點提示從 headline 處畫穿。只有 `run_loot` ready-shop 的深度改變，交易、玩法與幾何不變。
+- 選這個：只調單一提示深度，遮住世界提示但不蓋 HUD；放棄：把所有世界標籤降層或加通用 tooltip manager，會影響所有提示且是不必要的抽象。
+- 選這個：提示先回答「這是什麼」，交易細節留給同一 compare 入口；放棄：header／footer 重複價格與逐卡規格並列。
 
 ### Collector 與 Mutation
 - Collector 是四列高資訊列表與分次進度；解鎖卡是 UI-only，只在 blueprint cost 已真正持久化成功後出現（正費用、無 `Profile.last_save_error`、saved cells 已達 cost）。卡片開啟期間吞掉所有按鍵，Continue 才返回；partial／failure 仍用文字 receipt。
 - Mutation 是全寬頁；`RESET ALL` 第一列，三個效果列在後，長效果在既有 detail band 捲動；不改效果、容量或 reset 價格。
+- 服務頁眉（已實作）固定三個事實：花費資源（本局金幣／攜帶細胞／免費）、效果範圍（本局／永久）、落盤時機（立即／此 Passage checkpoint）；`MathArt.ui_state` 提供六態名稱＋短文字＋圖形，鎖定與已購買不得只靠變暗區分。Mutation 用 `MathArt.ui_mutation`，依 damage／cooldown／damage_taken／heal_kill 畫三角刃／斷環／六角殼／四瓣；空狀態 reset 明說本次花費 0、不可購買，非空狀態把確認放在最近一層；reset 先顯示本次真實費用與會清空的名稱，餘額不足不得假成功、不得扣款，取消不扣。Craft 顯示當前→付款後、支付額與支付後 Gold，並固定寫明保留現有充能與冷卻。
+- 選這個：先講作用範圍與落盤，再講當下結果；放棄：只靠變暗與單一服務符號暗示狀態。
 
 ### 標題與存檔
 - main 是五個動作的短列表（繼續／進入大廳、新一局、存檔、設定、離開）＋右側 active-save 面板；五行固定在 `Rect2(52,190+i*43,306,39)`，單行動作加短提示。`W/S` 選動作，Enter／A 開啟；`Saves` 仍是 index 2。
@@ -72,6 +85,9 @@ UI 借用 Dead Cells 可觀察的功能分組與導覽，不複製其版面、�
 - `Saves` 是獨立三張橫向卡頁；`A/D` 或 `W/S` 選槽，Enter 開啟，Esc 返回。
 - 從 run 暫停按 `T` 直接落在 Saves；本 session 第一次開標題落在 main。`TitleScreen.show_saves()` 只切 UI；返回標題仍走既有保存流程。
 - 新局覆蓋 checkpoint 要二次確認：`N, N` 或 `N, Enter`；Esc 取消。只有真正 `Profile` 寫入成功才顯示成功。
+- 標題右面板（已實作）：`Rect2(378,102,338,74)` 放 `MathArt.ui_brand`＋三軸輪廓的靜態原創構圖，半徑 ≤32、無 idle pulse；三槽卡 glyph 由 `ui_service` 對應空槽／Hub／checkpoint／protected。Saves 每卡固定槽號→地點／Hub→可繼續方式→保留邊界，損壞／新版本／受保護／空槽與「非空但不可恢復」各有明文原因；`Profile.slot_summary()` 的 `resume_error` 是 canonical validation 的顯示投影，只影響啟用與原因，`blocked`／`select_slot` 政策不變，標題保留 presence-based 拒絕。
+- 結果頁（已實作）：順序為死亡／放棄／通關→結果是否已保存→失去／保留→下一步；統計縮為次要，存檔失敗先於慶祝並提供可聚焦焦點 id「pending retry／clean return／quit」，按鈕列 `Rect2(52+i*134,424,128,28)`；五列原始原因在 `Rect2(52,242,664,100)`，可用真實上下鍵捲動、不截斷。成功放棄的結算用 ephemeral `Game.run_abandoned` 標記（實際 `end_run(false,true)` 後設定、新局重置），只影響文案與焦點，不進序列化、不改 `VERSION`／存檔政策／內容資料。
+- 選這個：存檔頁先回答「能不能繼續、會失去什麼」，結果頁先回答「有沒有保存」；放棄：把非空槽一律叫可繼續、截斷失敗原因，或把放棄誤顯示成死亡。
 
 ### 設定
 - `SettingsScreen`（`scripts/ui/settings_screen.gd`，`class_name SettingsScreen`，layer 62）固定對外 API 為 `open() / close() / is_open() / closed`；頁面狀態（`page_index`、`draft`、`committed`、`capture_active` 等）供輸入與測試讀取，不是第二份 canonical 進度。Main 建立唯一實例，標題與暫停以 `settings_requested` 開頁並記住 owner。關閉回到原頁原焦點、維持原 pause；設定可見時呼叫頁不處理輸入。Main 的 `_any_panel_open()` 與 `Hud._modal_open()` 把它算成開啟頁，最上層 `_input` 由設定自己消耗。
@@ -85,11 +101,19 @@ UI 借用 Dead Cells 可觀察的功能分組與導覽，不複製其版面、�
 ### 地圖
 - browse 以地圖為主：沒有側欄，兩行 place window；checkpoint travel 才有六列側欄。兩者共用同一列 clamp 與鍵盤焦點。
 - 只顯示已發現的房間、服務與 checkpoint；未知內容不洩漏，鎖定原因用文字說明。沒有任意傳送。
+- 世界與出口（已實作）：`level._draw_biome()` 不再繪 room id；出口、能力門與互動物件顯示翻譯後名稱與實際 action 鍵，未在可玩範圍取得的能力如實說明條件；地圖與世界共用 `Level.teleport_refusal` 判斷，拒絕理由一致。區域圖只畫 discovered、padding 24px、比例上限 1:1，單房放大置中；左上兩行顯示地點／已發現範圍，legend 固定玩家／傳送點／出口／地點與鎖定樣式。
+- 名稱與 locale（已實作）：EN 地圖標題曾因 `Level.floor_name` 快照快取 ZH，之後走 `ContentText.name` 的 EN 查詢仍回 ZH；現在每次繪製由 canonical `Data.name` 重新取用，`Passage` 使用自己的新 locale context 重取。
+- 選這個：canonical 名稱每次繪製重新投影；放棄：快取已翻譯字串快照，locale 切換後會顯示舊語言。
+- 選這個：只呈現已確認的地圖事實並保留方向感；放棄：以內部 ID 或未知出口裝飾。
 
 ### One-way 與動效
 - 正式路線 one-way 只改外觀：1px 虛線底邊（7px on／13px step）＋低 alpha accent sliver；solid 平台保留實線底邊。碰撞、drop-through、生成與存檔不動。
 - modal reveal 100ms、selection 120ms；焦點立即換位，輸入先生效，tween 可被下一鍵中斷。沒有新 idle 旋轉、脈衝或全屏閃白；靜圖不證明 motion 序列。
+- 回饋（已實作）：全頁只有一層 backdrop，成功 acknowledgement 是最上一層，Back 只退這一層；Archive／Skill 失敗用固定在地化 receipt 加可捲動原始診斷，不加 `SAVE FAILED:` 之類前綴字串比對；每個失敗都要給可執行下一步。`Game.announce_kind`、`SettingsScreen` layer 62 與顯示模式 10 秒 wall-clock 預覽是第 1–4 步已落地的基線，本輪維持並驗證，不重複實作。
+- 選這個：先改狀態再播動效，失敗一律能看到下一步；放棄：以動效代替狀態、把錯誤只留成一行前綴。
 
 ## 取捨
 
 選擇以大語意物件、安靜 surface、單一焦點與真實交易後果構成頁面，因為玩家要在低解析與戰鬥壓力下快速做選擇；放棄每頁同一左列表／右文字殼、裝飾框線、複製原作美術，以及用自動截圖代替真人理解。
+選這個：把 canonical build／交易／存檔狀態投影成唯讀顯示，讓玩家在同一頁先看到真實後果；放棄：另養一份 UI 專用 state、把預測當成已承諾，或讓 UI 反向擁有進度。
+選這個：所有失敗都保留原始診斷並給可執行下一步；放棄：用前綴字串、截斷行數或裝飾動畫掩蓋失敗。

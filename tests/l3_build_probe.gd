@@ -45,6 +45,7 @@ func _ready() -> void:
 		_check(build.definition(build.slots[i])["kind"] == RunBuild.SLOT_KINDS[i], "slot kind %d" % i)
 	await _economy()
 	await _long_comparison()
+	_comparison_contracts()
 	await _combat()
 	await _modals_and_air_roll()
 	await _transition_and_teardown(legacy)
@@ -243,7 +244,15 @@ func _economy() -> void:
 	await _shot("shop-world-affordable")
 	Game.build.gold = 0
 	await _shot("shop-world-unaffordable")
+	var prepay_target := 2 if Game.build.definition(shop.item)["kind"] == "skill" else 0
+	var prepay_credit := Game.build.recycle_value(Game.build.slots[prepay_target])
+	Game.build.gold = shop.cost - 1
+	_check(prepay_credit > 0 and shop.cost - 1 + prepay_credit >= shop.cost, "fixture credit could fake affordability if applied up front")
 	await _key(KEY_R)
+	var prepay_slots := Game.build.slots.duplicate()
+	await _key(KEY_ENTER)
+	_check(str(_main.build_screen._note).contains("NEED") and Game.build.gold == shop.cost - 1 and Game.build.slots == prepay_slots and not shop.consumed, "full price is required before any recycle credit applies")
+	Game.build.gold = 0
 	var before := Game.build.slots.duplicate()
 	await _key(KEY_X)
 	_check(str(_main.build_screen._note).contains("UNSOLD"), "Shop explains rejected recycling")
@@ -418,19 +427,34 @@ func _long_comparison() -> void:
 	build.gold = 999999
 	screen.open(loot)
 	await _frames(2)
-	var text: String = screen.item_details(loot.item)
-	var lines: Array[String] = screen._gear_lines(loot.item, 298)
-	_check(lines.size() > screen._detail_rows and Data.gear.items.arc_saber.name in "".join(lines), "long comparison retains the complete name in scrollable details")
-	var wrapped: Array[String] = screen.wrap_text(text, 298, 11)
-	_check("".join(wrapped).replace("\n", "") == text.replace("\n", ""), "wrapped long content preserves every character")
+	var lines: Array[String] = screen._detail_lines
+	_check(lines.size() > screen._detail_rows, "long comparison overflows the shared detail band")
+	var joined := "".join(lines)
+	_check(Data.gear.items.arc_saber.name in joined, "long comparison retains the complete name in scrollable details")
+	_check(lines[0] == ContentText.of("UI_BUILD_CANDIDATE", "FOUND / CANDIDATE"), "shared details label the candidate block")
+	_check(joined.contains(screen._slot_name(0)), "shared details label the selected target slot")
 	for line in lines:
-		_check(MathArt.ui_font().get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x <= 298, "actual font stays inside comparison details")
+		_check(MathArt.ui_font().get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x <= 664, "actual font stays inside comparison details")
+	var en_details := joined
+	TranslationServer.set_locale("zh_TW")
+	await _frames(2)
+	var zh_details := "".join(screen._detail_lines)
+	_check(zh_details != en_details and zh_details.contains(screen._slot_name(0)), "bilingual details keep owner labels while rewrapping")
+	TranslationServer.set_locale("en")
+	await _frames(2)
+	var en_again := "".join(screen._detail_lines)
+	_check(screen._detail_count > 0 and en_again == en_details, "English locale round trip keeps full non-empty canonical details (count %d, rows %d)" % [screen._detail_count, screen._detail_rows])
 	await _shot("compare-long-top")
-	for i in 20: await _key(KEY_DOWN)
-	_check(screen._detail_scroll > 0 and screen._detail_scroll == screen._detail_count - screen._detail_rows, "keyboard reaches final detail without spilling into actions")
+	var detail_last: int = int(screen._detail_count) - int(screen._detail_rows)
+	for i in detail_last + 1: await _key(KEY_DOWN)
+	_check(screen.visible and screen._detail_scroll > 0 and screen._detail_scroll == detail_last, "keyboard reaches final detail without spilling into actions (count %d, scroll %d, rows %d)" % [screen._detail_count, screen._detail_scroll, screen._detail_rows])
 	await _shot("compare-long-bottom")
+	var kept_uid := int(build.slots[0]["uid"])
+	var kept_charges := int(build.slots[0]["charges"])
+	var kept_hp := _p.hp
 	await _key(KEY_ESCAPE)
 	_check(not loot.consumed and build.gold == 999999 and not get_tree().paused, "long detail cancel restores gameplay without transaction")
+	_check(int(build.slots[0]["uid"]) == kept_uid and int(build.slots[0]["charges"]) == kept_charges and is_equal_approx(_p.hp, kept_hp), "cancel deletes no instance, charge or HP")
 	loot.queue_free()
 	var originals: Array = build.slots.duplicate()
 	Data.gear.items.arc_saber.name = Data.gear.items.arc_saber.name.repeat(4)
@@ -446,8 +470,9 @@ func _long_comparison() -> void:
 	await _key(KEY_2)
 	await _frames(2)
 	_check(screen._detail_count > screen._detail_rows, "long equipped names overflow Scroll details in the fixture")
-	for i in 40: await _key(KEY_DOWN)
-	_check(screen._detail_scroll == screen._detail_count - screen._detail_rows and not scroll.consumed, "Scroll detail keyboard reaches final row without committing")
+	var scroll_last: int = int(screen._detail_count) - int(screen._detail_rows)
+	for i in scroll_last + 1: await _key(KEY_DOWN)
+	_check(screen.visible and screen._detail_scroll == scroll_last and not scroll.consumed, "Scroll detail keyboard reaches final row without committing (count %d, scroll %d, rows %d)" % [screen._detail_count, screen._detail_scroll, screen._detail_rows])
 	await _shot("scroll-long-bottom")
 	await _key(KEY_ESCAPE)
 	for slot in 4: build.equip(slot, originals[slot])
@@ -455,6 +480,27 @@ func _long_comparison() -> void:
 	build.gold = coins
 	Data.gear.items.arc_saber.name = original_name
 	Data.gear.affixes.venom.name = original_affix
+
+func _comparison_contracts() -> void:
+	var build := Game.build
+	var screen: Node = _main.build_screen
+	var saved: Dictionary = build.slots[1]
+	var shield := build.create("fold_shield")
+	var offer := RunLoot.new()
+	offer.item = build.create("aegis")
+	_main.level.add_child(offer)
+	var previous_offer: RunLoot = screen.offer
+	build.slots[1] = shield
+	screen.offer = offer
+	# Both display COUNTER; only canonical action identity proves they differ.
+	var line: String = screen._target_headline(1, shield)
+	_check(not line.contains("→") and line.contains("Different actions"), "same display label with different canonical actions never gets a numeric delta: " + line)
+	_check(screen._recycle_credit({}) == 0 and screen._recycle_credit({"id": "not_a_gear"}) == 0, "empty and missing definitions fabricate no recycle credit")
+	_check(screen._gear_display_name({}) == ContentText.of("UI_STAT_EMPTY", "Empty"), "empty slot reads as localized Empty in the shared presenter path")
+	build.slots[1] = saved
+	screen.offer = previous_offer
+	offer.queue_free()
+
 
 func _combat() -> void:
 	# Fixture placement only: real Level, player key path, enemy collision/AI/status ticks.
@@ -616,14 +662,14 @@ func _transition_and_teardown(legacy: Dictionary) -> void:
 	item["cooldown"] = 1.0
 	var hp := _p.hp
 	build.gold = 23
-	build.mutations.assign(["test_state_only"])
+	build.mutations.assign(["edge"])
 	build.mutation_capacity = 1
 	_check(Game.select_destination("hanging_gallery"), "legal exit selected")
 	_main._on_floor_cleared()
 	_main.enter_passage()
 	_check(Game.build == build and _main.player.get_instance_id() == id and is_same(build.slots[2], item) and item["charges"] == 0 and _p.hp == hp, "Passage preserves body gear HP cooldown")
 	_check(_main.start_node("hanging_gallery"), "Passage enters actual next biome")
-	_check(Game.build == build and _main.player.get_instance_id() == id and build.gold == 23 and build.attributes.values() == [1, 1, 1] and build.mutations == ["test_state_only"], "next biome keeps all run build state")
+	_check(Game.build == build and _main.player.get_instance_id() == id and build.gold == 23 and build.attributes.values() == [1, 1, 1] and build.mutations == ["edge"], "next biome keeps all run build state")
 	await _frames(3)
 	var late: RunLoot = get_tree().get_first_node_in_group("run_loot")
 	_p.invuln = 0

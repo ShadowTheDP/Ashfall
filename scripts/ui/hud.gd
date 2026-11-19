@@ -25,6 +25,10 @@ const HP_PER_SEGMENT := 20.0
 ## Hard cap on the segmented health bar's draw loop. See _hp_segments().
 const MAX_HP_SEGMENTS := 40
 const PAUSE_DETAIL_ROWS := 7
+## A failed result shows its raw reason in a bounded scroll window instead of
+## truncating it; up/down page this region while left/right keep the actions.
+const RESULT_DETAIL_ROWS := 5
+const RESULT_DETAIL_RECT := Rect2(52, 242, 664, 100)
 
 # The 768x480 combat layout is fixed: equipment_rects() is the one public
 # gear-geometry entry, and the plates around it are single-owner constants so
@@ -54,6 +58,12 @@ var _pause_line_count := 0
 var _pause_focus := PAUSE_FOCUS_GEAR
 var _pause_action := 0
 var _abandon_confirm := false
+## Focused result action. The row defaults to Retry save / Return to start.
+var _run_action := 0
+## Renderer writes the line count; the input side clamps the scroll window.
+var _result_scroll := 0
+var _result_line_count := 0
+var _result_pending := false
 
 # Health is the only readout whose history matters: a lost segment flashes for
 # two frames, so the draw needs the previous lit count.
@@ -84,6 +94,13 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_hp_flash_t = maxf(0.0, _hp_flash_t - delta)
+	if not Game.run_over:
+		_run_action = 0
+	var pending := not Game.settlement_pending.is_empty()
+	if pending != _result_pending:
+		# A new outcome starts its diagnostic at line one.
+		_result_pending = pending
+		_result_scroll = 0
 	# is_instance_valid, not `!= null`: a freed-but-referenced player (the
 	# frame between a floor being torn down and the next body existing) turns
 	# every read below into an engine error PER FRAME. In the headless audits
@@ -242,16 +259,23 @@ func _unhandled_input(event: InputEvent) -> void:
 		_consume_event(event)
 		return
 	if Game.run_over:
-		if Interface.pressed(event, &"ui_accept") or Interface.pressed(event, &"restart"):
-			_restart()
-			_consume_event(event)
-			return
-		# Run-over keeps its existing owner until its own focusable result row
-		# lands; Q stays the additive keyboard quit.
-		if _raw_key(event, KEY_Q) or Interface.pressed(event, &"ui_tab_next"):
+		# The ended-run owner has its own focused row; pause never reaches it.
+		var ids := run_over_action_ids()
+		_run_action = clampi(_run_action, 0, ids.size() - 1)
+		if Interface.pressed(event, &"ui_nav_left"):
+			_run_action = wrapi(_run_action - 1, 0, ids.size())
+			MathArt.ui_select(self)
+		elif Interface.pressed(event, &"ui_nav_right"):
+			_run_action = wrapi(_run_action + 1, 0, ids.size())
+			MathArt.ui_select(self)
+		elif Interface.pressed(event, &"ui_nav_up") or Interface.pressed(event, &"ui_detail_up"):
+			_result_scroll = maxi(0, _result_scroll - 1)
+		elif Interface.pressed(event, &"ui_nav_down") or Interface.pressed(event, &"ui_detail_down"):
+			_result_scroll = mini(maxi(0, _result_line_count - RESULT_DETAIL_ROWS), _result_scroll + 1)
+		elif Interface.pressed(event, &"ui_accept") or Interface.pressed(event, &"restart"):
+			_run_result_action(str(ids[_run_action]))
+		elif _raw_key(event, KEY_Q) or Interface.pressed(event, &"ui_tab_next"):
 			get_tree().quit()
-			_consume_event(event)
-			return
 		_consume_event(event)
 		return
 	if Interface.pressed(event, &"pause") and not Game.run_over and Game.hub_return_in <= 0.0:
@@ -282,6 +306,37 @@ func _consume_event(event: InputEvent) -> void:
 ## input both read this, so a probe never has to duplicate the arithmetic.
 func pause_action_rect(index: int) -> Rect2:
 	return Rect2(52.0 + float(index) * 134.0, 376.0, 128.0, 28.0)
+
+
+## Result row geometry. Two cells; the same stable public entry as the pause row
+## so a probe reads the shipped rectangles instead of duplicating arithmetic.
+func run_over_action_rect(index: int) -> Rect2:
+	return Rect2(52.0 + float(index) * 134.0, 424.0, 128.0, 28.0)
+
+
+## A failed result offers Retry save / Leave; a clean result only returns to the
+## start. Quit stays an explicit action in both states.
+func run_over_action_ids() -> Array:
+	return ["retry", "quit"] if not Game.settlement_pending.is_empty() else ["return", "quit"]
+
+
+func _run_over_action_label(id: String) -> String:
+	match id:
+		"retry": return ContentText.of("UI_HUD_KEY_RETRY_SAVE", "Retry save")
+		"return": return ContentText.of("UI_HUD_KEY_RETURN_START", "Return to start")
+		"quit": return ContentText.of("UI_S7_HUD_ACTION_LEAVE", "Leave") if not Game.settlement_pending.is_empty() else ContentText.of("UI_HUD_ACTION_QUIT", "Quit")
+	return id
+
+
+## Retry and return both go through Main's existing restart/enter_hub path:
+## that is the owner that retries settlement, so the focused row never invents
+## a second persistence route.
+func _run_result_action(id: String) -> void:
+	match id:
+		"retry", "return":
+			_restart()
+		"quit":
+			get_tree().quit()
 
 
 func _pause_action_ids() -> Array:
@@ -1077,6 +1132,11 @@ static func slot_label(summary: Dictionary) -> String:
 	var label := str(summary.get("label", ""))
 	if summary.get("blocked", false):
 		return ContentText.machine(label)
+	# A present-but-unusable checkpoint keeps its canonical diagnostic. It is
+	# never shown as Hub, EMPTY, or a resumable place.
+	var resume_error := str(summary.get("resume_error", ""))
+	if not resume_error.is_empty():
+		return ContentText.of("UI_S7_TITLE_UNUSABLE_CHECKPOINT", "Checkpoint cannot resume: {reason} · original data retained.").format({"reason": resume_error})
 	if label in ["EMPTY", "UNAVAILABLE", "CANNOT READ SAVE", "CHECKPOINT NEEDS RECOVERY"]:
 		return ContentText.machine(label)
 	var node_id := str(summary.get("checkpoint_node_id", ""))
@@ -1288,30 +1348,54 @@ func _draw_run_over(_font: Font, _size: Vector2) -> void:
 	MathArt.px_rect(self, Rect2(0, 0, 768, 480), Color(MathArt.INK, 0.97))
 	MathArt.ui_panel(self, MathArt.UI_PAGE)
 	var pending := not Game.settlement_pending.is_empty()
-	var abandoned := pending and not bool(Game.settlement_pending.died)
+	var abandoned := Game.run_abandoned
 	var title := ContentText.of("UI_HUD_RUN_ABANDONED", "Run abandoned") if abandoned else (ContentText.of("UI_HUD_ROUTE_SLICE", "Route slice complete") if Game.slice_complete else (ContentText.of("UI_HUD_ASHFALL_COMPLETE", "Ashfall complete") if Game.victory and not Game.run_node_id.is_empty() else (ContentText.of("UI_HUD_FLOOR_CLEARED", "Floor cleared") if Game.victory else ContentText.of("UI_HUD_YOU_DIED", "You died"))))
-	var at := Vector2(384, 116)
-	MathArt.ui_service(self, at, "abandon" if abandoned else ("victory" if Game.victory else "death"), 32)
+	MathArt.ui_service(self, Vector2(384, 116), "abandon" if abandoned else ("victory" if Game.victory else "death"), 32)
 	MathArt.ui_text(self, Vector2(52, 188), title, 24, MathArt.ACCENT if Game.victory else MathArt.PALE, 664, HORIZONTAL_ALIGNMENT_CENTER)
-	MathArt.ui_text(self, Vector2(52, 218), ContentText.of("UI_HUD_RESULT_NOT_SAVED", "Result not saved") if pending else (ContentText.of("UI_HUD_VICTORY_SAVED", "Victory saved") if Game.victory else ContentText.of("UI_HUD_RUN_ENDED_SAVED", "Run ended · result saved")), 13, MathArt.PALE, 664, HORIZONTAL_ALIGNMENT_CENTER)
-	var total := int(Game.run_time)
-	var values := [str(Game.kills), "x%d" % Game.max_combo, str(Game.perfect_dodges), "%02d:%02d" % [total / 60, total % 60]]
-	var labels := [ContentText.of("UI_HUD_STAT_KILLS", "Kills"), ContentText.of("UI_HUD_STAT_BEST_COMBO", "Best combo"), ContentText.of("UI_HUD_STAT_PERFECT_DODGES", "Perfect dodges"), ContentText.of("UI_HUD_STAT_TIME", "Time")]
-	for i in 4:
-		var x := 52.0 + i * 166
-		MathArt.ui_text(self, Vector2(x, 277), values[i], 24, MathArt.WHITE, 166, HORIZONTAL_ALIGNMENT_CENTER)
-		MathArt.ui_text(self, Vector2(x, 299), labels[i], 11, MathArt.PALE, 166, HORIZONTAL_ALIGNMENT_CENTER)
-	MathArt.line(self, Vector2(52, 320), Vector2(716, 320), MathArt.STONE, 1)
+	# The result's persistence state outranks statistics and celebration.
+	MathArt.ui_text(self, Vector2(52, 216), ContentText.of("UI_HUD_RESULT_NOT_SAVED", "Result not saved") if pending else (ContentText.of("UI_HUD_VICTORY_SAVED", "Victory saved") if Game.victory else ContentText.of("UI_HUD_RUN_ENDED_SAVED", "Run ended · result saved")), 13, MathArt.PALE, 664, HORIZONTAL_ALIGNMENT_CENTER)
 	var message := ContentText.of("UI_HUD_KEPT_MESSAGE", "Permanent unlocks, investments and banked Cells are kept.")
 	if pending:
-		message = ContentText.of("UI_HUD_SAVE_FAILED_RESULT", "Save failed: {reason}\nYour previous checkpoint is protected. {accept} retries this result.").format({"reason": Profile.last_save_error, "accept": _prompt(&"ui_accept")})
+		message = ContentText.of("UI_S7_HUD_RESULT_FAILED", "Save failed: {reason}\nYour previous checkpoint is protected. Choose Retry save or Leave.").format({"reason": Profile.last_save_error})
 	elif Game.victory and not Game.run_node_id.is_empty():
-		message = ContentText.of("UI_HUD_VICTORY_MESSAGE", "Victory rewards and remaining Cells saved. BSC 1 unlocked.")
+		message = ContentText.of("UI_S7_HUD_VICTORY_BSC", "Victory rewards and remaining Cells saved. 0 BSC route complete; BSC 1 unlocked, not playable yet.")
 	elif not Game.victory:
 		message = ContentText.of("UI_HUD_DIED_MESSAGE", "Permanent unlocks, investments and banked Cells are kept.\nCarried Cells, Gold, equipment and blueprints are lost.")
-	var lines := MathArt.ui_wrap(message, 664, 13)
-	for i in mini(3, lines.size()): MathArt.ui_text(self, Vector2(52, 348 + i * 20), lines[i], 13, MathArt.WHITE if pending else MathArt.PALE)
+	var lines := MathArt.ui_wrap(message, RESULT_DETAIL_RECT.size.x, 13)
+	if pending:
+		# The raw diagnostic gets a bounded window and a visible range, never a
+		# silent tail cut. Up/down scroll it while left/right keep the actions.
+		_result_line_count = lines.size()
+		_result_scroll = clampi(_result_scroll, 0, maxi(0, _result_line_count - RESULT_DETAIL_ROWS))
+		var pitch := MathArt.ui_line_height(13)
+		for row in RESULT_DETAIL_ROWS:
+			var index := _result_scroll + row
+			if index >= lines.size():
+				break
+			MathArt.ui_text(self, Vector2(RESULT_DETAIL_RECT.position.x, RESULT_DETAIL_RECT.position.y + row * pitch), lines[index], 13, MathArt.WHITE, RESULT_DETAIL_RECT.size.x)
+		if _result_line_count > RESULT_DETAIL_ROWS:
+			MathArt.ui_text(self, Vector2(RESULT_DETAIL_RECT.position.x, RESULT_DETAIL_RECT.position.y + RESULT_DETAIL_ROWS * pitch + 12), ContentText.of("UI_S7_HUD_RESULT_RANGE", "Lines {start}–{end} / {total}").format({"start": _result_scroll + 1, "end": mini(_result_scroll + RESULT_DETAIL_ROWS, _result_line_count), "total": _result_line_count}), 11, MathArt.LIGHT_DIM, RESULT_DETAIL_RECT.size.x, HORIZONTAL_ALIGNMENT_RIGHT)
+		MathArt.line(self, Vector2(52, 372), Vector2(716, 372), MathArt.STONE, 1)
+	else:
+		_result_line_count = 0
+		for i in mini(3, lines.size()):
+			MathArt.ui_text(self, Vector2(52, 244 + i * 20), lines[i], 13, MathArt.PALE, 664)
+		MathArt.line(self, Vector2(52, 306), Vector2(716, 306), MathArt.STONE, 1)
+		# Statistics are secondary to what was saved and what was lost.
+		var total := int(Game.run_time)
+		MathArt.ui_text(self, Vector2(52, 330), ContentText.of("UI_S7_HUD_RESULT_STATS", "Kills {kills} · Best combo x{combo} · Perfect dodges {dodges} · {time}").format({"kills": Game.kills, "combo": Game.max_combo, "dodges": Game.perfect_dodges, "time": "%02d:%02d" % [total / 60, total % 60]}), 11, MathArt.PALE, 664, HORIZONTAL_ALIGNMENT_CENTER)
 	if Game.hub_return_in > 0.05:
-		MathArt.ui_text(self, Vector2(52, 408), ContentText.of("UI_HUD_RETURNING_HUB", "Returning to the Hub in {seconds}s").format({"seconds": "%.1f" % Game.hub_return_in}), 11)
-	MathArt.ui_key(self, Vector2(52, 428), _prompt(&"ui_accept"), ContentText.of("UI_HUD_KEY_RETRY_SAVE", "Retry save") if pending else ContentText.of("UI_HUD_KEY_RETURN_START", "Return to start"))
-	MathArt.ui_key(self, Vector2(642, 428), _prompt(&"ui_tab_next"), ContentText.of("UI_HUD_KEY_QUIT", "Quit"))
+		MathArt.ui_text(self, Vector2(52, 386 if pending else 354), ContentText.of("UI_HUD_RETURNING_HUB", "Returning to the Hub in {seconds}s").format({"seconds": "%.1f" % Game.hub_return_in}), 11)
+	var ids := run_over_action_ids()
+	_run_action = clampi(_run_action, 0, ids.size() - 1)
+	for i in ids.size():
+		var rect := run_over_action_rect(i)
+		var focused := i == _run_action
+		MathArt.ui_surface(self, rect, focused, true)
+		MathArt.ui_text(self, rect.position + Vector2(6, 18), _run_over_action_label(str(ids[i])), 13, MathArt.WHITE if focused else MathArt.PALE, rect.size.x - 12.0, HORIZONTAL_ALIGNMENT_CENTER)
+	var nav := _prompt_pair(&"ui_nav_left", &"ui_nav_right")
+	var accept := _prompt(&"ui_accept")
+	var hint := ContentText.of("UI_S7_HUD_RESULT_NAV_FITS", "{nav} Action · {accept} Select").format({"nav": nav, "accept": accept})
+	if _result_line_count > RESULT_DETAIL_ROWS:
+		hint = ContentText.of("UI_S7_HUD_RESULT_NAV", "{nav} Action · {detail} Scroll · {accept} Select").format({"nav": nav, "detail": _prompt_pair(&"ui_nav_up", &"ui_nav_down"), "accept": accept})
+	MathArt.ui_text(self, Vector2(52, 466), hint, 11, DIM2, 664)

@@ -62,13 +62,38 @@ func _ready() -> void:
 	# Travel mode keeps the side list, so it pages six at a time and still refuses
 	# an unreached source instead of teleporting on browse.
 	_map.close()
+	# Stand where no checkpoint can briefly claim the player: the outcome must be
+	# "no travel source", not an accident of the spawn point.
+	var room := $Main.level.data["rooms"][0]["rect"] as Rect2
+	var spot := room.position + Vector2(room.size.x * 0.5, -40.0)
+	var best := -1.0
+	for tx in [0.15, 0.5, 0.85]:
+		var candidate := room.position + Vector2(room.size.x * float(tx), -40.0)
+		var nearest := 1000000.0
+		for pad: Dictionary in $Main.level.data["pads"]:
+			nearest = minf(nearest, candidate.distance_to(pad["pos"]))
+		if nearest > best:
+			best = nearest
+			spot = candidate
+	Game.player.relocate(spot)
 	_map.open($Main.level, true)
 	await get_tree().process_frame
 	_check(_map._teleport and _map._place_rows() == 6, "checkpoint map offers the six-line side list")
 	_check(_map._place_scroll <= maxi(0, _map._place_count - 6), "travel paging stays inside its own window")
+	_check(_map._source.is_empty(), "refusal fixture starts away from a teleporter")
+	await _key(KEY_ENTER)
+	_check(_map.is_open() and _map._status_error and _map._status == ContentText.of("UI_MAP_TRAVEL_AT_TELEPORTER", "Travel is available only while standing at a teleporter."), "blocked travel paints its reason inside the paused map")
+	await _key(KEY_RIGHT)
+	_check(_map._tab == 1, "travel page still switches to the world tab")
+	await _key(KEY_ENTER)
+	_check(_map.is_open() and _map._status_error and _map._status == ContentText.of("UI_S7_MAP_STATUS_WORLD", "World map is browse only. Open a local map at a checkpoint to travel."), "world tab explains that it is browse only")
 	_map.close()
 	_map.open($Main.level)
 	await get_tree().process_frame
+	_fit_checks()
+	var browse_index: int = _map._index
+	await _key(KEY_DOWN)
+	_check(_map._index == browse_index, "browse up/down never moves the teleport target")
 	_check(not _map._teleport and _map._source.is_empty(), "browse mode never offers travel")
 	await _key(KEY_ESCAPE)
 	_check(not _map.is_open() and not get_tree().paused and not $Main.hud.paused, "Escape returns to gameplay without opening pause menu")
@@ -76,6 +101,23 @@ func _ready() -> void:
 	_check(_map.is_open() and _map._tab == 0, "reopening resets map focus")
 	await _key(KEY_TAB)
 	_check(not _map.is_open() and not get_tree().paused, "Tab closes map")
+	var biome_id: String = str(($Main.level as Level).route_node)
+	var biome_node: Dictionary = Data.route_graph["nodes"][biome_id]
+	var canonical: String = str(biome_node.get("name", "")).to_upper()
+	TranslationServer.set_locale("zh_TW")
+	_map.open($Main.level)
+	_check(_map._floor_display() == ContentText.name("biome", biome_id, canonical), "biome map name uses the open locale")
+	TranslationServer.set_locale("en")
+	_check(_map._floor_display() == canonical, "biome map name follows a locale change while open")
+	_map.close()
+	var passage := Passage.new()
+	TranslationServer.set_locale("zh_TW")
+	_map.open(passage)
+	_check(_map._floor_display() == ContentText.of("UI_PASSAGE_MAP_NAME", "Passage").to_upper(), "Passage map name uses the open locale")
+	TranslationServer.set_locale("en")
+	_check(_map._floor_display() == ContentText.of("UI_PASSAGE_MAP_NAME", "Passage").to_upper(), "Passage map name follows a locale change while open")
+	_map.close()
+	passage.free()
 	await _marker_regression()
 	print("MAP LAYOUT %s (%d checks, %d failures)" % ["OK" if _fails == 0 else "FAILED", _checks, _fails])
 	get_tree().quit(1 if _fails else 0)
@@ -275,17 +317,36 @@ func _strip_marker(snapshot: Dictionary, at: Vector2) -> void:
 	snapshot["markers"] = kept
 
 
-## The page's own browse fit: every discovered room plots inside
-## Rect2(52, 112, 664, 242), so a marker lands at origin + pos * scale.
+## The page's own browse fit. Delegating to the map keeps the probe honest:
+## a changed padding rule or 1:1 cap moves this point too.
 func _plot_point(snapshot: Dictionary, at: Vector2) -> Vector2:
 	var rooms: Array = snapshot.get("rooms", [])
 	if rooms.is_empty():
 		return Vector2.INF
-	var bounds: Rect2 = rooms[0]["bounds"]
-	for room: Dictionary in rooms: bounds = bounds.merge(room["bounds"])
-	var fit := Rect2(52, 112, 664, 242)
-	var scale := minf(fit.size.x / maxf(1, bounds.size.x), fit.size.y / maxf(1, bounds.size.y))
-	return fit.get_center() - bounds.get_center() * scale + at * scale
+	var transform: Dictionary = _map.plot_transform(rooms)
+	return (transform["origin"] as Vector2) + at * float(transform["scale"])
+
+
+## Discovered bounds grow into the plot but keep 24px breathing room; a single
+## small room is centred rather than blown up past 1:1.
+func _fit_checks() -> void:
+	var inner: Rect2 = _map._plot_area().grow(-24.0)
+	var single: Dictionary = _map.plot_transform([{"bounds": Rect2(0, 0, 80, 60)}])
+	var scale := float(single["scale"])
+	_check(absf(scale - 1.0) < 0.001, "single room caps at 1:1")
+	var center: Vector2 = (single["origin"] as Vector2) + Vector2(40, 30) * scale
+	_check(center.distance_to(inner.get_center()) < 0.01, "single room centres inside the padded plot")
+	var many: Array = []
+	for i in 12:
+		many.append({"bounds": Rect2(i * 200, 0, 180, 140)})
+	var fit: Dictionary = _map.plot_transform(many)
+	var origin: Vector2 = fit["origin"]
+	var many_scale := float(fit["scale"])
+	_check(many_scale < 1.0, "wide discovered bounds shrink to fit")
+	for room: Dictionary in many:
+		var rect: Rect2 = room["bounds"]
+		var mapped := Rect2(origin + rect.position * many_scale, rect.size * many_scale)
+		_check(inner.grow(0.5).encloses(mapped), "every discovered room stays inside the 24px padding")
 
 
 ## Marker-only crop: excludes the localized caption rows below the plot.

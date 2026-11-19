@@ -6,9 +6,9 @@
 
 ## 目前範圍
 
-Delivery A 是合法九訪問、三 Boss 的 0 BSC 主路線，加上同一 Profile 的 Silt Cistern 替代路線與已完成的 UI 成熟度增量。擴充世界、BSC 1–5 玩法、新機制、重平衡、DLC、連線與替換存檔政策都未授權。
+Delivery A 是合法九訪問、三 Boss 的 0 BSC 主路線，加上同一 Profile 的 Silt Cistern 替代路線與第 1–8 步 UI 成熟度增量；UI 已完成工程實作與有限視覺，最終 gate 見 [current-state](docs/agent/current-state.md)。擴充世界、BSC 1–5 玩法、新機制、重平衡、DLC、連線與替換存檔政策都未授權。
 
-已核准且唯一的 UI 執行計畫：[ASHFALL_UI_IMPROVE_PLAN.md](ASHFALL_UI_IMPROVE_PLAN.md)。第 1–4 步（內附 CJK 字型與繁中／英文雙語文字層、原生 InputMap 共用輸入層與鍵盤／手把導覽、設定頁與偏好儲存、戰鬥 HUD 與暫停 Build 摘要）已完成工程與有限視覺驗證；人類美術／理解與實體手把仍待。本輪完成第 4 步即停止，未啟動 5–8；日後使用者要求接續時，沿用此計畫從第 5 步開始。第 1 步含 Collector 鬼影複核；第 2 步的 13 個 `--fast` 組別全數通過；第 3 步含原生匯入、headless／display 擷取與原生視窗；第 4 步以唯讀 `GearPresentation` 投影、正式 HUD 幾何，以及短鍵帽與計時器的實際畫面完成有限視覺驗收。第 5–8 步（比較、服務、地圖與回饋）尚未開始，未完成前不預先宣稱。
+已核准且唯一的 UI 執行計畫：[ASHFALL_UI_IMPROVE_PLAN.md](ASHFALL_UI_IMPROVE_PLAN.md)。第 1–8 步（內附 CJK 字型與繁中／英文雙語文字層、原生 InputMap 共用輸入層與鍵盤／手把導覽、設定頁與偏好儲存、戰鬥 HUD 與暫停 Build 摘要、比較／商店、服務、地圖／存檔／結果與狀態回饋）已完成工程實作與有限視覺；最終 gate、證據與已知限制只以 [current-state](docs/agent/current-state.md) 為準；最終自動與有限視覺 gate 已 PASS（見 RESULT），人類、實體手把與 Windows export 仍待。第 1 步含 Collector 鬼影複核；第 2 步的 13 個 `--fast` 組別全數通過；第 3 步含原生匯入、headless／display 擷取與原生視窗；第 4 步以唯讀 `GearPresentation` 投影、正式 HUD 幾何，以及短鍵帽與計時器的實際畫面完成有限視覺驗收。
 
 人類 UI 美術／理解與真人雙路線驗收仍待完成；自動測試、截圖與模型看圖不能代替。實際進度、證據與限制只看 [current-state](docs/agent/current-state.md)，人工流程見 [delivery-a-human-check](docs/agent/delivery-a-human-check.md)。歷史 UI 看圖入口是 [review-index.html](output/ui-maturity-2026-11-16/review-index.html)；第 4 步最終證據是 [step4-evidence.json](output/ui-product/step4-evidence.json)。兩者都不代替真人驗收。
 
@@ -66,7 +66,7 @@ Delivery A 是合法九訪問、三 Boss 的 0 BSC 主路線，加上同一 Prof
 project.godot                 引擎、autoload、視窗與渲染設定
 play.bat                      雙擊啟動
 AGENTS.md                     治理、read order、授權與硬約束
-ASHFALL_UI_IMPROVE_PLAN.md    唯一 UI 執行計畫（1–4 完成；5 為下一步）
+ASHFALL_UI_IMPROVE_PLAN.md    唯一 UI 執行計畫（1–8 工程與有限視覺完成；最終 gate 見 current-state）
 MEMORY.md                     持久偏好與可重用實作教訓
 data/*.json                   canonical 武器、敵人、房間、路線與經濟資料
 scenes/main.tscn              唯一產品入口

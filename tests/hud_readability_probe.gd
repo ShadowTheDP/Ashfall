@@ -201,6 +201,7 @@ func _ready() -> void:
 	hud.queue_redraw()
 	await _frames(2)
 	hud._set_paused(false)
+	await _check_rapid_focus(hud)
 	if _capture:
 		get_tree().paused = true
 		for row in [["boss-announcement", "BRIDGE SENTINEL DEFEATED", &"info"], ["rune-announcement", "RUNE ACQUIRED: VINE", &"info"], ["save-announcement", "SAVE FAILED: PROFILE IS PROTECTED", &"error"], ["long-save-announcement", "SAVE FAILED: " + "LONG_STORAGE_ERROR_TOKEN_".repeat(6) + " - ENTER TO RETRY", &"error"]]:
@@ -260,6 +261,39 @@ func _contrast(a: Color, b: Color) -> float:
 	var linear_a := a.srgb_to_linear().get_luminance()
 	var linear_b := b.srgb_to_linear().get_luminance()
 	return (maxf(linear_a, linear_b) + 0.05) / (minf(linear_a, linear_b) + 0.05)
+
+## STEP8 consumer edge: a focus change must land immediately even while the
+## page reveal is still animating, and the newest keypress must win. Freezing
+## engine time keeps both tweens deterministically mid-flight across frames, so
+## the proof never depends on frame pacing; frames and wall ticks still run.
+func _check_rapid_focus(hud: Hud) -> void:
+	hud._set_paused(true)
+	## Fixture state: the long-name section left the selection on slot 2, so
+	## start this proof from the first slot before sending real input.
+	hud._pause_index = 0
+	## _set_paused cancels any hitstop (Engine.time_scale = 1.0); freeze after it
+	## so the reveal and settle tweens stay mid-flight for the whole proof.
+	Engine.time_scale = 0.0
+	var reveal := hud.get_meta("ui_reveal", null) as Tween
+	_check(reveal != null and reveal.is_valid() and hud.position.y > 0.0,
+		"the pause reveal is still running when the next press arrives")
+	await _key(KEY_D)
+	_check(hud._pause_index == 1, "focus moves on the first press without waiting for the reveal")
+	var first := hud.get_meta("ui_select", null) as Tween
+	_check(first != null and first.is_valid(), "the first focus change starts its settle tween")
+	await _key(KEY_D)
+	_check(hud._pause_index == 2, "the latest of two rapid presses owns the focus")
+	_check(first == null or not first.is_valid(), "the newest selection kills the previous settle tween")
+	var second := hud.get_meta("ui_select", null) as Tween
+	_check(second != null and second != first and second.is_valid(), "only the newest settle tween remains")
+	_check(is_zero_approx(float(hud.get_meta("ui_focus_progress", -1.0))),
+		"the focus target is committed before its settle animation")
+	_check(hud.position.y > 0.0 and reveal.is_valid(), "input never waits for the page reveal")
+	Engine.time_scale = 1.0
+	await get_tree().create_timer(0.2, true).timeout
+	_check(hud._pause_index == 2, "the focus target survives the resumed animation")
+	hud._set_paused(false)
+
 
 ## Idle frames for redraw settling; the tree may be paused, so this waits on the
 ## tree signal instead of any node's process tick.

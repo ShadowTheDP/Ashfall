@@ -60,6 +60,16 @@ func _ready() -> void:
 		_put(Profile.slot_path(3), raw)
 		_check(Profile.slot_summary(3).blocked and not Profile.select_slot(3), "corrupt/future slot cannot masquerade as empty")
 		_check(Profile.active_slot == 1 and Profile.SAVE_PATH == base and _text(Profile.slot_path(3)) == raw, "rejected selection preserves active slot and bytes")
+	# A nonempty but malformed checkpoint is not a blocked file: it must read as
+	# unusable, keep its bytes, and never fall through to Hub or EMPTY display.
+	var malformed := JSON.stringify({"version":Profile.VERSION, "run_checkpoint":{"kind":"biome_entry"}})
+	_put(Profile.slot_path(3), malformed)
+	var display := Profile.slot_summary(3)
+	_check(not display.blocked and not display.resume and not str(display.resume_error).is_empty(), "malformed checkpoint is unusable, not blocked or resumable")
+	_check(str(display.label) != "EMPTY" and not str(display.label).begins_with("HUB"), "unusable checkpoint never displays as empty or Hub")
+	_check(_text(Profile.slot_path(3)) == malformed, "reading an unusable checkpoint never rewrites the file")
+	var shown := Hud.slot_label(display)
+	_check(shown == ContentText.of("UI_S7_TITLE_UNUSABLE_CHECKPOINT", "Checkpoint cannot resume: {reason} · original data retained.").format({"reason": str(display.resume_error)}) and not shown.contains("EMPTY") and not shown.begins_with("Hub"), "unusable checkpoint names its canonical reason instead of Hub or Empty")
 	_put(Profile.slot_path(3), third)
 	Game.settlement_pending = {"kills":1, "died":true}
 	_check(not Profile.select_slot(2) and Profile.active_slot == 1, "pending settlement cannot cross slots")
@@ -90,6 +100,9 @@ func _ready() -> void:
 		Profile.load_profile(true)
 		var raw := _text(base)
 		_check(not RunCheckpoint.error(Profile.run_checkpoint).is_empty() and not _main.resume_checkpoint(), "reject invalid checkpoint " + field)
+		if field == "content":
+			var stale := Profile.slot_summary(1)
+			_check(not stale.resume and not str(stale.resume_error).is_empty(), "stale-content checkpoint is never offered as resumable")
 		_check(Game.route_history == history and _text(base) == raw, "rejection leaves world and saved bytes untouched")
 	_check(Profile.save(entry), "restore valid entry fixture")
 	var gold := Game.build.gold

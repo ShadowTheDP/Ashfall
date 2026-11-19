@@ -44,6 +44,10 @@ func _ready() -> void:
 		_fail("reward screen did not unpause after picking 1")
 	if not is_equal_approx(player.max_hp, max_hp_before + 20.0):
 		_fail("vitality did not add 20 max hp")
+	var max_hp_after := player.max_hp
+	await _press(KEY_ENTER)
+	if not is_equal_approx(player.max_hp, max_hp_after) or Game.reward_open:
+		_fail("closed reward screen applied a second boon or reopened")
 
 	# Arrow + Enter path, then number 3.
 	_main.reward_screen.open(["edge", "armory", "swift"])

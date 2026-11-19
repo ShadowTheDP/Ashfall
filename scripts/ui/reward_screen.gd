@@ -153,8 +153,9 @@ func _draw() -> void:
 			_: MathArt.ui_gear(self, at, "aegis", 32)
 		var names := MathArt.ui_wrap(ContentText.name("reward", id, str(cfg.get("name", id))), 180, 16)
 		for n in mini(2, names.size()): MathArt.ui_text(self, rect.position + Vector2(16, 132 + n * MathArt.ui_line_height(16)), names[n], 16, MathArt.WHITE)
-		var lines := MathArt.ui_wrap(ContentText.text("reward", id, str(cfg.get("desc", ""))), 180, 13)
-		for n in mini(4, lines.size()): MathArt.ui_text(self, rect.position + Vector2(16, 196 + n * MathArt.ui_line_height(13)), lines[n], 13)
+		var copy := ContentText.of("UI_S6_REWARD_CHANGE", "WHAT CHANGES · THIS RUN") + "\n" + ContentText.text("reward", id, str(cfg.get("desc", "")))
+		var lines := MathArt.ui_wrap(copy, 180, 13)
+		for n in mini(5, lines.size()): MathArt.ui_text(self, rect.position + Vector2(16, 196 + n * MathArt.ui_line_height(13)), lines[n], 13, MathArt.WHITE if n == 0 else MathArt.PALE)
 	var nav := _prompt_pair(&"ui_nav_left", &"ui_nav_right")
 	MathArt.ui_text(self, Vector2(52, 408), ContentText.of("UI_REWARD_HELP", "Use {nav} to preview · {accept} chooses · number keys pick immediately").format({"nav": nav, "accept": Interface.prompt(&"ui_accept")}), 11)
 	var x := 52.0

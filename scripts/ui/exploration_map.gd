@@ -14,6 +14,10 @@ var _teleport := false
 ## Set only when this page itself paused the tree.
 var _owns_pause := false
 var _locale := ""
+## Full-page map owns its feedback: the HUD announcement is suppressed while a
+## modal is open, so a blocked confirm has to leave its reason here.
+var _status := ""
+var _status_error := false
 
 
 func _ready() -> void:
@@ -55,6 +59,8 @@ func open(level_node: Node, teleport_mode := false) -> void:
 	_tab = 0
 	_index = 0
 	_place_scroll = 0
+	_status = ""
+	_status_error = false
 	# Pause belongs to whoever owned it: opening over a paused page must not
 	# hand the world an unpause when the map closes.
 	_owns_pause = not get_tree().paused
@@ -82,51 +88,115 @@ func _input(event: InputEvent) -> void:
 		return
 	get_viewport().set_input_as_handled()
 	var pads: Array = _snapshot.get("pads", [])
+	_index = clampi(_index, 0, maxi(0, pads.size() - 1))
 	if Interface.pressed(event, &"ui_back") or Interface.pressed(event, &"map"):
 		close()
 		return
 	if Interface.pressed(event, &"ui_nav_left") or Interface.pressed(event, &"ui_nav_right"):
 		_tab = 1 - _tab
+		_clear_status()
 	elif Interface.pressed(event, &"ui_tab_prev"):
 		_place_scroll = maxi(0, _place_scroll - _place_rows())
 	elif Interface.pressed(event, &"ui_tab_next"):
 		_place_scroll = mini(maxi(0, _place_count - _place_rows()), _place_scroll + _place_rows())
 	elif _tab == 0 and _teleport and Interface.pressed(event, &"ui_nav_up"):
 		_index = wrapi(_index - 1, 0, maxi(1, pads.size()))
+		_clear_status()
 	elif _tab == 0 and _teleport and Interface.pressed(event, &"ui_nav_down"):
 		_index = wrapi(_index + 1, 0, maxi(1, pads.size()))
+		_clear_status()
 	elif Interface.pressed(event, &"ui_accept"):
-		if _tab != 0:
-			# The world tab never travels: confirm still answers with a reason
-			# instead of silently swallowing the press.
-			Game.announce(ContentText.of("UI_MAP_TELEPORT_BLOCKED", "TELEPORT UNAVAILABLE / LANDING BLOCKED"), 1.2, &"error")
-			return
-		if _source.is_empty():
-			Game.announce(ContentText.of("UI_MAP_TRAVEL_AT_TELEPORTER", "Travel is available only while standing at a teleporter."), 1.2, &"error")
-		elif pads.is_empty():
-			Game.announce(ContentText.of("UI_MAP_NONE_DISCOVERED", "None discovered"), 1.2, &"error")
-		elif is_instance_valid(_level) and _level.teleport_to(str(pads[_index]["id"]), _source):
+		var refusal := _travel_refusal(pads)
+		if refusal.is_empty() and is_instance_valid(_level) and _level.teleport_to(str(pads[_index]["id"]), _source):
 			close()
 			return
-		else:
-			# The refusal is localized at the producer; kind flags it as an
-			# error, not a quiet info line.
-			Game.announce(ContentText.of("UI_MAP_TELEPORT_BLOCKED", "TELEPORT UNAVAILABLE / LANDING BLOCKED"), 1.2, &"error")
+		if refusal.is_empty():
+			refusal = _level.teleport_refusal(str(pads[_index]["id"]), _source) if is_instance_valid(_level) else "RUN UNAVAILABLE"
+		_status = _refusal_text(refusal)
+		_status_error = true
+		_canvas.queue_redraw()
+		return
 	else:
 		return
 	MathArt.ui_select(_canvas)
 	_canvas.queue_redraw()
 
 
+## Exact refusal before the world owner runs the teleport. Keeping this in one
+## place means the button never claims success and the map never guesses a cause.
+func _travel_refusal(pads: Array) -> String:
+	if _tab != 0:
+		return "WORLD TAB"
+	if _source.is_empty():
+		return "AT TELEPORTER"
+	if pads.is_empty():
+		return "NONE DISCOVERED"
+	if not is_instance_valid(_level):
+		return "RUN UNAVAILABLE"
+	return _level.teleport_refusal(str(pads[_index]["id"]), _source)
+
+
+func _refusal_text(code: String) -> String:
+	match code:
+		"WORLD TAB": return ContentText.of("UI_S7_MAP_STATUS_WORLD", "World map is browse only. Open a local map at a checkpoint to travel.")
+		"AT TELEPORTER": return ContentText.of("UI_MAP_TRAVEL_AT_TELEPORTER", "Travel is available only while standing at a teleporter.")
+		"NONE DISCOVERED": return ContentText.of("UI_MAP_NONE_DISCOVERED", "None discovered")
+		"RUN UNAVAILABLE": return ContentText.of("UI_S7_MAP_REFUSE_RUN", "Travel is not available during this run state.")
+		"UNKNOWN PAD": return ContentText.of("UI_S7_MAP_REFUSE_UNKNOWN", "That destination is not available in this run.")
+		"SAME CHECKPOINT": return ContentText.of("UI_S7_MAP_REFUSE_SAME", "You are already at this checkpoint.")
+		"TOO FAR": return ContentText.of("UI_S7_MAP_REFUSE_FAR", "Move to the teleporter to travel.")
+		"PHASE RUNE REQUIRED": return ContentText.of("UI_S7_MAP_REFUSE_PHASE", "Phase Rune and its paired landing are required.")
+		"TARGET NOT REACHED": return ContentText.of("UI_S7_MAP_REFUSE_PAD", "That checkpoint was not reached.")
+		"TARGET NOT A TELEPORTER": return ContentText.of("UI_S7_MAP_REFUSE_TARGET", "That pad is not a checkpoint.")
+		"LANDING BLOCKED": return ContentText.of("UI_S7_MAP_REFUSE_LANDING", "The landing point is blocked.")
+	return ContentText.of("UI_S7_MAP_REFUSE_UNKNOWN", "That destination is not available in this run.")
+
+
+func _clear_status() -> void:
+	_status = ""
+	_status_error = false
+
+
 func _place_rows() -> int:
 	return 6 if _teleport else 2
 
 
+## Browse uses the full page; travel leaves the six-row sidebar. The inner
+## 24px is reserved padding and the scale never exceeds 1:1, so one room is
+## centered rather than blown up into a fake landmark.
+func _plot_area() -> Rect2:
+	return Rect2(52, 112, 472, 242) if _teleport else Rect2(52, 112, 664, 242)
+
+
+## Shared by the page and its probe: no second copy of the fit arithmetic.
+func plot_transform(rooms: Array) -> Dictionary:
+	if rooms.is_empty():
+		return {"scale": 1.0, "origin": Vector2.ZERO}
+	var bounds: Rect2 = rooms[0]["bounds"]
+	for room: Dictionary in rooms:
+		bounds = bounds.merge(room["bounds"])
+	var inner := _plot_area().grow(-24.0)
+	var scale := minf(minf(inner.size.x / maxf(1.0, bounds.size.x), inner.size.y / maxf(1.0, bounds.size.y)), 1.0)
+	return {"scale": scale, "origin": inner.get_center() - bounds.get_center() * scale}
+
+
 func _floor_display() -> String:
-	var raw := str(_snapshot.get("name", ""))
-	if raw.is_empty() or Game.run_node_id.is_empty():
-		return raw
-	return ContentText.name("biome", Game.run_node_id, raw)
+	# The snapshot caches a translated label. Rederive from canonical data on
+	# every paint so a locale change while the map is open cannot stay sticky.
+	if _level is Passage:
+		return ContentText.of("UI_PASSAGE_MAP_NAME", "Passage").to_upper()
+	var biome_id := ""
+	if _level is Level:
+		biome_id = str((_level as Level).route_node)
+	if biome_id.is_empty():
+		biome_id = Game.run_node_id
+	if biome_id.is_empty():
+		return str(_snapshot.get("name", ""))
+	var node: Dictionary = Data.route_graph["nodes"].get(biome_id, {})
+	var canonical := str(node.get("name", ""))
+	if canonical.is_empty():
+		return str(_snapshot.get("name", ""))
+	return ContentText.name("biome", biome_id, canonical).to_upper()
 
 
 ## Room ids are internal. The sidebar names teleporters by their order instead
@@ -150,12 +220,14 @@ func _draw_map() -> void:
 	MathArt.ui_panel(_canvas, MathArt.UI_PAGE)
 	MathArt.ui_heading(_canvas,
 		ContentText.of("UI_MAP_TITLE_BIOME", "Biome map") if _tab == 0 else ContentText.of("UI_MAP_TITLE_WORLD", "World routes"),
-		ContentText.of("UI_MAP_CONTEXT", "{place} / discovered areas only").format({"place": _floor_display()}))
+		ContentText.of("UI_S7_MAP_CONTEXT", "{place} / discovered {rooms} rooms · {edges} links").format({"place": _floor_display(), "rooms": int(_snapshot.get("rooms", []).size()), "edges": int(_snapshot.get("edges", []).size())}) if _tab == 0 else ContentText.of("UI_S7_MAP_CONTEXT_WORLD", "{place} / visited {count} biomes · unknown routes hidden").format({"place": _floor_display(), "count": Profile.seen_biomes.size()}))
 	var x := 52.0
 	x += MathArt.ui_key(_canvas, Vector2(x, 440), _key_labels([&"ui_nav_left", &"ui_nav_right"]), ContentText.of("UI_MAP_KEY_CHANGE", "Change map"))
 	if _tab == 0:
-		x += MathArt.ui_key(_canvas, Vector2(x, 440), _key_labels([&"ui_nav_up", &"ui_nav_down"]), ContentText.of("UI_MAP_KEY_TELEPORTER", "Teleporter"))
-		if not _source.is_empty(): MathArt.ui_key(_canvas, Vector2(x, 440), Interface.prompt(&"ui_accept"), ContentText.of("UI_MAP_KEY_TRAVEL", "Travel"))
+		if _teleport:
+			x += MathArt.ui_key(_canvas, Vector2(x, 440), _key_labels([&"ui_nav_up", &"ui_nav_down"]), ContentText.of("UI_MAP_KEY_TELEPORTER", "Teleporter"))
+			if not _source.is_empty(): MathArt.ui_key(_canvas, Vector2(x, 440), Interface.prompt(&"ui_accept"), ContentText.of("UI_MAP_KEY_TRAVEL", "Travel"))
+		MathArt.ui_key(_canvas, Vector2(x, 440), _key_labels([&"ui_tab_prev", &"ui_tab_next"]), ContentText.of("UI_S7_MAP_KEY_PAGES", "Pages"))
 	MathArt.ui_key(_canvas, Vector2(596, 440), _key_labels([&"ui_back", &"map"]), ContentText.of("UI_MAP_KEY_BACK", "Back"))
 	if _tab == 1:
 		_draw_world()
@@ -163,13 +235,12 @@ func _draw_map() -> void:
 	var rooms: Array = _snapshot.get("rooms", [])
 	if rooms.is_empty():
 		MathArt.ui_text(_canvas, Vector2(52, 140), ContentText.of("UI_MAP_NO_ROOMS", "No discovered rooms"), 16)
+		if not _status.is_empty():
+			MathArt.ui_text(_canvas, Vector2(52, 168), _status, 11, MathArt.DANGER if _status_error else MathArt.PALE, 560)
 		return
-	var bounds: Rect2 = rooms[0]["bounds"]
-	for room: Dictionary in rooms: bounds = bounds.merge(room["bounds"])
-	# One fit: the map is the page in browse mode, so it takes the full width.
-	var fit := Rect2(52, 112, 472, 242) if _teleport else Rect2(52, 112, 664, 242)
-	var scale := minf(fit.size.x / maxf(1, bounds.size.x), fit.size.y / maxf(1, bounds.size.y))
-	var origin := fit.get_center() - bounds.get_center() * scale
+	var transform := plot_transform(rooms)
+	var scale: float = transform["scale"]
+	var origin: Vector2 = transform["origin"]
 	var positions: Dictionary = {}
 	for room: Dictionary in rooms: positions[str(room["id"])] = origin + (room["bounds"] as Rect2).get_center() * scale
 	for edge: Dictionary in _snapshot.get("edges", []): MathArt.line(_canvas, positions[str(edge["from"])], positions[str(edge["to"])], MathArt.STONE_HI, 1.5)
@@ -180,7 +251,7 @@ func _draw_map() -> void:
 		MathArt.poly(_canvas, PackedVector2Array([drawn.position, Vector2(drawn.end.x, drawn.position.y), drawn.end, Vector2(drawn.position.x, drawn.end.y)]), Color.TRANSPARENT, MathArt.STONE_HI, 1)
 	for pad_index in _snapshot.get("pads", []).size():
 		var pad: Dictionary = _snapshot.pads[pad_index]
-		if pad_index == _index:
+		if _teleport and pad_index == _index:
 			var target := origin + (pad.pos as Vector2) * scale
 			MathArt.ring(_canvas, target, 8, MathArt.ACCENT, 2, 4)
 			MathArt.line(_canvas, target + Vector2(0, -12), target + Vector2(0, -20), MathArt.ACCENT, 1)
@@ -219,14 +290,17 @@ func _draw_map() -> void:
 			var lines := MathArt.ui_wrap(_teleporter_display(i), 140, 11)
 			for n in mini(2, lines.size()): MathArt.ui_text(_canvas, rect.position + Vector2(24, 13 + n * MathArt.ui_line_height(11)), lines[n], 11)
 		MathArt.ui_text(_canvas, Vector2(552, 251), ContentText.of("UI_MAP_KNOWN_PLACES", "Known places"), 13, MathArt.WHITE)
+		if _place_count > 6: MathArt.ui_text(_canvas, Vector2(552, 251), ContentText.of("UI_MAP_PAGE_COUNT", "{page} · {index} / {total}").format({"page": _key_labels([&"ui_tab_prev", &"ui_tab_next"]), "index": _place_scroll + 1, "total": _place_count}), 11, MathArt.LIGHT_DIM, 164, HORIZONTAL_ALIGNMENT_RIGHT)
 		for i in range(_place_scroll, mini(_place_scroll + 6, place_lines.size())): MathArt.ui_text(_canvas, Vector2(552, 272 + (i - _place_scroll) * MathArt.ui_line_height(11)), place_lines[i], 11)
-		if _place_count > 6: MathArt.ui_text(_canvas, Vector2(552, 371), ContentText.of("UI_MAP_PAGE_COUNT", "{page} · {index} / {total}").format({"page": _key_labels([&"ui_tab_prev", &"ui_tab_next"]), "index": _place_scroll + 1, "total": _place_count}), 11)
 		MathArt.ui_text(_canvas, Vector2(52, 388), ContentText.of("UI_MAP_LEGEND", "■ You · ◇ Teleporter · △ Exit · ○ Place · Slash: locked"), 11)
-		MathArt.ui_text(_canvas, Vector2(52, 410), ContentText.of("UI_MAP_CHOOSE_CHECKPOINT", "Choose a reached checkpoint to travel.") if not _source.is_empty() else ContentText.of("UI_MAP_TRAVEL_AT_TELEPORTER", "Travel is available only while standing at a teleporter."), 11)
+		var travel_note := _status if not _status.is_empty() else (ContentText.of("UI_MAP_CHOOSE_CHECKPOINT", "Choose a reached checkpoint to travel.") if not _source.is_empty() else ContentText.of("UI_MAP_TRAVEL_AT_TELEPORTER", "Travel is available only while standing at a teleporter."))
+		MathArt.ui_text(_canvas, Vector2(52, 410), travel_note, 11, MathArt.DANGER if _status_error else MathArt.PALE, 472)
 	else:
 		# Browse mode belongs to the map: no side list, only availability and the
-		# two-line place window under it.
-		MathArt.ui_text(_canvas, Vector2(52, 372), ContentText.of("UI_MAP_TRAVEL_FROM_CHECKPOINT", "Travel from a reached checkpoint.") if not _source.is_empty() else ContentText.of("UI_MAP_TRAVEL_AT_TELEPORTER", "Travel is available only while standing at a teleporter."), 11, MathArt.PALE, 560)
+		# two-line place window under it. A refused confirm leaves its reason in
+		# this line, because the HUD cannot speak while the modal is open.
+		var browse_note := _status if not _status.is_empty() else (ContentText.of("UI_MAP_TRAVEL_FROM_CHECKPOINT", "Travel from a reached checkpoint.") if not _source.is_empty() else ContentText.of("UI_MAP_TRAVEL_AT_TELEPORTER", "Travel is available only while standing at a teleporter."))
+		MathArt.ui_text(_canvas, Vector2(52, 372), browse_note, 11, MathArt.DANGER if _status_error else MathArt.PALE, 560)
 		for i in range(_place_scroll, mini(_place_scroll + 2, place_lines.size())):
 			MathArt.ui_text(_canvas, Vector2(52, 389 + (i - _place_scroll) * MathArt.ui_line_height(11)), place_lines[i], 11, MathArt.PALE, 664)
 		if _place_count > 2:
@@ -303,6 +377,8 @@ func _draw_world() -> void:
 		for i in lines.size():
 			_canvas.draw_string(font, label.position + Vector2(0, font.get_ascent(11) + float(i) * font.get_height(11)), lines[i], HORIZONTAL_ALIGNMENT_CENTER, label.size.x, 11, MathArt.PALE)
 	_canvas.draw_string(font, Vector2(40, 390), ContentText.of("UI_MAP_WORLD_FOOTER", "Visited biomes only · Locks use this run’s Runes, keys and BSC."), HORIZONTAL_ALIGNMENT_LEFT, 680, 11, MathArt.PALE)
+	if not _status.is_empty():
+		_canvas.draw_string(font, Vector2(40, 410), _status, HORIZONTAL_ALIGNMENT_LEFT, 680, 11, MathArt.DANGER if _status_error else MathArt.PALE)
 
 
 ## One prompt per distinct label: keyboard shows "A D", pad shows "D-pad".

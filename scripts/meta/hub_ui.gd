@@ -201,10 +201,18 @@ func _rows() -> Array:
 				# shows both currencies and the list is the only place that says
 				# which one a row spends.
 				var currency := Profile.upgrade_currency(id)
+				var cost_now := Profile.upgrade_cost(id)
+				var shortfall := maxi(0, cost_now - (Profile.souls if currency == "souls" else Profile.cells))
 				upgrades.append({
 					"id": id, "kind": "upgrade",
 					"name": ContentText.name("upgrade", str(id), str(cfg.get("name", id))),
 					"info": ContentText.of("UI_HUBUI_LEVEL", "LV {level}/{max}   {text}").format({"level": Profile.upgrade_level(id), "max": int(cfg.get("max", 1)), "text": ContentText.text("upgrade", str(id), str(cfg.get("text", "")))}),
+					# Purpose then acquisition: the detail pane answers "what is
+					# this for" and "how do I get it" before any price ladder.
+					"purpose": ContentText.text("upgrade", str(id), str(cfg.get("text", ""))),
+					"acq": ContentText.of("UI_S6_HUB_ACQ_UPGRADE_SOULS", "Permanent Arena upgrade · pay banked Souls in this panel") if currency == "souls" else ContentText.of("UI_S6_HUB_ACQ_UPGRADE_CELLS", "Permanent Arena upgrade · pay banked Cells in this panel"),
+					"short": shortfall, "currency": currency,
+					"state_name": "completed" if maxed else ("available" if Profile.can_afford_upgrade(id) else "insufficient"),
 					# `price` stays the machine value `_fail()` compares.
 					"price": "MAX" if maxed else "%d %s" % [cost, "S" if currency == "souls" else "C"],
 					"price_text": ContentText.of("UI_COMMON_MAX", "MAX") if maxed else _price(cost, currency),
@@ -222,9 +230,12 @@ func _rows() -> Array:
 					"id": id, "kind": "character",
 					"name": ContentText.name("character", str(id), str(cfg.get("name", id))),
 					"info": ContentText.of("UI_HUBUI_STATS", "HP {hp}   SPD {spd}   KNIVES {knives}   {passive}").format({"hp": int(cfg.get("hp", 0.0)), "spd": int(cfg.get("speed", 0.0)), "knives": int(cfg.get("knives", 0)), "passive": ContentText.text("character", str(id), str(cfg.get("passive_text", "")))}),
+					"purpose": ContentText.text("character", str(id), str(cfg.get("passive_text", ""))),
+					"acq": ContentText.of("UI_S6_HUB_ACQ_FLOOR", "Reach Arena floor {floor} to unlock, then equip here").format({"floor": gate}) if locked else ContentText.of("UI_S6_HUB_ACQ_CHARACTER", "Unlock with Cells here, then equip for Arena"),
 					"right": ContentText.of("UI_HUBUI_FLOOR_LOCK", "Floor {floor}").format({"floor": gate}) if locked else _status(
 						"character", id, int(cfg.get("cost", 0)), Profile.selected_character),
 					"lock": locked,
+					"state_name": "locked" if locked else ("owned" if Profile.selected_character == id or Profile.is_unlocked("character", id) else "available"),
 					"state": 0 if locked else (
 						2 if Profile.selected_character == id else (
 							1 if Profile.is_unlocked("character", id) else 0)),
@@ -276,10 +287,20 @@ func _draw_ui() -> void:
 		var names := MathArt.ui_wrap(str(row.name), 300, 16)
 		for i in mini(2, names.size()): MathArt.ui_text(_canvas, Vector2(416, 142 + i * MathArt.ui_line_height(16)), names[i], 16, MathArt.WHITE)
 		var status := str(row.get("price_text", row.get("right", "")))
-		if row.get("lock", false): status = ContentText.of("UI_HUBUI_LOCKED_STATUS", "Locked / reach {value}").format({"value": str(row.get("right", ""))})
-		elif int(row.state) == 0: status += ContentText.of("UI_HUBUI_UNAVAILABLE", " / unavailable")
-		MathArt.ui_text(_canvas, Vector2(328, 211), status, 16, MathArt.CELL if int(row.state) > 0 else MathArt.LIGHT_DIM)
-		var details := MathArt.ui_wrap(str(row.info), 372, 13)
+		if row.get("lock", false):
+			status = ContentText.of("UI_HUBUI_LOCKED_STATUS", "Locked / reach {value}").format({"value": str(row.get("right", ""))})
+			status += " · " + ContentText.of("UI_S6_HUB_STATE_LOCKED", "missing condition")
+		elif _open_id == "upgrade":
+			if int(row.state) == 2:
+				status += " · " + ContentText.of("UI_S6_HUB_STATE_COMPLETED", "Completed")
+			elif int(row.state) == 1:
+				status += " · " + ContentText.of("UI_S6_HUB_STATE_UNLOCKABLE", "Unlockable")
+			else:
+				status += " · " + ContentText.of("UI_S6_HUB_STATE_INSUFFICIENT", "Need {amount}").format({"amount": _price(int(row.get("short", 0)), str(row.get("currency", "cells")))})
+		MathArt.ui_state(_canvas, Vector2(332, 206), str(row.get("state_name", "available")))
+		MathArt.ui_text(_canvas, Vector2(344, 211), status, 16, MathArt.CELL if int(row.state) > 0 else MathArt.LIGHT_DIM, 356)
+		# Acquisition first, then what the purchase changes.
+		var details := MathArt.ui_wrap(str(row.get("acq", "")) + "\n" + str(row.info), 372, 13)
 		for i in mini(5, details.size()): MathArt.ui_text(_canvas, Vector2(328, 238 + i * 20), details[i], 13)
 		if row.has("level"):
 			var count := int(row.max)

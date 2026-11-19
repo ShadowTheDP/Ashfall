@@ -128,10 +128,13 @@ func _draw() -> void:
 		if near:
 			if station[1] == "fountain":
 				var used := Game.passage_claims.has("fountain")
-				MathArt.px_rect(self, Rect2(x - 132, -182, 264, 68), MathArt.INK)
-				MathArt.ui_service(self, Vector2(x - 104, -148), "fountain", 18)
-				MathArt.ui_text(self, Vector2(x - 74, -157), ContentText.of("UI_PASSAGE_USED", "Already used") if used else ContentText.of("UI_PASSAGE_RESTORE", "Restore HP + flask"), 13, MathArt.WHITE)
-				MathArt.ui_text(self, Vector2(x - 74, -137), ContentText.of("UI_PASSAGE_ONCE", "Once per Passage") if used else ContentText.of("UI_PASSAGE_RESTORE_HINT", "{action} to restore").format({"action": Interface.prompt(&"interact")}), 11, MathArt.PALE)
+				MathArt.px_rect(self, Rect2(x - 132, -192, 264, 84), MathArt.INK)
+				MathArt.ui_service(self, Vector2(x - 104, -158), "fountain", 18)
+				MathArt.ui_text(self, Vector2(x - 74, -167), ContentText.of("UI_PASSAGE_USED", "Already used") if used else ContentText.of("UI_PASSAGE_RESTORE", "Restore HP + flask"), 13, MathArt.WHITE)
+				# The world prompt states both what is spent and where the result
+				# lands before the player presses interact.
+				MathArt.ui_text(self, Vector2(x - 74, -147), ContentText.of("UI_S6_FOUNTAIN_SCOPE", "This run · once per Passage"), 11, MathArt.LIGHT_DIM)
+				MathArt.ui_text(self, Vector2(x - 74, -127), ContentText.of("UI_S6_FOUNTAIN_SAVED", "Saved; cannot be used again") if used else ContentText.of("UI_S6_FOUNTAIN_SAVE_HINT", "{action} to restore · saved at this Passage").format({"action": Interface.prompt(&"interact")}), 11, MathArt.PALE)
 			draw_string(font, Vector2(x - 100, -72), Interface.prompt(&"interact"), HORIZONTAL_ALIGNMENT_CENTER, 200, 11, MathArt.PALE)
 	for i in 9:
 		var x := float(i + 1) * WIDTH / 10.0
